@@ -28,11 +28,6 @@ inference_timeout: 5
 # Env: TTS_FRAME_DURATION_MS
 frame_duration_ms: 50
 
-# Audio sample rate in Hz (8000, 16000, 24000, 48000).
-# CLI: --sample_rate
-# Env: TTS_SAMPLE_RATE
-sample_rate: 48000
-
 # Maximum number of models to cache in memory.
 # Model with the lowest RPS rating is evicted when limit reached.
 # CLI: --max_models
@@ -49,25 +44,29 @@ max_concurrent_sentences_per_model: 2
 # Env: TTS_MAX_SENTENCE_CHARS
 max_sentence_chars: 140
 
-# Directory for downloaded Silero .pt model files.
-# CLI: --models_dir
-# Env: TTS_MODELS_DIR
-models_dir: models/silero
-
 # Local path to the voice/model mapping configuration file.
 # CLI: --data_yml_path
 # Env: TTS_DATA_YML_PATH
 data_yml_path: data/data.yml
 
-# URL to the Silero models.yml registry file.
-# CLI: --models_yml_url
-# Env: TTS_MODELS_YML_URL
-models_yml_url: https://raw.githubusercontent.com/snakers4/silero-models/refs/heads/master/models.yml
+# Settings for Silero models.
+# Env only (not available via CLI).
+silero:
+  # Audio sample rate in Hz (8000, 16000, 24000, 48000).
+  # Env: TTS_SILERO__SAMPLE_RATE
+  sample_rate: 48000
 
-# SHA-256 hash of the Silero models.yml file for integrity verification. Set empty to skip validation.
-# CLI: --models_yml_hash
-# Env: TTS_MODELS_YML_HASH
-models_yml_hash: ""
+  # Directory for downloaded Silero .pt model files.
+  # Env: TTS_SILERO__MODELS_DIR
+  models_dir: models/silero
+  
+  # URL to the Silero models.yml registry file.
+  # Env: TTS_SILERO__MODELS_YML_URL
+  models_yml_url: https://raw.githubusercontent.com/snakers4/silero-models/refs/heads/master/models.yml
+
+  # SHA-256 hash of the Silero models.yml file for integrity verification. Set empty to skip validation.
+  # Env: TTS_SILERO__MODELS_YML_HASH
+  models_yml_hash: ""
 
 # Text normalization settings.
 # Env only (not available via CLI).

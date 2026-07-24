@@ -1,3 +1,4 @@
+import pytest
 from pydantic_settings import YamlConfigSettingsSource
 
 from src.config import Settings
@@ -59,6 +60,54 @@ class TestTtsZeroconf:
         assert settings.zeroconf == "my_tts"
 
 
+class TestSileroSettings:
+    def test_silero_settings_defaults(self):
+        """SileroSettings has expected defaults."""
+        settings = Settings()
+        assert settings.silero.sample_rate == 48000
+        assert settings.silero.models_dir == "models/silero"
+        assert (
+            str(settings.silero.models_yml_url)
+            == "https://raw.githubusercontent.com/snakers4/silero-models/refs/heads/master/models.yml"
+        )
+        assert settings.silero.models_yml_hash == ""
+
+    def test_silero_sample_rate_env_var(self, monkeypatch):
+        """TTS_SILERO__SAMPLE_RATE overrides sample_rate."""
+        monkeypatch.setenv("TTS_SILERO__SAMPLE_RATE", "24000")
+        settings = Settings()
+        assert settings.silero.sample_rate == 24000
+
+    def test_silero_sample_rate_coerces_from_string(self, monkeypatch):
+        """sample_rate is coerced from string to int."""
+        monkeypatch.setenv("TTS_SILERO__SAMPLE_RATE", "16000")
+        settings = Settings()
+        assert settings.silero.sample_rate == 16000
+
+    def test_silero_models_yml_hash_invalid_raises(self, monkeypatch):
+        """Invalid models_yml_hash raises ValueError."""
+        monkeypatch.setenv("TTS_SILERO__MODELS_YML_HASH", "not-a-valid-hash")
+        with pytest.raises(ValueError, match="64-character hex string"):
+            Settings()
+
+    def test_silero_models_yml_hash_empty_is_valid(self):
+        """Empty models_yml_hash is valid."""
+        settings = Settings()
+        assert settings.silero.models_yml_hash == ""
+
+    def test_silero_models_yml_hash_none_is_valid(self, monkeypatch):
+        """models_yml_hash blanked is treated as empty."""
+        monkeypatch.setenv("TTS_SILERO__MODELS_YML_HASH", "   ")
+        settings = Settings()
+        assert settings.silero.models_yml_hash == ""
+
+    def test_silero_models_dir_env_var(self, monkeypatch):
+        """TTS_SILERO__MODELS_DIR overrides models_dir."""
+        monkeypatch.setenv("TTS_SILERO__MODELS_DIR", "/custom/models")
+        settings = Settings()
+        assert settings.silero.models_dir == "/custom/models"
+
+
 class TestYamlConfigSource:
     def test_config_yml_overrides_defaults(self):
         """config.yml values take priority over Field defaults."""
@@ -66,7 +115,7 @@ class TestYamlConfigSource:
         assert settings.env_type == "development"
         assert settings.torch.device == "cpu"
         assert settings.torch.num_threads == 4
-        assert settings.sample_rate == 48000
+        assert settings.silero.sample_rate == 48000
         assert settings.max_models == 2
 
     def test_yaml_source_is_in_priority_chain(self):
