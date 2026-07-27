@@ -50,13 +50,13 @@ def create_engine(
     config = TTSConfig(
         device=settings.torch.device,
         inference_timeout=settings.inference_timeout,
-        frame_duration_ms=settings.frame_duration_ms,
+        frame_duration=settings.frame_duration,
         sample_rate=settings.silero.sample_rate,
         max_models=settings.max_models,
         cache_half_life=settings.cache_half_life,
         max_concurrent_sentences_per_model=settings.max_concurrent_sentences_per_model,
         max_sentence_chars=settings.max_sentence_chars,
-        models_dir=settings.silero.models_dir,
+        models_dir=settings.models_dir,
         models_yml_url=settings.silero.models_yml_url,
         models_yml_hash=settings.silero.models_yml_hash,
     )

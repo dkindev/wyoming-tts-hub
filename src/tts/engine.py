@@ -325,7 +325,7 @@ class SileroTTSEngine:
         buffer: np.ndarray,
         sample_rate: int,
     ) -> Iterator[TTSResult]:
-        duration_sec = self._config.frame_duration_ms / 1000.0
+        duration_sec = self._config.frame_duration / 1000.0
         chunk_size = int(sample_rate * BYTES_PER_SAMPLE * CHANNELS * duration_sec)
 
         sample_frame_size = BYTES_PER_SAMPLE * CHANNELS
@@ -446,10 +446,10 @@ class SileroTTSEngine:
 
         models_dir = self._config.models_dir
 
-        lang_dir = os.path.join(models_dir, language)
+        lang_dir = os.path.join(models_dir, "silero", language)
         os.makedirs(lang_dir, exist_ok=True)
 
-        yml_path = os.path.join(models_dir, "models.yml")
+        yml_path = os.path.join(models_dir, "silero", "models.yml")
         registry = self._get_models_data(
             yml_path, self._config.models_yml_url, self._config.models_yml_hash
         )

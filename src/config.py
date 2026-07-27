@@ -146,12 +146,6 @@ class SileroSettings(BaseModel):
             return int(v)
         return v
 
-    models_dir: str = Field(
-        default="models/silero",
-        description="Directory for downloaded Silero .pt model files.",
-    )
-    """Directory for downloaded Silero .pt model files."""
-
     models_yml_url: HttpUrl = Field(
         default="https://raw.githubusercontent.com/snakers4/silero-models/refs/heads/master/models.yml",
         description="URL to the Silero models.yml registry file.",
@@ -174,7 +168,7 @@ class SileroSettings(BaseModel):
 
             if not re.fullmatch(r"[a-f0-9]{64}", v.lower()):
                 raise ValueError(
-                    "TTS_MODELS_YML_HASH must be a 64-character hex string or empty to skip validation"
+                    "models_yml_hash must be a 64-character hex string or empty to skip validation"
                 )
         return v
 
@@ -232,25 +226,12 @@ class Settings(BaseSettings):
     )
     """Timeout for inference of one sentence in seconds."""
 
-    frame_duration_ms: float = Field(
+    frame_duration: float = Field(
         default=50,
         ge=1,
         description="Frame duration in milliseconds",
     )
     """Frame duration in milliseconds"""
-
-    sample_rate: Literal[8000, 16000, 24000, 48000] = Field(
-        default=48000,
-        description="Audio sample rate in Hz for TTS output.",
-    )
-    """Audio sample rate in Hz for TTS output."""
-
-    @field_validator("sample_rate", mode="before")
-    @classmethod
-    def coerce_sample_rate(cls, v: object) -> object:
-        if isinstance(v, str):
-            return int(v)
-        return v
 
     max_models: int = Field(
         default=2,
@@ -287,35 +268,9 @@ class Settings(BaseSettings):
 
     models_dir: str = Field(
         default="models/silero",
-        description="Directory for downloaded Silero .pt model files.",
+        description="Directory for cached model files",
     )
-    """Directory for downloaded Silero .pt model files."""
-
-    models_yml_url: HttpUrl = Field(
-        default="https://raw.githubusercontent.com/snakers4/silero-models/refs/heads/master/models.yml",
-        description="URL to the Silero models.yml registry file.",
-    )
-    """URL to the Silero models.yml registry file."""
-
-    models_yml_hash: str = Field(
-        default="",
-        description="SHA-256 hash of the Silero models.yml file for integrity verification. Set empty to skip validation.",
-    )
-    """SHA-256 hash of the Silero models.yml file for integrity verification. Set empty to skip validation."""
-
-    @field_validator("models_yml_hash")
-    @classmethod
-    def models_yml_hash_must_be_valid(cls, v: str) -> str:
-        if v and not v.strip():
-            return ""
-        if v:
-            import re
-
-            if not re.fullmatch(r"[a-f0-9]{64}", v.lower()):
-                raise ValueError(
-                    "TTS_MODELS_YML_HASH must be a 64-character hex string or empty to skip validation"
-                )
-        return v
+    """Directory for cached model files"""
 
     silero: SileroSettings = Field(default_factory=SileroSettings)
     normalization: NormalizationSettings = Field(

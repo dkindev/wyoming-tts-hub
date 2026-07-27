@@ -1,4 +1,5 @@
 # Application name. Used as a Wyoming service name.
+# CLI: --app_name
 # Env: TTS_APP_NAME
 app_name: Wyoming TTS Hub
 
@@ -28,15 +29,20 @@ streaming: true
 inference_timeout: 5
 
 # Frame duration in milliseconds.
-# CLI: --frame_duration_ms
-# Env: TTS_FRAME_DURATION_MS
-frame_duration_ms: 50
+# CLI: --frame_duration
+# Env: TTS_FRAME_DURATION
+frame_duration: 50
 
 # Maximum number of models to cache in memory.
 # Model with the lowest RPS rating is evicted when limit reached.
 # CLI: --max_models
 # Env: TTS_MAX_MODELS
 max_models: 2
+
+# Period of downtime in seconds during which the model's RPS will be halved.
+# CLI: --cache_half_life
+# Env: TTS_CACHE_HALF_LIFE
+cache_half_life: 60
 
 # Maximum concurrent sentences per model for TTS processing.
 # CLI: --max_concurrent_sentences_per_model
@@ -53,16 +59,17 @@ max_sentence_chars: 140
 # Env: TTS_DATA_YML_PATH
 data_yml_path: data/data.yml
 
+# Directory for cached model files.
+# CLI: --models_dir
+# Env: TTS_MODELS_DIR
+models_dir: models
+
 # Settings for Silero models.
 # Env only (not available via CLI).
 silero:
   # Audio sample rate in Hz (8000, 16000, 24000, 48000).
   # Env: TTS_SILERO__SAMPLE_RATE
   sample_rate: 48000
-
-  # Directory for downloaded Silero .pt model files.
-  # Env: TTS_SILERO__MODELS_DIR
-  models_dir: models/silero
   
   # URL to the Silero models.yml registry file.
   # Env: TTS_SILERO__MODELS_YML_URL

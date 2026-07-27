@@ -1,4 +1,3 @@
-import os
 import unittest.mock
 
 import pytest
@@ -16,6 +15,7 @@ from tests.helpers import (
     make_model,
     make_models_dir,
     make_voice,
+    models_yml_path,
 )
 
 
@@ -26,13 +26,13 @@ class TestSileroTTSEngineInit:
     async def test_engine_uses_models_yml_hash_from_config(self, tmp_path, mock_package_importer):
         """Engine reads models_yml_hash from TTSConfig for local file validation."""
         models_dir = make_models_dir(tmp_path)
-        yml_path = os.path.join(models_dir, "models.yml")
+        yml_path = models_yml_path(models_dir)
         actual_hash = hash_models_yml(yml_path)
 
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -255,11 +255,11 @@ class TestSynthesizeValidation:
     async def test_synthesize_successful_returns_tts_results(self, tmp_path, mock_package_importer):
         """synthesize_pcm_chunks with valid params should yield TTSResult objects."""
         models_dir = make_models_dir(tmp_path, sample_rates=[48000])
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -301,7 +301,7 @@ class TestSynthesizeValidation:
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -351,11 +351,11 @@ class TestSynthesizeValidation:
 
         mock_model.apply_tts = capture_apply_tts
 
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -398,11 +398,11 @@ class TestSynthesizeValidation:
 
         mock_model.apply_tts = capture_apply_tts
 
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=8000,
             max_models=2,
             cache_half_life=60,
@@ -431,11 +431,11 @@ class TestSynthesizeValidation:
     ):
         """synthesize_pcm_chunks should use config rate if it exactly matches available rate."""
         models_dir = make_models_dir(tmp_path, sample_rates=[24000, 48000])
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=24000,
             max_models=2,
             cache_half_life=60,
@@ -477,11 +477,11 @@ class TestSynthesizeValidation:
     ):
         """synthesize_pcm_chunks should use highest available rate below config if config not in list."""
         models_dir = make_models_dir(tmp_path, sample_rates=[24000, 48000])
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=44100,
             max_models=2,
             cache_half_life=60,
@@ -537,11 +537,11 @@ class TestSynthesizeValidation:
 
         mock_model.apply_tts = capture_apply_tts
 
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -570,11 +570,11 @@ class TestSynthesizeValidation:
     ):
         """synthesize_pcm_chunks should use config rate if model has no sample rates."""
         models_dir = make_models_dir(tmp_path, sample_rates=[])
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -615,19 +615,12 @@ class TestSynthesizeValidation:
         self, tmp_path, mock_package_importer, mock_model
     ):
         """synthesize_pcm_chunks should use config rate if model sample rates is None."""
-        models_dir = tmp_path / "models"
-        models_dir.mkdir()
-        (models_dir / "models.yml").write_text(
-            "tts_models:\n  ru:\n    v5_5_ru:\n      latest:\n        package: 'http://x'\n"
-        )
-        lang_dir = models_dir / "ru"
-        lang_dir.mkdir()
-        (lang_dir / "v5_5_ru.pt").write_bytes(b"fake model")
-        yml_hash = hash_models_yml(os.path.join(str(models_dir), "models.yml"))
+        models_dir = make_models_dir(tmp_path, sample_rates=[])
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -667,11 +660,11 @@ class TestSynthesizeValidation:
     async def test_synthesize_lazy_model_loading(self, tmp_path, mock_model):
         """synthesize_pcm_chunks should load model on first request and cache it."""
         models_dir = make_models_dir(tmp_path, sample_rates=[48000])
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -717,11 +710,11 @@ class TestSynthesizeValidation:
     ):
         """synthesize_pcm_chunks should use per-model semaphores to limit concurrent requests."""
         models_dir = make_models_dir(tmp_path, sample_rates=[48000])
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -751,11 +744,11 @@ class TestSynthesizeValidation:
     ):
         """Should fall back to CPU when CUDA is requested but unavailable."""
         models_dir = make_models_dir(tmp_path, sample_rates=[48000])
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cuda",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -804,11 +797,11 @@ class TestSynthesizeValidation:
     ):
         """Should fall back to CPU when XPU is requested but unavailable."""
         models_dir = make_models_dir(tmp_path, sample_rates=[48000])
-        yml_hash = hash_models_yml(os.path.join(models_dir, "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="xpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -854,19 +847,13 @@ class TestSynthesizeValidation:
     @pytest.mark.asyncio
     async def test_synthesize_raises_on_malformed_models_yml(self, tmp_path, default_tts_config):
         """synthesize_pcm_chunks should raise TTSEngineError on malformed models.yml."""
-        models_dir = tmp_path / "models"
-        models_dir.mkdir()
-        (models_dir / "models.yml").write_bytes(b"tts_models:\n  invalid: [")
-        ru_dir = models_dir / "ru"
-        ru_dir.mkdir()
-        (ru_dir / "v5_5_ru.pt").write_bytes(b"fake model")
-
-        yml_hash = hash_models_yml(os.path.join(str(models_dir), "models.yml"))
+        models_dir = make_models_dir(tmp_path, yml_content=b"tts_models:\n  invalid: [")
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
 
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,
@@ -897,20 +884,15 @@ class TestSynthesizeValidation:
     @pytest.mark.asyncio
     async def test_synthesize_raises_on_model_not_in_registry(self, tmp_path, default_tts_config):
         """synthesize_pcm_chunks should raise TTSEngineError when model missing from registry."""
-        models_dir = tmp_path / "models"
-        models_dir.mkdir()
-        (models_dir / "models.yml").write_bytes(
-            b"tts_models:\n  ru:\n    other_model:\n      latest:\n        package: 'http://x'\n"
+        models_dir = make_models_dir(
+            tmp_path,
+            yml_content=b"tts_models:\n  ru:\n    other_model:\n      latest:\n        package: 'http://x'\n",
         )
-        ru_dir = models_dir / "ru"
-        ru_dir.mkdir()
-        (ru_dir / "v5_5_ru.pt").write_bytes(b"fake model")
-
-        yml_hash = hash_models_yml(os.path.join(str(models_dir), "models.yml"))
+        yml_hash = hash_models_yml(models_yml_path(models_dir))
         config = TTSConfig(
             device="cpu",
             inference_timeout=5,
-            frame_duration_ms=50,
+            frame_duration=50,
             sample_rate=48000,
             max_models=2,
             cache_half_life=60,

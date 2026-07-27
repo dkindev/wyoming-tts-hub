@@ -61,7 +61,7 @@ class TTSConfigModel:
 class TTSConfig:
     device: str
     inference_timeout: float
-    frame_duration_ms: int
+    frame_duration: int
     sample_rate: int
     max_models: int
     cache_half_life: float

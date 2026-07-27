@@ -65,7 +65,6 @@ class TestSileroSettings:
         """SileroSettings has expected defaults."""
         settings = Settings()
         assert settings.silero.sample_rate == 48000
-        assert settings.silero.models_dir == "models/silero"
         assert (
             str(settings.silero.models_yml_url)
             == "https://raw.githubusercontent.com/snakers4/silero-models/refs/heads/master/models.yml"
@@ -101,11 +100,16 @@ class TestSileroSettings:
         settings = Settings()
         assert settings.silero.models_yml_hash == ""
 
-    def test_silero_models_dir_env_var(self, monkeypatch):
-        """TTS_SILERO__MODELS_DIR overrides models_dir."""
-        monkeypatch.setenv("TTS_SILERO__MODELS_DIR", "/custom/models")
+    def test_models_dir_env_var(self, monkeypatch):
+        """TTS_MODELS_DIR overrides models_dir."""
+        monkeypatch.setenv("TTS_MODELS_DIR", "/custom/models")
         settings = Settings()
-        assert settings.silero.models_dir == "/custom/models"
+        assert settings.models_dir == "/custom/models"
+
+    def test_models_dir_default_from_yaml(self):
+        """models_dir is 'models' from config.yml (overrides Python default)."""
+        settings = Settings()
+        assert settings.models_dir == "models"
 
 
 class TestYamlConfigSource:

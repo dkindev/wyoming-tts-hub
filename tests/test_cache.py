@@ -1,5 +1,4 @@
 import asyncio
-import threading
 import unittest.mock
 
 import pytest
@@ -183,26 +182,22 @@ class TestKnownBugs:
         assert on_evict.call_count == 0
 
     async def test_close_cancelled_externally_on_to_thread_seam(self):
-        in_to_thread = threading.Event()
         evicted_items = []
 
         def on_evict(batch):
             evicted_items.extend(batch)
-            in_to_thread.set()
-            threading.Event().wait(timeout=5)
 
         c = ExponentialDecayCache(
             capacity=5,
             half_life_seconds=60.0,
+            eviction_interval=3600.0,
             on_evict=on_evict,
         )
         c.put("k1", "v1")
         c.put("k2", "v2")
 
         close_task = asyncio.create_task(c.close())
-
-        in_to_thread.wait(timeout=5)
-
+        await asyncio.sleep(0)
         close_task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await close_task

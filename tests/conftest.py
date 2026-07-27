@@ -35,7 +35,7 @@ def default_tts_config():
     return TTSConfig(
         device="cpu",
         inference_timeout=5,
-        frame_duration_ms=50,
+        frame_duration=50,
         sample_rate=48000,
         max_models=2,
         cache_half_life=60,
