@@ -43,10 +43,10 @@ class TestTtsUri:
 
 
 class TestTtsZeroconf:
-    def test_zeroconf_defaults_to_silero(self):
-        """zeroconf defaults to 'silero-tts' (enabled)."""
+    def test_zeroconf_defaults_to_wyoming_tts_hub(self):
+        """zeroconf defaults to 'wyoming-tts-hub' (enabled)."""
         settings = Settings()
-        assert settings.zeroconf == "silero-tts"
+        assert settings.zeroconf == "wyoming-tts-hub"
 
     def test_zeroconf_silero_is_truthy(self):
         """Non-empty zeroconf evaluates as truthy (enabled)."""

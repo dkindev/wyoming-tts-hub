@@ -122,6 +122,7 @@ async def main():
             partial(
                 SileroEventHandler,
                 engine,
+                settings.app_name,
                 settings.streaming,
                 settings.env_type == "development",
             )

@@ -27,7 +27,7 @@ def _get_language_from_locale_string(locale_str: str) -> str | None:
     return parts[0] if parts else None
 
 
-def _create_wyoming_info(engine: SileroTTSEngine, streaming: bool) -> Info:
+def _create_wyoming_info(engine: SileroTTSEngine, service_name: str, streaming: bool) -> Info:
     storage = engine.get_storage()
     voices = []
     for voice in storage.get_voices():
@@ -50,7 +50,7 @@ def _create_wyoming_info(engine: SileroTTSEngine, streaming: bool) -> Info:
     return Info(
         tts=[
             TtsProgram(
-                name=__metadata__["name"],
+                name=service_name,
                 description=__metadata__["summary"],
                 attribution=Attribution(
                     name=__metadata__["name"],
@@ -69,6 +69,7 @@ class SileroEventHandler(AsyncEventHandler):
     def __init__(
         self,
         engine: SileroTTSEngine,
+        wyoming_service_name: str,
         supports_synthesize_streaming: bool,
         throw_detailed_errors: bool,
         *args,
@@ -76,6 +77,7 @@ class SileroEventHandler(AsyncEventHandler):
     ):
         super().__init__(*args, **kwargs)
         self._engine = engine
+        self._wyoming_service_name = wyoming_service_name
         self._supports_synthesize_streaming = supports_synthesize_streaming
         self._throw_detailed_errors = throw_detailed_errors
         self._is_streaming: bool = False
@@ -156,7 +158,7 @@ class SileroEventHandler(AsyncEventHandler):
 
     async def _handle_describe(self, event: Event) -> bool:
         wyoming_info_event = _create_wyoming_info(
-            self._engine, self._supports_synthesize_streaming
+            self._engine, self._wyoming_service_name, self._supports_synthesize_streaming
         ).event()
         await self.write_event(wyoming_info_event)
         return True

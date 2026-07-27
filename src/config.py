@@ -180,6 +180,12 @@ class SileroSettings(BaseModel):
 
 
 class Settings(BaseSettings):
+    app_name: str = Field(
+        default="Wyoming TTS Hub",
+        description="Application name. Used as a Wyoming service name.",
+    )
+    """Application name. Used as a Wyoming service name."""
+
     env_type: Literal["development", "production"] = Field(
         default="development",
         description="Application environment type. Controls error detail level and other environment-specific behavior.",

@@ -1,3 +1,7 @@
+# Application name. Used as a Wyoming service name.
+# Env: TTS_APP_NAME
+app_name: Wyoming TTS Hub
+
 # Application environment type.
 # CLI: --env_type
 # Env: TTS_ENV_TYPE
@@ -11,7 +15,7 @@ uri: tcp://127.0.0.1:10200
 # Zeroconf discovery name. Empty string disables.
 # CLI: --zeroconf
 # Env: TTS_ZEROCONF
-zeroconf: silero-tts
+zeroconf: wyoming-tts-hub
 
 # Enable audio streaming.
 # CLI: --streaming / --no-streaming
@@ -34,7 +38,7 @@ frame_duration_ms: 50
 # Env: TTS_MAX_MODELS
 max_models: 2
 
-# Maximum concurrent sentences per model.
+# Maximum concurrent sentences per model for TTS processing.
 # CLI: --max_concurrent_sentences_per_model
 # Env: TTS_MAX_CONCURRENT_SENTENCES_PER_MODEL
 max_concurrent_sentences_per_model: 2
