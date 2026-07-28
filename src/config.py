@@ -282,8 +282,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        yaml_file="config.yml",
-        yaml_file_encoding="utf-8",
         env_prefix="TTS_",
         env_nested_delimiter="__",
         extra="ignore",
@@ -298,18 +296,31 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # CLI > ENV OS > config.yaml > Defaults
+        # CLI > ENV OS > config file > Defaults
         return (
             CliArgsSource(settings_cls),
             env_settings,
             dotenv_settings,
-            YamlConfigSettingsSource(settings_cls),
+            CustomYamlSource(settings_cls),
             init_settings,
         )
 
 
+class CustomYamlSource(YamlConfigSettingsSource):
+    def __init__(self, settings_cls: type[BaseSettings]):
+        env_prefix = settings_cls.model_config.get("env_prefix", "")
+
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument("--config", type=str, default=None)
+        args, _ = parser.parse_known_args()
+
+        config_path = args.config or os.environ.get(f"{env_prefix}CONFIG_PATH") or "config.yml"
+
+        super().__init__(settings_cls, yaml_file=config_path)
+
+
 class CliArgsSource(PydanticBaseSettingsSource):
-    _fields_to_skip = ["normalization"]
+    _fields_to_skip = ["normalization", "silero"]
 
     def get_field_value(self, field, field_name):
         return None
@@ -321,6 +332,10 @@ class CliArgsSource(PydanticBaseSettingsSource):
         parser = argparse.ArgumentParser(
             description=__metadata__["summary"],
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        )
+
+        parser.add_argument(
+            "--config", type=str, default=None, metavar="FILE_PATH", help="Path to config YML file"
         )
 
         schema = Settings.model_json_schema()
