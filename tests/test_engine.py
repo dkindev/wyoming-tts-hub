@@ -3,10 +3,10 @@ import unittest.mock
 import pytest
 import torch
 
-from src.tts.config_storage import SileroTTSYamlConfigStorage
+from src.tts.data_storage import YamlDataStorage
 from src.tts.engine import BYTES_PER_SAMPLE, CHANNELS, SileroTTSEngine
 from src.tts.exceptions import TTSEngineError
-from src.tts.models import TextFormat, TTSConfig, TTSConfigModel, TTSResult
+from src.tts.models import PredefinedData, TextFormat, TTSConfig, TTSResult
 from src.tts.preprocessing import TextSentenizerFactory
 from tests.helpers import (
     collect_sentences,
@@ -42,7 +42,7 @@ class TestSileroTTSEngineInit:
             models_yml_url="https://example.com/models.yml",
             models_yml_hash=actual_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -51,7 +51,7 @@ class TestSileroTTSEngineInit:
             "src.tts.engine.urllib.request.urlopen",
             side_effect=RuntimeError("network disabled"),
         ):
-            storage = SileroTTSYamlConfigStorage(config_model)
+            storage = YamlDataStorage(config_model)
             engine = SileroTTSEngine(
                 config=config,
                 storage=storage,
@@ -85,7 +85,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         engine = SileroTTSEngine(
             config=default_tts_config,
             storage=storage,
@@ -120,7 +120,7 @@ models:
             },
         )
 
-        storage = SileroTTSYamlConfigStorage(config_path)
+        storage = YamlDataStorage(config_path)
         engine = SileroTTSEngine(
             config=default_tts_config,
             storage=storage,
@@ -142,7 +142,7 @@ class TestGetInputTypes:
     async def test_get_input_types_returns_tuple(self, tmp_path, default_tts_config):
         """get_input_types should return a tuple."""
         config_path = make_config_file(tmp_path, models={})
-        storage = SileroTTSYamlConfigStorage(config_path)
+        storage = YamlDataStorage(config_path)
         engine = SileroTTSEngine(
             config=default_tts_config,
             storage=storage,
@@ -157,7 +157,7 @@ class TestGetInputTypes:
     async def test_get_input_types_includes_text_and_ssml(self, tmp_path, default_tts_config):
         """get_input_types should include TEXT and SSML."""
         config_path = make_config_file(tmp_path, models={})
-        storage = SileroTTSYamlConfigStorage(config_path)
+        storage = YamlDataStorage(config_path)
         engine = SileroTTSEngine(
             config=default_tts_config,
             storage=storage,
@@ -200,7 +200,7 @@ class TestSynthesizeValidation:
             },
         )
 
-        storage = SileroTTSYamlConfigStorage(config_path)
+        storage = YamlDataStorage(config_path)
         engine = SileroTTSEngine(
             config=default_tts_config,
             storage=storage,
@@ -239,7 +239,7 @@ class TestSynthesizeValidation:
             },
         )
 
-        storage = SileroTTSYamlConfigStorage(config_path)
+        storage = YamlDataStorage(config_path)
         engine = SileroTTSEngine(
             config=default_tts_config,
             storage=storage,
@@ -269,12 +269,12 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -311,7 +311,7 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com/models.yml",
             models_yml_hash="",
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -320,7 +320,7 @@ class TestSynthesizeValidation:
             "src.tts.engine.urllib.request.urlopen",
             side_effect=RuntimeError("network disabled"),
         ):
-            storage = SileroTTSYamlConfigStorage(config_model)
+            storage = YamlDataStorage(config_model)
             engine = SileroTTSEngine(
                 config=config,
                 storage=storage,
@@ -337,7 +337,7 @@ class TestSynthesizeValidation:
     ):
         """synthesize_pcm_chunks should clamp sample rate to model's max if configured rate exceeds it."""
         models_dir = make_models_dir(tmp_path, sample_rates=[8000, 24000])
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -366,7 +366,7 @@ class TestSynthesizeValidation:
             models_yml_hash=yml_hash,
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -384,7 +384,7 @@ class TestSynthesizeValidation:
     ):
         """synthesize_pcm_chunks should use min available rate if configured rate is below min."""
         models_dir = make_models_dir(tmp_path, sample_rates=[24000, 48000])
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -413,7 +413,7 @@ class TestSynthesizeValidation:
             models_yml_hash=yml_hash,
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -445,7 +445,7 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -459,7 +459,7 @@ class TestSynthesizeValidation:
 
         mock_model.apply_tts = capture_apply_tts
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -491,7 +491,7 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -505,7 +505,7 @@ class TestSynthesizeValidation:
 
         mock_model.apply_tts = capture_apply_tts
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -523,7 +523,7 @@ class TestSynthesizeValidation:
     ):
         """synthesize_pcm_chunks should use single available rate regardless of config value."""
         models_dir = make_models_dir(tmp_path, sample_rates=[24000])
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -552,7 +552,7 @@ class TestSynthesizeValidation:
             models_yml_hash=yml_hash,
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -584,7 +584,7 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -598,7 +598,7 @@ class TestSynthesizeValidation:
 
         mock_model.apply_tts = capture_apply_tts
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -630,7 +630,7 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -644,7 +644,7 @@ class TestSynthesizeValidation:
 
         mock_model.apply_tts = capture_apply_tts
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -674,7 +674,7 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -692,7 +692,7 @@ class TestSynthesizeValidation:
             "src.tts.engine.torch.package.PackageImporter",
             return_value=mock_importer,
         ):
-            storage = SileroTTSYamlConfigStorage(config_model)
+            storage = YamlDataStorage(config_model)
             engine = SileroTTSEngine(
                 config=config,
                 storage=storage,
@@ -724,12 +724,12 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -758,7 +758,7 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -775,7 +775,7 @@ class TestSynthesizeValidation:
         mock_model.to = FakeModule.to
 
         with unittest.mock.patch.object(torch, "cuda", FakeModule(), create=True):
-            storage = SileroTTSYamlConfigStorage(config_model)
+            storage = YamlDataStorage(config_model)
             engine = SileroTTSEngine(
                 config=config,
                 storage=storage,
@@ -811,7 +811,7 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
@@ -828,7 +828,7 @@ class TestSynthesizeValidation:
         mock_model.to = FakeModule.to
 
         with unittest.mock.patch.object(torch, "xpu", FakeModule(), create=True):
-            storage = SileroTTSYamlConfigStorage(config_model)
+            storage = YamlDataStorage(config_model)
             engine = SileroTTSEngine(
                 config=config,
                 storage=storage,
@@ -863,12 +863,12 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com/models.yml",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,
@@ -902,12 +902,12 @@ class TestSynthesizeValidation:
             models_yml_url="https://example.com",
             models_yml_hash=yml_hash,
         )
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[make_model()],
             voices=[make_voice(voice_id="ru_RU-v5_5_ru-aidar", name="aidar")],
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         engine = SileroTTSEngine(
             config=config,
             storage=storage,

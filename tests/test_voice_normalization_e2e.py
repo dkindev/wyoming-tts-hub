@@ -1,5 +1,5 @@
 from src.config import NormalizationSettings
-from src.tts.config_storage import SileroTTSYamlConfigStorage
+from src.tts.data_storage import YamlDataStorage
 from src.tts.models import TextFormat
 from src.tts.preprocessing import (
     OpenAiTextNormalizer,
@@ -66,7 +66,7 @@ class TestE2EVoiceNormalizationLLM:
         config_yml = tmp_path / "data.yml"
         config_yml.write_text(YAML_WITH_LLM_NORMALIZATION)
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client,
             settings=NormalizationSettings(),
@@ -90,7 +90,7 @@ class TestE2EVoiceNormalizationDisabled:
         config_yml = tmp_path / "data.yml"
         config_yml.write_text(YAML_WITH_DISABLED_NORMALIZATION)
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client,
             settings=NormalizationSettings(),
@@ -114,7 +114,7 @@ class TestE2ENoVoiceNormalizationFallsThrough:
         config_yml = tmp_path / "data.yml"
         config_yml.write_text(YAML_WITHOUT_NORMALIZATION)
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client,
             settings=NormalizationSettings(),

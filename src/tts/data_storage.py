@@ -8,15 +8,15 @@ from loguru import logger
 from src.tts.models import (
     Model,
     NormalizationType,
+    PredefinedData,
     Prompt,
     TextFormat,
-    TTSConfigModel,
     Voice,
     VoiceNormalization,
 )
 
 
-class SileroTTSConfigStorage(ABC):
+class DataStorage(ABC):
     @abstractmethod
     def get_voices(self) -> list[Voice]:
         ...
@@ -44,8 +44,8 @@ class SileroTTSConfigStorage(ABC):
         ...
 
 
-class SileroTTSYamlConfigStorage(SileroTTSConfigStorage):
-    def __init__(self, config_path_or_model: str | Path | TTSConfigModel):
+class YamlDataStorage(DataStorage):
+    def __init__(self, config_path_or_model: str | Path | PredefinedData):
         if isinstance(config_path_or_model, str | Path):
             config_model = self._load_config_model(config_path_or_model)
         else:
@@ -67,7 +67,7 @@ class SileroTTSYamlConfigStorage(SileroTTSConfigStorage):
             else {}
         )
 
-    def _load_config_model(self, config_path: str | Path) -> TTSConfigModel:
+    def _load_config_model(self, config_path: str | Path) -> PredefinedData:
         config_path = config_path.strip()
         if not config_path:
             raise ValueError("Path to the model configuration file is empty or whitespace")
@@ -116,7 +116,7 @@ class SileroTTSYamlConfigStorage(SileroTTSConfigStorage):
         prompts_list = self._parse_prompts(data)
 
         logger.debug("Configuration loaded.")
-        return TTSConfigModel(
+        return PredefinedData(
             models=models_list,
             voices=voices_list,
             prompts=prompts_list if prompts_list else None,
@@ -166,13 +166,13 @@ class SileroTTSYamlConfigStorage(SileroTTSConfigStorage):
         return prompts_list
 
     @staticmethod
-    def _filter_enabled(config: TTSConfigModel) -> TTSConfigModel:
+    def _filter_enabled(config: PredefinedData) -> PredefinedData:
         enabled_models = [m for m in config.models if m.enabled]
         enabled_model_names = {m.name for m in enabled_models}
 
         filtered_voices = [v for v in config.voices if v.model in enabled_model_names]
 
-        return TTSConfigModel(
+        return PredefinedData(
             models=enabled_models,
             voices=filtered_voices,
             prompts=config.prompts,

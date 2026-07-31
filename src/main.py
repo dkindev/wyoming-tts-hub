@@ -10,7 +10,7 @@ from wyoming.server import AsyncServer, AsyncTcpServer
 from src.config import Settings, get_settings
 from src.handler import SileroEventHandler
 from src.logger import setup_logging
-from src.tts.config_storage import SileroTTSConfigStorage, SileroTTSYamlConfigStorage
+from src.tts.data_storage import DataStorage, YamlDataStorage
 from src.tts.engine import SileroTTSEngine
 from src.tts.models import TTSConfig
 from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
@@ -18,8 +18,8 @@ from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
 setup_logging()
 
 
-def create_storage(settings: Settings) -> SileroTTSConfigStorage:
-    return SileroTTSYamlConfigStorage(settings.data_yml_path)
+def create_storage(settings: Settings) -> DataStorage:
+    return YamlDataStorage(settings.data_yml_path)
 
 
 def create_text_sentenizer_factory() -> TextSentenizerFactory:
@@ -27,7 +27,7 @@ def create_text_sentenizer_factory() -> TextSentenizerFactory:
 
 
 def create_text_normalizer_factory(
-    openai_client: AsyncOpenAI, settings: Settings, storage: SileroTTSConfigStorage
+    openai_client: AsyncOpenAI, settings: Settings, storage: DataStorage
 ) -> TextNormalizerFactory:
     return TextNormalizerFactory(
         openai_client=openai_client,
@@ -38,7 +38,7 @@ def create_text_normalizer_factory(
 
 def create_engine(
     settings: Settings,
-    storage: SileroTTSConfigStorage,
+    storage: DataStorage,
     text_sentenizer_factory: TextSentenizerFactory,
     text_normalizer_factory: TextNormalizerFactory,
 ) -> SileroTTSEngine:

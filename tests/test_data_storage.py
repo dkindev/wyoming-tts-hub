@@ -1,14 +1,14 @@
-from src.tts.config_storage import SileroTTSYamlConfigStorage
-from src.tts.models import Model, NormalizationType, TextFormat, TTSConfigModel, Voice
+from src.tts.data_storage import YamlDataStorage
+from src.tts.models import Model, NormalizationType, PredefinedData, TextFormat, Voice
 
 
-class TestSileroTTSYamlConfigStorageInit:
+class TestYamlDataStorageInit:
     """Tests for SileroTTSYamlConfigStorage initialization."""
 
     def test_init_accepts_config_model(self):
         """Should accept TTSConfigModel and expose get_voice."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[Model(name="v5_5_ru", language="ru")],
             voices=[
                 Voice(
@@ -21,7 +21,7 @@ class TestSileroTTSYamlConfigStorageInit:
             ],
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
 
         assert storage.get_voice("ru_RU-v5_5_ru-aidar").name == "aidar"
 
@@ -32,8 +32,8 @@ class TestGetVoices:
     def test_get_voices_returns_list(self):
         """get_voices should return a list of Voice objects."""
 
-        config_model = TTSConfigModel(models=[], voices=[])
-        storage = SileroTTSYamlConfigStorage(config_model)
+        config_model = PredefinedData(models=[], voices=[])
+        storage = YamlDataStorage(config_model)
 
         result = storage.get_voices()
         assert isinstance(result, list)
@@ -41,7 +41,7 @@ class TestGetVoices:
     def test_get_voices_returns_voice_objects(self):
         """get_voices should return list of Voice objects with id field."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[Model(name="v5_5_ru", language="ru")],
             voices=[
                 Voice(
@@ -53,7 +53,7 @@ class TestGetVoices:
                 )
             ],
         )
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
 
         result = storage.get_voices()
         assert len(result) == 1
@@ -63,7 +63,7 @@ class TestGetVoices:
     def test_get_voices_includes_all_voices(self):
         """get_voices should include all voices."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[Model(name="v5_5_ru", language="ru")],
             voices=[
                 Voice(
@@ -82,7 +82,7 @@ class TestGetVoices:
                 ),
             ],
         )
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
 
         result = storage.get_voices()
         assert len(result) == 2
@@ -92,7 +92,7 @@ class TestGetVoices:
     def test_get_voices_from_all_locales(self):
         """get_voices should include voices from all locales."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[Model(name="v5_5_ru", language="ru"), Model(name="v3_en", language="en")],
             voices=[
                 Voice(
@@ -111,7 +111,7 @@ class TestGetVoices:
                 ),
             ],
         )
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
 
         result = storage.get_voices()
         assert len(result) == 2
@@ -123,7 +123,7 @@ class TestGetVoice:
     def test_get_voice_returns_correct_config(self):
         """get_voice should return Voice for the given voice_id."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[Model(name="v5_5_ru", language="ru")],
             voices=[
                 Voice(
@@ -135,7 +135,7 @@ class TestGetVoice:
                 )
             ],
         )
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
 
         voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
         assert voice.speaker == "aidar"
@@ -163,7 +163,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
         assert voice.name == "aidar"
@@ -188,7 +188,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         voices = storage.get_voices()
         assert len(voices) == 1
@@ -212,7 +212,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
         assert voice.speaker == "aidar"
 
@@ -234,19 +234,19 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
         assert voice.speaker == "aidar"
 
 
-class TestEmptyConfig:
+class TestEmptyData:
     """Tests for empty/minimal configs."""
 
     def test_empty_config(self):
         """Should handle empty config with no locales or models."""
 
-        config_model = TTSConfigModel(models=[], voices=[])
-        storage = SileroTTSYamlConfigStorage(config_model)
+        config_model = PredefinedData(models=[], voices=[])
+        storage = YamlDataStorage(config_model)
 
         assert storage.get_voices() == []
 
@@ -256,7 +256,7 @@ class TestEmptyConfig:
         config_yml = tmp_path / "empty.yml"
         config_yml.write_text("")
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert storage.get_voices() == []
 
@@ -283,7 +283,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert storage.get_voices() == []
 
@@ -305,7 +305,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert len(storage.get_voices()) == 1
 
@@ -328,7 +328,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert len(storage.get_voices()) == 1
 
@@ -360,7 +360,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         voices = storage.get_voices()
         assert not any(v.locale == "ru_RU" for v in voices)
@@ -374,11 +374,11 @@ class TestGetModel:
     def test_get_model_returns_correct_model(self):
         """get_model should return Model for the given model name."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[Model(name="v5_5_ru", language="ru")],
             voices=[],
         )
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
 
         m = storage.get_model("v5_5_ru")
         assert m.language == "ru"
@@ -388,7 +388,7 @@ class TestGetModels:
     def test_get_models_returns_all_enabled_models(self):
         """get_models() returns list of all enabled Model objects."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[
                 Model(name="v5_5_ru", language="ru", warmup=True),
                 Model(name="v3_en", language="en"),
@@ -404,7 +404,7 @@ class TestGetModels:
             ],
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
         result = storage.get_models()
 
         model1 = [model for model in result if model.name == "v5_5_ru"]
@@ -438,7 +438,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert storage.get_model("v5_5_ru").warmup is True
 
@@ -460,7 +460,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert storage.get_model("v5_5_ru").warmup is False
 
@@ -487,7 +487,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert storage.get_model("v5_5_ru").hash_prefix == "a1b2c3d4"
 
@@ -509,7 +509,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert storage.get_model("v5_5_ru").hash_prefix is None
 
@@ -532,7 +532,7 @@ models:
 """
         )
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
 
         assert storage.get_model("v5_5_ru").hash_prefix is None
 
@@ -543,7 +543,7 @@ class TestDisabledModel:
     def test_disabled_model_voices_excluded_from_get_voices(self):
         """get_voices should exclude voices that reference a disabled model."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[
                 Model(name="v5_5_ru", language="ru", enabled=False),
                 Model(name="v3_en", language="en", enabled=True),
@@ -566,7 +566,7 @@ class TestDisabledModel:
             ],
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
 
         result = storage.get_voices()
         assert not any(v.locale == "ru_RU" for v in result)
@@ -576,14 +576,14 @@ class TestDisabledModel:
     def test_disabled_model_get_model_returns_none(self):
         """get_model should return None for a disabled model."""
 
-        config_model = TTSConfigModel(
+        config_model = PredefinedData(
             models=[
                 Model(name="v5_5_ru", language="ru", enabled=False),
             ],
             voices=[],
         )
 
-        storage = SileroTTSYamlConfigStorage(config_model)
+        storage = YamlDataStorage(config_model)
 
         assert storage.get_model("v5_5_ru") is None
 
@@ -604,7 +604,7 @@ models: {}
 voices: []
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         prompt = storage.get_prompt("p1")
         assert prompt is not None
         assert prompt.id == "p1"
@@ -624,7 +624,7 @@ models: {}
 voices: []
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         assert storage.get_prompt("unknown") is None
 
     def test_get_prompt_from_empty_prompts(self, tmp_path):
@@ -637,7 +637,7 @@ models: {}
 voices: []
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         assert storage.get_prompt("p1") is None
 
     def test_get_prompt_from_missing_prompts_key(self, tmp_path):
@@ -649,7 +649,7 @@ models: {}
 voices: []
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         assert storage.get_prompt("p1") is None
 
 
@@ -675,7 +675,7 @@ models:
                 prompt_id: p1
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         vn = storage.get_voice_normalization("ru_RU-v5_5_ru-aidar", TextFormat.TEXT)
         assert vn is not None
         assert vn.voice_id == "ru_RU-v5_5_ru-aidar"
@@ -702,7 +702,7 @@ models:
                 type: llm
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         assert storage.get_voice_normalization("unknown-voice", TextFormat.TEXT) is None
 
     def test_get_voice_normalization_returns_none_for_unknown_format(self, tmp_path):
@@ -723,7 +723,7 @@ models:
                 type: llm
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         assert storage.get_voice_normalization("ru_RU-v5_5_ru-aidar", TextFormat.SSML) is None
 
     def test_get_voice_normalization_voice_without_normalization(self, tmp_path):
@@ -740,7 +740,7 @@ models:
           - name: aidar
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         assert storage.get_voice_normalization("ru_RU-v5_5_ru-aidar", TextFormat.TEXT) is None
 
     def test_get_voice_normalization_disabled_entry(self, tmp_path):
@@ -761,7 +761,7 @@ models:
                 type: simple
 """
         )
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         vn = storage.get_voice_normalization("ru_RU-v5_5_ru-aidar", TextFormat.TEXT)
         assert vn is not None
         assert vn.enabled is False

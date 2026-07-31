@@ -7,10 +7,10 @@ from src.tts.exceptions import TTSEngineError
 from src.tts.models import (
     Model,
     NormalizationType,
+    PredefinedData,
     Prompt,
     TextFormat,
     TTSConfig,
-    TTSConfigModel,
     TTSResult,
     Voice,
     VoiceNormalization,
@@ -161,13 +161,13 @@ class TestTTSConfigModel:
                 locale="en_US",
             )
         ]
-        config = TTSConfigModel(models=models, voices=voices)
+        config = PredefinedData(models=models, voices=voices)
         assert config.models == models
         assert config.voices == voices
 
     def test_tts_config_model_is_frozen(self):
         """TTSConfigModel dataclass is immutable (frozen)."""
-        config = TTSConfigModel(models=[], voices=[])
+        config = PredefinedData(models=[], voices=[])
         with pytest.raises(FrozenInstanceError):
             config.models = []
 

@@ -4,7 +4,7 @@ from loguru import logger
 from openai import AsyncOpenAI
 
 from src.config import BaseNormalizationSettings, NormalizationSettings
-from src.tts.config_storage import SileroTTSConfigStorage
+from src.tts.data_storage import DataStorage
 from src.tts.models import (
     OpenAiNormalizationConfig,
     TextFormat,
@@ -24,7 +24,7 @@ class TextNormalizerFactory:
         self,
         openai_client: AsyncOpenAI,
         settings: NormalizationSettings,
-        storage: SileroTTSConfigStorage,
+        storage: DataStorage,
     ):
         self._settings = settings
         self._storage = storage

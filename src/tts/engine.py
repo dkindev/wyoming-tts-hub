@@ -13,7 +13,7 @@ import yaml
 from loguru import logger
 
 from src.tts.cache import ExponentialDecayCache
-from src.tts.config_storage import SileroTTSConfigStorage
+from src.tts.data_storage import DataStorage
 from src.tts.exceptions import TTSEngineError
 from src.tts.models import Model, NormalizationOptions, TextFormat, TTSConfig, TTSResult, Voice
 from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
@@ -37,7 +37,7 @@ class SileroTTSEngine:
     def __init__(
         self,
         config: TTSConfig,
-        storage: SileroTTSConfigStorage,
+        storage: DataStorage,
         text_sentenizer_factory: TextSentenizerFactory,
         text_normalizer_factory: TextNormalizerFactory,
     ):
@@ -120,7 +120,7 @@ class SileroTTSEngine:
 
             logger.info("Engine has been warmed up")
 
-    def get_storage(self) -> SileroTTSConfigStorage:
+    def get_storage(self) -> DataStorage:
         """Return the config storage."""
         return self._storage
 

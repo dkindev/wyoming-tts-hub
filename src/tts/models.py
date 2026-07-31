@@ -50,7 +50,7 @@ class Voice:
 
 
 @dataclass(frozen=True)
-class TTSConfigModel:
+class PredefinedData:
     models: list[Model]
     voices: list[Voice]
     prompts: list[Prompt] | None = None
