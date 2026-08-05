@@ -53,7 +53,7 @@ class YamlDataStorage(DataStorage):
 
         config_model = self._filter_enabled(config_model)
 
-        self._models: dict[str, Model] = {m.name: m for m in config_model.models}
+        self._models: dict[str, Model] = {m.id: m for m in config_model.models}
         self._voices_by_id: dict[str, Voice] = {v.id: v for v in config_model.voices}
         self._prompts: dict[str, Prompt] = (
             {p.id: p for p in config_model.prompts} if config_model.prompts else {}
@@ -84,10 +84,10 @@ class YamlDataStorage(DataStorage):
         voices_list: list[Voice] = []
         voice_normalizations_list: list[VoiceNormalization] = []
 
-        for model_name, model_data in data.get("models", {}).items():
+        for model_id, model_data in data.get("models", {}).items():
             models_list.append(
                 Model(
-                    name=model_name,
+                    id=model_id,
                     language=model_data["language"],
                     enabled=model_data.get("enabled", True),
                     warmup=model_data.get("warmup", False),
@@ -99,13 +99,13 @@ class YamlDataStorage(DataStorage):
                 for voice_entry in locale_data.get("voices", []):
                     voice_name = voice_entry["name"]
                     speaker = voice_entry.get("speaker", "").strip() or voice_name
-                    voice_id = f"{locale_name}-{model_name}-{voice_name}"
+                    voice_id = f"{locale_name}-{model_id}-{voice_name}"
                     voices_list.append(
                         Voice(
                             id=voice_id,
                             name=voice_name,
                             speaker=speaker,
-                            model=model_name,
+                            model=model_id,
                             locale=locale_name,
                         )
                     )
@@ -168,9 +168,9 @@ class YamlDataStorage(DataStorage):
     @staticmethod
     def _filter_enabled(config: PredefinedData) -> PredefinedData:
         enabled_models = [m for m in config.models if m.enabled]
-        enabled_model_names = {m.name for m in enabled_models}
+        enabled_model_ids = {m.id for m in enabled_models}
 
-        filtered_voices = [v for v in config.voices if v.model in enabled_model_names]
+        filtered_voices = [v for v in config.voices if v.model in enabled_model_ids]
 
         return PredefinedData(
             models=enabled_models,

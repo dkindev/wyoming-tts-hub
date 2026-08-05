@@ -20,33 +20,33 @@ from src.tts.models import (
 class TestModel:
     def test_model_has_name_and_language_fields(self):
         """Model dataclass has name and language fields."""
-        model = Model(name="test_model", language="en")
-        assert model.name == "test_model"
+        model = Model(id="test_model", language="en")
+        assert model.id == "test_model"
         assert model.language == "en"
 
     def test_model_warmup_defaults_to_false(self):
         """Model.warmup defaults to False."""
-        model = Model(name="test_model", language="en")
+        model = Model(id="test_model", language="en")
         assert model.warmup is False
 
     def test_model_warmup_can_be_set_to_true(self):
         """Model(language, warmup=True) sets warmup to True."""
-        model = Model(name="test_model", language="en", warmup=True)
+        model = Model(id="test_model", language="en", warmup=True)
         assert model.warmup is True
 
     def test_model_hash_prefix_defaults_to_none(self):
         """Model.hash_prefix defaults to None."""
-        model = Model(name="test_model", language="en")
+        model = Model(id="test_model", language="en")
         assert model.hash_prefix is None
 
     def test_model_hash_prefix_can_be_set(self):
         """Model(name, language, hash_prefix=...) stores the value."""
-        model = Model(name="test_model", language="en", hash_prefix="a1b2c3")
+        model = Model(id="test_model", language="en", hash_prefix="a1b2c3")
         assert model.hash_prefix == "a1b2c3"
 
     def test_model_is_frozen(self):
         """Model dataclass is immutable (frozen)."""
-        model = Model(name="test_model", language="en")
+        model = Model(id="test_model", language="en")
         with pytest.raises(FrozenInstanceError):
             model.language = "fr"
 
@@ -151,7 +151,7 @@ class TestVoiceNormalization:
 class TestTTSConfigModel:
     def test_tts_config_model_has_models_and_voices(self):
         """TTSConfigModel dataclass has models list and voices list."""
-        models = [Model(name="v3_en", language="en")]
+        models = [Model(id="v3_en", language="en")]
         voices = [
             Voice(
                 id="en_US-v3_en-en_0",

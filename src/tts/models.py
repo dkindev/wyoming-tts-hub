@@ -33,7 +33,7 @@ class VoiceNormalization:
 
 @dataclass(frozen=True)
 class Model:
-    name: str
+    id: str
     language: str
     enabled: bool = True
     warmup: bool = False

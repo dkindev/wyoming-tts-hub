@@ -85,8 +85,8 @@ def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru", locale="ru_RU")
     )
 
 
-def make_model(name="v5_5_ru", language="ru", warmup=False, enabled=True):
-    return Model(name=name, language=language, warmup=warmup, enabled=enabled)
+def make_model(id="v5_5_ru", language="ru", warmup=False, enabled=True):
+    return Model(id=id, language=language, warmup=warmup, enabled=enabled)
 
 
 def make_merged_yaml(tmp_path, models_data: dict) -> str:

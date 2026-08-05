@@ -9,7 +9,7 @@ class TestYamlDataStorageInit:
         """Should accept TTSConfigModel and expose get_voice."""
 
         config_model = PredefinedData(
-            models=[Model(name="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru", language="ru")],
             voices=[
                 Voice(
                     id="ru_RU-v5_5_ru-aidar",
@@ -42,7 +42,7 @@ class TestGetVoices:
         """get_voices should return list of Voice objects with id field."""
 
         config_model = PredefinedData(
-            models=[Model(name="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru", language="ru")],
             voices=[
                 Voice(
                     id="ru_RU-v5_5_ru-aidar",
@@ -64,7 +64,7 @@ class TestGetVoices:
         """get_voices should include all voices."""
 
         config_model = PredefinedData(
-            models=[Model(name="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru", language="ru")],
             voices=[
                 Voice(
                     id="ru_RU-v5_5_ru-aidar",
@@ -93,7 +93,7 @@ class TestGetVoices:
         """get_voices should include voices from all locales."""
 
         config_model = PredefinedData(
-            models=[Model(name="v5_5_ru", language="ru"), Model(name="v3_en", language="en")],
+            models=[Model(id="v5_5_ru", language="ru"), Model(id="v3_en", language="en")],
             voices=[
                 Voice(
                     id="ru_RU-v5_5_ru-aidar",
@@ -124,7 +124,7 @@ class TestGetVoice:
         """get_voice should return Voice for the given voice_id."""
 
         config_model = PredefinedData(
-            models=[Model(name="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru", language="ru")],
             voices=[
                 Voice(
                     id="ru_RU-v5_5_ru-aidar",
@@ -375,7 +375,7 @@ class TestGetModel:
         """get_model should return Model for the given model name."""
 
         config_model = PredefinedData(
-            models=[Model(name="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru", language="ru")],
             voices=[],
         )
         storage = YamlDataStorage(config_model)
@@ -390,8 +390,8 @@ class TestGetModels:
 
         config_model = PredefinedData(
             models=[
-                Model(name="v5_5_ru", language="ru", warmup=True),
-                Model(name="v3_en", language="en"),
+                Model(id="v5_5_ru", language="ru", warmup=True),
+                Model(id="v3_en", language="en"),
             ],
             voices=[
                 Voice(
@@ -407,8 +407,8 @@ class TestGetModels:
         storage = YamlDataStorage(config_model)
         result = storage.get_models()
 
-        model1 = [model for model in result if model.name == "v5_5_ru"]
-        model2 = [model for model in result if model.name == "v3_en"]
+        model1 = [model for model in result if model.id == "v5_5_ru"]
+        model2 = [model for model in result if model.id == "v3_en"]
 
         assert isinstance(result, list)
         assert len(result) == 2
@@ -545,8 +545,8 @@ class TestDisabledModel:
 
         config_model = PredefinedData(
             models=[
-                Model(name="v5_5_ru", language="ru", enabled=False),
-                Model(name="v3_en", language="en", enabled=True),
+                Model(id="v5_5_ru", language="ru", enabled=False),
+                Model(id="v3_en", language="en", enabled=True),
             ],
             voices=[
                 Voice(
@@ -578,7 +578,7 @@ class TestDisabledModel:
 
         config_model = PredefinedData(
             models=[
-                Model(name="v5_5_ru", language="ru", enabled=False),
+                Model(id="v5_5_ru", language="ru", enabled=False),
             ],
             voices=[],
         )
