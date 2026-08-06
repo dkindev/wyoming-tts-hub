@@ -88,7 +88,6 @@ class YamlDataStorage(DataStorage):
             models_list.append(
                 Model(
                     id=model_id,
-                    language=model_data["language"],
                     enabled=model_data.get("enabled", True),
                     warmup=model_data.get("warmup", False),
                     hash_prefix=model_data.get("hash_prefix") or None,

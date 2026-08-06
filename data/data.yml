@@ -1,6 +1,5 @@
 models:
   v5_5_ru:
-    language: ru
     warmup: true
     locales:
       ru_RU:
@@ -11,7 +10,6 @@ models:
           - name: kseniya
           - name: xenia
   v3_en:
-    language: en
     locales:
       en_US:
         voices:

@@ -34,7 +34,6 @@ class VoiceNormalization:
 @dataclass(frozen=True)
 class Model:
     id: str
-    language: str
     enabled: bool = True
     warmup: bool = False
     hash_prefix: str | None = None
