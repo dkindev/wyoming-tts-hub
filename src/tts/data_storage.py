@@ -97,7 +97,7 @@ class YamlDataStorage(DataStorage):
             for voice_entry in model_data.get("voices", []):
                 voice_name = voice_entry["name"]
                 speaker = voice_entry.get("speaker", "").strip() or voice_name
-                voice_id = f"{model_id}-{voice_name}"
+                voice_id = f"{model_id}-{speaker}"
                 voices_list.append(
                     Voice(
                         id=voice_id,

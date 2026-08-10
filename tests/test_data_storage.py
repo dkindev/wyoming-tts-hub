@@ -247,11 +247,35 @@ models:
         assert [v.id for v in storage.get_voices()] == [
             "v5_5_ru-aidar",
             "v5_5_ru-eugene",
-            "v3_en-henry",
+            "v3_en-en_2",
         ]
         assert not hasattr(storage.get_voice("v5_5_ru-aidar"), "locale")
-        assert storage.get_voice("v3_en-henry").speaker == "en_2"
+        assert storage.get_voice("v3_en-en_2").speaker == "en_2"
+        assert storage.get_voice("v3_en-en_2").name == "henry"
         assert storage.get_model("v5_5_ru").warmup is True
+
+    def test_voice_yaml_entries_populate_reference_fields(self, tmp_path):
+        """ref_audio, ref_text, and instruct keys in a voice entry parse onto the Voice."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    voices:
+      - name: aidar
+        ref_audio: /audio/aidar.wav
+        ref_text: "Hello world"
+        instruct: "Speak slowly"
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+        voice = storage.get_voice("v5_5_ru-aidar")
+
+        assert voice.ref_audio == "/audio/aidar.wav"
+        assert voice.ref_text == "Hello world"
+        assert voice.instruct == "Speak slowly"
 
 
 class TestEmptyData:

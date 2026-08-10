@@ -24,9 +24,7 @@ different models.
 _Avoid_: Voice (when meaning a speaker profile)
 
 **Voice**:
-A named voice backed by a model speaker. Each voice has a unique ID of the form
-`<model_id>-<voice_name>` (e.g., `v5_5_ru-aidar`), references exactly one
-**Model**, and maps to exactly one speaker.
+The model-speaker mapping backed by a model speaker.
 _Avoid_: Speaker (when meaning a named voice)
 
 **Sentence**:
