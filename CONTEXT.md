@@ -23,14 +23,10 @@ are model-specific — the same speaker name may refer to different voices acros
 different models.
 _Avoid_: Voice (when meaning a speaker profile)
 
-**Locale**:
-A language-region string (e.g., `ru_RU`, `en_US`) that groups voices. A locale is
-available only when at least one voice backed by an enabled model carries it.
-_Avoid_: Language (when referring to the locale as a whole)
-
 **Voice**:
-A named, locale-specific voice backed by a model speaker. Each voice has a
-unique ID, belongs to exactly one locale and references one model.
+A named voice backed by a model speaker. Each voice has a unique ID of the form
+`<model_id>-<voice_name>` (e.g., `v5_5_ru-aidar`), references exactly one
+**Model**, and maps to exactly one speaker.
 _Avoid_: Speaker (when meaning a named voice)
 
 **Sentence**:
@@ -60,9 +56,9 @@ _Avoid_: LLM instruction
 
 - A **Model** supports one or more **Speakers**
 - A **Speaker** belongs to exactly one **Model**
-- A **Locale** has one or more **Voices**
-- A **Voice** belongs to exactly one **Locale**, references exactly one
-  **Model**, and maps to exactly one **Speaker**
+- A **Voice** references exactly one **Model** and maps to exactly one
+  **Speaker**; the language of its speech is derived from the **Model** (via the
+  engine's model→language mapping)
 - The **TTS Engine** loads a **Model**, selects a **Speaker**, splits text into
   **Sentences**, applies **Text normalization** to each **Sentence**, synthesizes
   each **Sentence** into one or more **Chunks**, and streams the **Chunks** over
@@ -74,8 +70,8 @@ _Avoid_: LLM instruction
 
 ## Example dialogue
 
-> **Dev:** "If I configure a **Voice** `henry` under locale `en_US` backed by
-> model `v3_en`, does the **TTS Engine** load the model immediately?"
+> **Dev:** "If I configure a **Voice** `v5_5_ru-aidar` backed by
+> model `v5_5_ru`, does the **TTS Engine** load the model immediately?"
 > **Domain expert:** "No — the **Model** is only loaded when the first synthesis
 > request arrives, unless its `warmup` is set to `true`."
 > **Dev:** "And if the text exceeds the **Sentence** limit, does each sentence
