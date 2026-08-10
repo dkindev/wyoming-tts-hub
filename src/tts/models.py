@@ -26,6 +26,7 @@ class NormalizationType(Enum):
 class VoiceNormalization:
     voice_id: str
     text_format: TextFormat
+    language: str
     type: NormalizationType
     enabled: bool
     prompt_id: str | None = None

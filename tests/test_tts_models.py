@@ -112,16 +112,18 @@ class TestPrompt:
 
 class TestVoiceNormalization:
     def test_voice_normalization_has_all_fields(self):
-        """VoiceNormalization dataclass has voice_id, text_format, type, enabled, prompt_id."""
+        """VoiceNormalization dataclass has voice_id, text_format, language, type, enabled, prompt_id."""
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="p1",
         )
         assert vn.voice_id == "v1"
         assert vn.text_format == TextFormat.TEXT
+        assert vn.language == "ru"
         assert vn.type == NormalizationType.OPENAI
         assert vn.enabled is True
         assert vn.prompt_id == "p1"
@@ -131,6 +133,7 @@ class TestVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.SIMPLE,
             enabled=False,
         )
@@ -141,6 +144,7 @@ class TestVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.SIMPLE,
             enabled=True,
         )
@@ -158,7 +162,6 @@ class TestTTSConfigModel:
                 name="en_0",
                 speaker="en_0",
                 model_id="v3_en",
-                locale="en_US",
             )
         ]
         config = PredefinedData(models=models, voices=voices)

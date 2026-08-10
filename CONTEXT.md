@@ -45,7 +45,7 @@ The preprocessing step applied to text before TTS synthesis that ensures clean i
 _Avoid_: Preprocessing, text cleaning, normalization (alone)
 
 **VoiceNormalization**:
-A per-voice, per-text-format override of normalization settings. Links a voice to a specific normalization type (simple or LLM), optionally referencing a reusable prompt. When present, it overrides the server-wide default for that voice and text format combination.
+A per-voice, per-text-format, per-language override of normalization settings. Links a voice to a specific normalization type (simple or LLM) for a bare language code, optionally referencing a reusable prompt. When present, it overrides the server-wide default for that voice, text format, and language combination.
 _Avoid_: Normalization override, voice normalisation config
 
 **Prompt**:
@@ -65,7 +65,7 @@ _Avoid_: LLM instruction
   the Wyoming protocol
 - The server advertises supported **Voices** over the **Wyoming**
   protocol
-- A **Voice** has zero or more **VoiceNormalizations** (per text format overrides)
+- A **Voice** has zero or more **VoiceNormalizations** (per text format and language overrides)
 - A **Prompt** is referenced by zero or more **VoiceNormalizations** (shared LLM prompt definitions)
 
 ## Example dialogue
@@ -83,7 +83,7 @@ _Avoid_: LLM instruction
 > **Domain expert:** "You create a **VoiceNormalization** linking the voice to
 > `NormalizationType.LLM`, and optionally attach a **Prompt** that tells the LLM
 > which model and instruction to use. If no **VoiceNormalization** exists for
-> that voice and text format, the server-wide default applies."
+> that voice, text format, and language, the server-wide default applies."
 
 ## Flagged ambiguities
 

@@ -639,7 +639,7 @@ class TestGetVoiceNormalization:
     """Tests for get_voice_normalization() method."""
 
     def test_get_voice_normalization_returns_normalization(self, tmp_path):
-        """get_voice_normalization should return VoiceNormalization for voice + text_format."""
+        """get_voice_normalization returns VoiceNormalization for voice + text_format + language."""
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
             """
@@ -648,19 +648,94 @@ models:
     voices:
       - name: aidar
         normalization:
-          text:
-            enabled: true
-            type: openai
-            prompt_id: p1
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: p1
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT)
+        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
         assert vn is not None
         assert vn.voice_id == "v5_5_ru-aidar"
         assert vn.text_format == TextFormat.TEXT
+        assert vn.language == "ru"
         assert vn.type == NormalizationType.OPENAI
         assert vn.enabled is True
+        assert vn.prompt_id == "p1"
+
+    def test_get_voice_normalization_mismatched_language_returns_none(self, tmp_path):
+        """get_voice_normalization returns None for a language with no override."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: p1
+"""
+        )
+        storage = YamlDataStorage(str(config_yml))
+        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "en") is None
+
+    def test_get_voice_normalization_multiple_languages(self, tmp_path):
+        """get_voice_normalization distinguishes overrides for different languages."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: p1
+          en:
+            text:
+              enabled: false
+              type: simple
+"""
+        )
+        storage = YamlDataStorage(str(config_yml))
+        ru_vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
+        en_vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "en")
+        assert ru_vn.language == "ru"
+        assert ru_vn.enabled is True
+        assert en_vn.language == "en"
+        assert en_vn.enabled is False
+
+    def test_get_voice_normalization_lenient_defaults(self, tmp_path):
+        """enabled defaults to true, type defaults to simple, invalid format keys skipped."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              prompt_id: p1
+            bogus_format:
+              enabled: false
+"""
+        )
+        storage = YamlDataStorage(str(config_yml))
+        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
+        assert vn is not None
+        assert vn.enabled is True
+        assert vn.type == NormalizationType.SIMPLE
         assert vn.prompt_id == "p1"
 
     def test_get_voice_normalization_returns_none_for_unknown_voice(self, tmp_path):
@@ -673,13 +748,14 @@ models:
     voices:
       - name: aidar
         normalization:
-          text:
-            enabled: true
-            type: llm
+          ru:
+            text:
+              enabled: true
+              type: openai
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        assert storage.get_voice_normalization("unknown-voice", TextFormat.TEXT) is None
+        assert storage.get_voice_normalization("unknown-voice", TextFormat.TEXT, "ru") is None
 
     def test_get_voice_normalization_returns_none_for_unknown_format(self, tmp_path):
         """get_voice_normalization returns None for text_format not in normalization."""
@@ -691,13 +767,14 @@ models:
     voices:
       - name: aidar
         normalization:
-          text:
-            enabled: true
-            type: llm
+          ru:
+            text:
+              enabled: true
+              type: openai
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.SSML) is None
+        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.SSML, "ru") is None
 
     def test_get_voice_normalization_voice_without_normalization(self, tmp_path):
         """get_voice_normalization returns None when voice has no normalization section."""
@@ -711,7 +788,7 @@ models:
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT) is None
+        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru") is None
 
     def test_get_voice_normalization_disabled_entry(self, tmp_path):
         """get_voice_normalization returns entry even if enabled=False."""
@@ -723,13 +800,14 @@ models:
     voices:
       - name: aidar
         normalization:
-          text:
-            enabled: false
-            type: simple
+          ru:
+            text:
+              enabled: false
+              type: simple
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT)
+        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
         assert vn is not None
         assert vn.enabled is False
         assert vn.type == NormalizationType.SIMPLE

@@ -26,7 +26,7 @@ class DataStorage(ABC):
         ...
 
     @abstractmethod
-    def get_model(self, model_name: str) -> Model | None:
+    def get_model(self, model_id: str) -> Model | None:
         ...
 
     @abstractmethod
@@ -39,7 +39,7 @@ class DataStorage(ABC):
 
     @abstractmethod
     def get_voice_normalization(
-        self, voice_id: str, text_format: TextFormat
+        self, voice_id: str, text_format: TextFormat, language: str
     ) -> VoiceNormalization | None:
         ...
 
@@ -60,7 +60,7 @@ class YamlDataStorage(DataStorage):
         )
         self._voice_normalizations: dict[str, VoiceNormalization] = (
             {
-                f"{vn.voice_id}__{vn.text_format.value}": vn
+                f"{vn.voice_id}__{vn.text_format.value}__{vn.language}": vn
                 for vn in config_model.voice_normalizations
             }
             if config_model.voice_normalizations
@@ -104,6 +104,9 @@ class YamlDataStorage(DataStorage):
                         name=voice_name,
                         speaker=speaker,
                         model_id=model_id,
+                        ref_audio=voice_entry.get("ref_audio") or None,
+                        ref_text=voice_entry.get("ref_text") or None,
+                        instruct=voice_entry.get("instruct") or None,
                     )
                 )
                 self._parse_voice_normalization(voice_entry, voice_id, voice_normalizations_list)
@@ -127,26 +130,30 @@ class YamlDataStorage(DataStorage):
         normalization = voice_entry.get("normalization")
         if not normalization or not isinstance(normalization, dict):
             return
-        for text_format_str, norm_data in normalization.items():
-            try:
-                text_format = TextFormat(text_format_str)
-            except ValueError:
+        for language, formats in normalization.items():
+            if not isinstance(formats, dict):
                 continue
-            enabled = norm_data.get("enabled", True)
-            type_str = norm_data.get("type", "simple")
-            try:
-                norm_type = NormalizationType(type_str)
-            except ValueError:
-                norm_type = NormalizationType.SIMPLE
-            prompt_id = norm_data.get("prompt_id")
-            vn = VoiceNormalization(
-                voice_id=voice_id,
-                text_format=text_format,
-                type=norm_type,
-                enabled=enabled,
-                prompt_id=prompt_id,
-            )
-            voice_normalizations_list.append(vn)
+            for text_format_str, norm_data in formats.items():
+                try:
+                    text_format = TextFormat(text_format_str)
+                except ValueError:
+                    continue
+                enabled = norm_data.get("enabled", True)
+                type_str = norm_data.get("type", "simple")
+                try:
+                    norm_type = NormalizationType(type_str)
+                except ValueError:
+                    norm_type = NormalizationType.SIMPLE
+                prompt_id = norm_data.get("prompt_id")
+                vn = VoiceNormalization(
+                    voice_id=voice_id,
+                    text_format=text_format,
+                    language=language,
+                    type=norm_type,
+                    enabled=enabled,
+                    prompt_id=prompt_id,
+                )
+                voice_normalizations_list.append(vn)
 
     @staticmethod
     def _parse_prompts(data: dict) -> list[Prompt]:
@@ -190,6 +197,6 @@ class YamlDataStorage(DataStorage):
         return self._prompts.get(prompt_id)
 
     def get_voice_normalization(
-        self, voice_id: str, text_format: TextFormat
+        self, voice_id: str, text_format: TextFormat, language: str
     ) -> VoiceNormalization | None:
-        return self._voice_normalizations.get(f"{voice_id}__{text_format.value}")
+        return self._voice_normalizations.get(f"{voice_id}__{text_format.value}__{language}")

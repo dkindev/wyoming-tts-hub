@@ -47,6 +47,7 @@ class TestTextNormalizerFactory:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="prompt1",
@@ -68,6 +69,7 @@ class TestTextNormalizerFactory:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="missing",
@@ -90,6 +92,7 @@ class TestTextNormalizerFactory:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="prompt1",
@@ -160,6 +163,7 @@ class TestTextNormalizerFactoryVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.SIMPLE,
             enabled=False,
         )
@@ -180,6 +184,7 @@ class TestTextNormalizerFactoryVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.SIMPLE,
             enabled=True,
         )
@@ -200,6 +205,7 @@ class TestTextNormalizerFactoryVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.SSML,
+            language="ru",
             type=NormalizationType.SIMPLE,
             enabled=True,
         )
@@ -220,6 +226,7 @@ class TestTextNormalizerFactoryVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="prompt1",
