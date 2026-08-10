@@ -83,6 +83,7 @@ class YamlDataStorage(DataStorage):
         models_list: list[Model] = []
         voices_list: list[Voice] = []
         voice_normalizations_list: list[VoiceNormalization] = []
+        seen_voice_ids: dict[str, str] = {}
 
         for model_id, model_data in data.get("models", {}).items():
             models_list.append(
@@ -98,6 +99,12 @@ class YamlDataStorage(DataStorage):
                 voice_name = voice_entry["name"]
                 speaker = voice_entry.get("speaker", "").strip() or voice_name
                 voice_id = f"{model_id}-{voice_name}"
+                if voice_id in seen_voice_ids:
+                    raise ValueError(
+                        f"Duplicate voice ID '{voice_id}': multiple voices in model "
+                        f"'{model_id}' share the name '{voice_name}'"
+                    )
+                seen_voice_ids[voice_id] = model_id
                 voices_list.append(
                     Voice(
                         id=voice_id,

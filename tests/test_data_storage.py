@@ -1,3 +1,5 @@
+import pytest
+
 from src.tts.data_storage import YamlDataStorage
 from src.tts.models import Model, NormalizationType, PredefinedData, TextFormat, Voice
 
@@ -278,6 +280,45 @@ models:
         ]
         assert storage.get_voice("v5_5_ru-aidar-soft").speaker == "aidar"
         assert storage.get_voice("v5_5_ru-aidar-loud").speaker == "aidar"
+
+    def test_duplicate_voice_name_in_one_model_raises_error(self, tmp_path):
+        """Two voices with the same name in one model derive the same ID and fail loudly."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    voices:
+      - name: aidar
+        speaker: aidar
+      - name: aidar
+        speaker: baya
+"""
+        )
+
+        with pytest.raises(ValueError, match="v5_5_ru-aidar"):
+            YamlDataStorage(str(config_yml))
+
+    def test_same_voice_name_in_different_models_loads(self, tmp_path):
+        """Same voice name under different models derives distinct IDs and loads fine."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    voices:
+      - name: aidar
+  v3_en:
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert [v.id for v in storage.get_voices()] == ["v5_5_ru-aidar", "v3_en-aidar"]
 
     def test_voice_yaml_entries_populate_reference_fields(self, tmp_path):
         """ref_audio, ref_text, and instruct keys in a voice entry parse onto the Voice."""
