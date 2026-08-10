@@ -43,7 +43,7 @@ The preprocessing step applied to text before TTS synthesis that ensures clean i
 _Avoid_: Preprocessing, text cleaning, normalization (alone)
 
 **VoiceNormalization**:
-A per-voice, per-text-format, per-language override of normalization settings. Links a voice to a specific normalization type (simple or LLM) for a bare language code, optionally referencing a reusable prompt. When present, it overrides the server-wide default for that voice, text format, and language combination.
+A per-voice, per-text-format, per-language override of normalization settings. Links a voice to a specific normalization type (simple or openai) for a bare language code, optionally referencing a reusable prompt. When present, it overrides the server-wide default for that voice, text format, and language combination.
 _Avoid_: Normalization override, voice normalisation config
 
 **Prompt**:

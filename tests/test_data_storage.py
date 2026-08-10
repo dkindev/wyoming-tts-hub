@@ -247,12 +247,37 @@ models:
         assert [v.id for v in storage.get_voices()] == [
             "v5_5_ru-aidar",
             "v5_5_ru-eugene",
-            "v3_en-en_2",
+            "v3_en-henry",
         ]
         assert not hasattr(storage.get_voice("v5_5_ru-aidar"), "locale")
-        assert storage.get_voice("v3_en-en_2").speaker == "en_2"
-        assert storage.get_voice("v3_en-en_2").name == "henry"
+        assert storage.get_voice("v3_en-henry").speaker == "en_2"
+        assert storage.get_voice("v3_en-henry").name == "henry"
         assert storage.get_model("v5_5_ru").warmup is True
+
+    def test_voices_sharing_speaker_load_with_distinct_name_ids(self, tmp_path):
+        """Two voices sharing a speaker under one model load with distinct name-based IDs."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    voices:
+      - name: aidar-soft
+        speaker: aidar
+      - name: aidar-loud
+        speaker: aidar
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert [v.id for v in storage.get_voices()] == [
+            "v5_5_ru-aidar-soft",
+            "v5_5_ru-aidar-loud",
+        ]
+        assert storage.get_voice("v5_5_ru-aidar-soft").speaker == "aidar"
+        assert storage.get_voice("v5_5_ru-aidar-loud").speaker == "aidar"
 
     def test_voice_yaml_entries_populate_reference_fields(self, tmp_path):
         """ref_audio, ref_text, and instruct keys in a voice entry parse onto the Voice."""
