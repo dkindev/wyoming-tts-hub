@@ -12,7 +12,7 @@ class TestYamlDataStorageInit:
             models=[Model(id="v5_5_ru")],
             voices=[
                 Voice(
-                    id="ru_RU-v5_5_ru-aidar",
+                    id="v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
                     model_id="v5_5_ru",
@@ -22,7 +22,7 @@ class TestYamlDataStorageInit:
 
         storage = YamlDataStorage(config_model)
 
-        assert storage.get_voice("ru_RU-v5_5_ru-aidar").name == "aidar"
+        assert storage.get_voice("v5_5_ru-aidar").name == "aidar"
 
 
 class TestGetVoices:
@@ -44,7 +44,7 @@ class TestGetVoices:
             models=[Model(id="v5_5_ru")],
             voices=[
                 Voice(
-                    id="ru_RU-v5_5_ru-aidar",
+                    id="v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
                     model_id="v5_5_ru",
@@ -55,28 +55,26 @@ class TestGetVoices:
 
         result = storage.get_voices()
         assert len(result) == 1
-        assert result[0].id == "ru_RU-v5_5_ru-aidar"
-        assert result[0].locale == "ru_RU"
+        assert result[0].id == "v5_5_ru-aidar"
+        assert result[0].model_id == "v5_5_ru"
 
     def test_get_voices_includes_all_voices(self):
         """get_voices should include all voices."""
 
         config_model = PredefinedData(
-            models=[Model(id="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru")],
             voices=[
                 Voice(
-                    id="ru_RU-v5_5_ru-aidar",
+                    id="v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
                     model_id="v5_5_ru",
-                    locale="ru_RU",
                 ),
                 Voice(
-                    id="ru_RU-v5_5_ru-baya",
+                    id="v5_5_ru-baya",
                     name="baya",
                     speaker="baya",
                     model_id="v5_5_ru",
-                    locale="ru_RU",
                 ),
             ],
         )
@@ -87,25 +85,23 @@ class TestGetVoices:
         assert result[0].name == "aidar"
         assert result[1].name == "baya"
 
-    def test_get_voices_from_all_locales(self):
-        """get_voices should include voices from all locales."""
+    def test_get_voices_from_all_models(self):
+        """get_voices should include voices from all models."""
 
         config_model = PredefinedData(
-            models=[Model(id="v5_5_ru", language="ru"), Model(id="v3_en", language="en")],
+            models=[Model(id="v5_5_ru"), Model(id="v3_en")],
             voices=[
                 Voice(
-                    id="ru_RU-v5_5_ru-aidar",
+                    id="v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
                     model_id="v5_5_ru",
-                    locale="ru_RU",
                 ),
                 Voice(
-                    id="en_US-v3_en-en_0",
+                    id="v3_en-en_0",
                     name="en_0",
                     speaker="en_0",
                     model_id="v3_en",
-                    locale="en_US",
                 ),
             ],
         )
@@ -122,20 +118,19 @@ class TestGetVoice:
         """get_voice should return Voice for the given voice_id."""
 
         config_model = PredefinedData(
-            models=[Model(id="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru")],
             voices=[
                 Voice(
-                    id="ru_RU-v5_5_ru-aidar",
+                    id="v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
                     model_id="v5_5_ru",
-                    locale="ru_RU",
                 )
             ],
         )
         storage = YamlDataStorage(config_model)
 
-        voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
+        voice = storage.get_voice("v5_5_ru-aidar")
         assert voice.speaker == "aidar"
         assert voice.model_id == "v5_5_ru"
 
@@ -151,19 +146,16 @@ class TestYamlConstructor:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
 
-        voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
+        voice = storage.get_voice("v5_5_ru-aidar")
         assert voice.name == "aidar"
         assert voice.speaker == "aidar"
         assert voice.model_id == "v5_5_ru"
@@ -176,13 +168,10 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -190,8 +179,8 @@ models:
 
         voices = storage.get_voices()
         assert len(voices) == 1
-        assert voices[0].id == "ru_RU-v5_5_ru-aidar"
-        assert voices[0].locale == "ru_RU"
+        assert voices[0].id == "v5_5_ru-aidar"
+        assert voices[0].model_id == "v5_5_ru"
 
     def test_missing_speaker_defaults_to_voice_name(self, tmp_path):
         """YAML without speaker field should default speaker to voice_name."""
@@ -201,17 +190,14 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        model: v5_5_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
-        voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
+        voice = storage.get_voice("v5_5_ru-aidar")
         assert voice.speaker == "aidar"
 
     def test_empty_speaker_defaults_to_voice_name(self, tmp_path):
@@ -222,18 +208,15 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: ""
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: ""
+        model: v5_5_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
-        voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
+        voice = storage.get_voice("v5_5_ru-aidar")
         assert voice.speaker == "aidar"
 
 
@@ -304,14 +287,11 @@ class TestYamlEnabledField:
             """
 models:
   v5_5_ru:
-    language: ru
     enabled: false
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -327,13 +307,10 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -349,14 +326,11 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
     enabled: true
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -372,31 +346,25 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
     enabled: false
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
   v3_en:
-    language: en
     enabled: true
-    locales:
-      en_US:
-        voices:
-          - name: en_0
-            speaker: en_0
-            model: v3_en
+    voices:
+      - name: en_0
+        speaker: en_0
+        model: v3_en
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
 
         voices = storage.get_voices()
-        assert not any(v.locale == "ru_RU" for v in voices)
-        assert any(v.locale == "en_US" for v in voices)
+        assert not any(v.model_id == "v5_5_ru" for v in voices)
+        assert any(v.model_id == "v3_en" for v in voices)
         assert any(v.name == "en_0" for v in voices)
 
 
@@ -407,13 +375,13 @@ class TestGetModel:
         """get_model should return Model for the given model name."""
 
         config_model = PredefinedData(
-            models=[Model(id="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru")],
             voices=[],
         )
         storage = YamlDataStorage(config_model)
 
         m = storage.get_model("v5_5_ru")
-        assert m.language == "ru"
+        assert m.id == "v5_5_ru"
 
 
 class TestGetModels:
@@ -422,16 +390,15 @@ class TestGetModels:
 
         config_model = PredefinedData(
             models=[
-                Model(id="v5_5_ru", language="ru", warmup=True),
-                Model(id="v3_en", language="en"),
+                Model(id="v5_5_ru", warmup=True),
+                Model(id="v3_en"),
             ],
             voices=[
                 Voice(
-                    id="ru_RU-v5_5_ru-aidar",
+                    id="v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
                     model_id="v5_5_ru",
-                    locale="ru_RU",
                 )
             ],
         )
@@ -459,14 +426,11 @@ class TestYamlWarmupField:
             """
 models:
   v5_5_ru:
-    language: ru
     warmup: true
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -482,13 +446,10 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -508,14 +469,11 @@ class TestYamlHashPrefixField:
             """
 models:
   v5_5_ru:
-    language: ru
     hash_prefix: "a1b2c3d4"
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -531,13 +489,10 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -553,14 +508,11 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
     hash_prefix: ""
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            speaker: aidar
-            model: v5_5_ru
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_5_ru
 """
         )
 
@@ -577,23 +529,21 @@ class TestDisabledModel:
 
         config_model = PredefinedData(
             models=[
-                Model(id="v5_5_ru", language="ru", enabled=False),
-                Model(id="v3_en", language="en", enabled=True),
+                Model(id="v5_5_ru", enabled=False),
+                Model(id="v3_en", enabled=True),
             ],
             voices=[
                 Voice(
-                    id="ru_RU-v5_5_ru-aidar",
+                    id="v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
                     model_id="v5_5_ru",
-                    locale="ru_RU",
                 ),
                 Voice(
-                    id="en_US-v3_en-en_0",
+                    id="v3_en-en_0",
                     name="en_0",
                     speaker="en_0",
                     model_id="v3_en",
-                    locale="en_US",
                 ),
             ],
         )
@@ -601,8 +551,8 @@ class TestDisabledModel:
         storage = YamlDataStorage(config_model)
 
         result = storage.get_voices()
-        assert not any(v.locale == "ru_RU" for v in result)
-        assert any(v.locale == "en_US" for v in result)
+        assert not any(v.model_id == "v5_5_ru" for v in result)
+        assert any(v.model_id == "v3_en" for v in result)
         assert any(v.name == "en_0" for v in result)
 
     def test_disabled_model_get_model_returns_none(self):
@@ -610,7 +560,7 @@ class TestDisabledModel:
 
         config_model = PredefinedData(
             models=[
-                Model(id="v5_5_ru", language="ru", enabled=False),
+                Model(id="v5_5_ru", enabled=False),
             ],
             voices=[],
         )
@@ -695,22 +645,19 @@ class TestGetVoiceNormalization:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            normalization:
-              text:
-                enabled: true
-                type: llm
-                prompt_id: p1
+    voices:
+      - name: aidar
+        normalization:
+          text:
+            enabled: true
+            type: openai
+            prompt_id: p1
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        vn = storage.get_voice_normalization("ru_RU-v5_5_ru-aidar", TextFormat.TEXT)
+        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT)
         assert vn is not None
-        assert vn.voice_id == "ru_RU-v5_5_ru-aidar"
+        assert vn.voice_id == "v5_5_ru-aidar"
         assert vn.text_format == TextFormat.TEXT
         assert vn.type == NormalizationType.OPENAI
         assert vn.enabled is True
@@ -723,15 +670,12 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            normalization:
-              text:
-                enabled: true
-                type: llm
+    voices:
+      - name: aidar
+        normalization:
+          text:
+            enabled: true
+            type: llm
 """
         )
         storage = YamlDataStorage(str(config_yml))
@@ -744,19 +688,16 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            normalization:
-              text:
-                enabled: true
-                type: llm
+    voices:
+      - name: aidar
+        normalization:
+          text:
+            enabled: true
+            type: llm
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        assert storage.get_voice_normalization("ru_RU-v5_5_ru-aidar", TextFormat.SSML) is None
+        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.SSML) is None
 
     def test_get_voice_normalization_voice_without_normalization(self, tmp_path):
         """get_voice_normalization returns None when voice has no normalization section."""
@@ -765,15 +706,12 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
+    voices:
+      - name: aidar
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        assert storage.get_voice_normalization("ru_RU-v5_5_ru-aidar", TextFormat.TEXT) is None
+        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT) is None
 
     def test_get_voice_normalization_disabled_entry(self, tmp_path):
         """get_voice_normalization returns entry even if enabled=False."""
@@ -782,19 +720,16 @@ models:
             """
 models:
   v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            normalization:
-              text:
-                enabled: false
-                type: simple
+    voices:
+      - name: aidar
+        normalization:
+          text:
+            enabled: false
+            type: simple
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        vn = storage.get_voice_normalization("ru_RU-v5_5_ru-aidar", TextFormat.TEXT)
+        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT)
         assert vn is not None
         assert vn.enabled is False
         assert vn.type == NormalizationType.SIMPLE
