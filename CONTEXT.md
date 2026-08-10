@@ -18,13 +18,15 @@ or pre-warmed at startup. Each model supports one or more speakers.
 _Avoid_: Neural network, PyTorch model
 
 **Speaker**:
-A named voice profile within a model (e.g., `aidar`, `eugene`, `baya`). Speakers
-are model-specific — the same speaker name may refer to different voices across
-different models.
+The engine-level Silero voice profile within a **Model** that the **TTS Engine**
+selects during synthesis (e.g., `aidar`, `eugene`, `baya`). Speakers are
+model-specific — the same speaker name may refer to different profiles across
+different models. One or more **Voices** can map to the same **Speaker**.
 _Avoid_: Voice (when meaning a speaker profile)
 
 **Voice**:
-The model-speaker mapping backed by a model speaker.
+A user-facing preset anchored to a **(Model, Speaker)** pair. Multiple
+**Voices** can map to the same **Speaker** within a **Model**.
 _Avoid_: Speaker (when meaning a named voice)
 
 **Sentence**:
@@ -54,9 +56,10 @@ _Avoid_: LLM instruction
 
 - A **Model** supports one or more **Speakers**
 - A **Speaker** belongs to exactly one **Model**
-- A **Voice** references exactly one **Model** and maps to exactly one
-  **Speaker**; the language of its speech is derived from the **Model** (via the
-  engine's model→language mapping)
+- A **Speaker** within a **Model** may be referenced by one or more **Voices**
+- A **Voice** references exactly one **Model** and exactly one **Speaker**; the
+  language of its speech is derived from the **Model** (via the engine's
+  model→language mapping)
 - The **TTS Engine** loads a **Model**, selects a **Speaker**, splits text into
   **Sentences**, applies **Text normalization** to each **Sentence**, synthesizes
   each **Sentence** into one or more **Chunks**, and streams the **Chunks** over
@@ -72,6 +75,11 @@ _Avoid_: LLM instruction
 > model `v5_5_ru`, does the **TTS Engine** load the model immediately?"
 > **Domain expert:** "No — the **Model** is only loaded when the first synthesis
 > request arrives, unless its `warmup` is set to `true`."
+> **Dev:** "Can two voices share one speaker?"
+> **Domain expert:** "Yes — a **Voice** is a preset anchored to a
+> **(Model, Speaker)** pair. `aidar-soft` and `aidar-loud` under `v5_5_ru` can
+> both map to `speaker: aidar`, giving the distinct IDs `v5_5_ru-aidar-soft`
+> and `v5_5_ru-aidar-loud`."
 > **Dev:** "And if the text exceeds the **Sentence** limit, does each sentence
 > produce separate audio?"
 > **Domain expert:** "Each **Sentence** is synthesized into **Chunks** of PCM
