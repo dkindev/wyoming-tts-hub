@@ -80,7 +80,7 @@ def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru", locale="ru_RU")
         id=voice_id,
         name=name,
         speaker=speaker or name,
-        model=model,
+        model_id=model,
         locale=locale,
     )
 

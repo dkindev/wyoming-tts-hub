@@ -47,7 +47,7 @@ class TestTextNormalizerFactory:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
-            type=NormalizationType.LLM,
+            type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="prompt1",
         )
@@ -68,7 +68,7 @@ class TestTextNormalizerFactory:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
-            type=NormalizationType.LLM,
+            type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="missing",
         )
@@ -90,7 +90,7 @@ class TestTextNormalizerFactory:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
-            type=NormalizationType.LLM,
+            type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="prompt1",
         )
@@ -140,7 +140,7 @@ class TestTextNormalizerFactory:
     def test_llm_with_none_prompts_returns_none(self, mock_storage):
         settings = NormalizationSettings(
             text=TextNormalizationSettings(
-                type=NormalizationType.LLM,
+                type=NormalizationType.OPENAI,
                 prompts=None,
             ),
         )
@@ -220,7 +220,7 @@ class TestTextNormalizerFactoryVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
-            type=NormalizationType.LLM,
+            type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="prompt1",
         )

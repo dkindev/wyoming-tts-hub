@@ -58,13 +58,13 @@ class TestVoice:
             id="en_US-v3_en-en_0",
             name="en_0",
             speaker="en_0",
-            model="v3_en",
+            model_id="v3_en",
             locale="en_US",
         )
         assert voice.id == "en_US-v3_en-en_0"
         assert voice.name == "en_0"
         assert voice.speaker == "en_0"
-        assert voice.model == "v3_en"
+        assert voice.model_id == "v3_en"
         assert voice.locale == "en_US"
 
     def test_voice_can_be_created_without_gender(self):
@@ -73,13 +73,13 @@ class TestVoice:
             id="en_US-v3_en-en_0",
             name="en_0",
             speaker="en_0",
-            model="v3_en",
+            model_id="v3_en",
             locale="en_US",
         )
         assert voice.id == "en_US-v3_en-en_0"
         assert voice.name == "en_0"
         assert voice.speaker == "en_0"
-        assert voice.model == "v3_en"
+        assert voice.model_id == "v3_en"
         assert voice.locale == "en_US"
 
     def test_voice_is_frozen(self):
@@ -88,7 +88,7 @@ class TestVoice:
             id="en_US-v3_en-en_0",
             name="en_0",
             speaker="en_0",
-            model="v3_en",
+            model_id="v3_en",
             locale="en_US",
         )
         with pytest.raises(FrozenInstanceError):
@@ -116,13 +116,13 @@ class TestVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
-            type=NormalizationType.LLM,
+            type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="p1",
         )
         assert vn.voice_id == "v1"
         assert vn.text_format == TextFormat.TEXT
-        assert vn.type == NormalizationType.LLM
+        assert vn.type == NormalizationType.OPENAI
         assert vn.enabled is True
         assert vn.prompt_id == "p1"
 
@@ -157,7 +157,7 @@ class TestTTSConfigModel:
                 id="en_US-v3_en-en_0",
                 name="en_0",
                 speaker="en_0",
-                model="v3_en",
+                model_id="v3_en",
                 locale="en_US",
             )
         ]

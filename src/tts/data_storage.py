@@ -94,23 +94,19 @@ class YamlDataStorage(DataStorage):
                 )
             )
 
-            for locale_name, locale_data in model_data.get("locales", {}).items():
-                for voice_entry in locale_data.get("voices", []):
-                    voice_name = voice_entry["name"]
-                    speaker = voice_entry.get("speaker", "").strip() or voice_name
-                    voice_id = f"{locale_name}-{model_id}-{voice_name}"
-                    voices_list.append(
-                        Voice(
-                            id=voice_id,
-                            name=voice_name,
-                            speaker=speaker,
-                            model=model_id,
-                            locale=locale_name,
-                        )
+            for voice_entry in model_data.get("voices", []):
+                voice_name = voice_entry["name"]
+                speaker = voice_entry.get("speaker", "").strip() or voice_name
+                voice_id = f"{model_id}-{voice_name}"
+                voices_list.append(
+                    Voice(
+                        id=voice_id,
+                        name=voice_name,
+                        speaker=speaker,
+                        model_id=model_id,
                     )
-                    self._parse_voice_normalization(
-                        voice_entry, voice_id, voice_normalizations_list
-                    )
+                )
+                self._parse_voice_normalization(voice_entry, voice_id, voice_normalizations_list)
 
         prompts_list = self._parse_prompts(data)
 
@@ -169,7 +165,7 @@ class YamlDataStorage(DataStorage):
         enabled_models = [m for m in config.models if m.enabled]
         enabled_model_ids = {m.id for m in enabled_models}
 
-        filtered_voices = [v for v in config.voices if v.model in enabled_model_ids]
+        filtered_voices = [v for v in config.voices if v.model_id in enabled_model_ids]
 
         return PredefinedData(
             models=enabled_models,
@@ -184,8 +180,8 @@ class YamlDataStorage(DataStorage):
     def get_voice(self, voice_id: str) -> Voice | None:
         return self._voices_by_id.get(voice_id)
 
-    def get_model(self, model_name: str) -> Model | None:
-        return self._models.get(model_name)
+    def get_model(self, model_id: str) -> Model | None:
+        return self._models.get(model_id)
 
     def get_models(self) -> list[Model]:
         return list(self._models.values())

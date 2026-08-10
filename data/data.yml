@@ -1,19 +1,15 @@
 models:
   v5_5_ru:
     warmup: true
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-          - name: eugene
-          - name: baya
-          - name: kseniya
-          - name: xenia
+    voices:
+      - name: aidar
+      - name: eugene
+      - name: baya
+      - name: kseniya
+      - name: xenia
   v3_en:
-    locales:
-      en_US:
-        voices:
-          - name: henry
-            speaker: en_2
-          - name: sophia
-            speaker: en_3
+    voices:
+      - name: henry
+        speaker: en_2
+      - name: sophia
+        speaker: en_3

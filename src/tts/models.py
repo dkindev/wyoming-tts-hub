@@ -19,7 +19,7 @@ class TextFormat(Enum):
 @unique
 class NormalizationType(Enum):
     SIMPLE = "simple"
-    LLM = "llm"
+    OPENAI = "openai"
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,10 @@ class Voice:
     id: str
     name: str
     speaker: str
-    model: str
-    locale: str
+    model_id: str
+    ref_audio: str | None = None
+    ref_text: str | None = None
+    instruct: str | None = None
 
 
 @dataclass(frozen=True)

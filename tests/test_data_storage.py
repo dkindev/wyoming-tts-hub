@@ -9,14 +9,13 @@ class TestYamlDataStorageInit:
         """Should accept TTSConfigModel and expose get_voice."""
 
         config_model = PredefinedData(
-            models=[Model(id="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru")],
             voices=[
                 Voice(
                     id="ru_RU-v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model="v5_5_ru",
-                    locale="ru_RU",
+                    model_id="v5_5_ru",
                 )
             ],
         )
@@ -42,14 +41,13 @@ class TestGetVoices:
         """get_voices should return list of Voice objects with id field."""
 
         config_model = PredefinedData(
-            models=[Model(id="v5_5_ru", language="ru")],
+            models=[Model(id="v5_5_ru")],
             voices=[
                 Voice(
                     id="ru_RU-v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model="v5_5_ru",
-                    locale="ru_RU",
+                    model_id="v5_5_ru",
                 )
             ],
         )
@@ -70,14 +68,14 @@ class TestGetVoices:
                     id="ru_RU-v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model="v5_5_ru",
+                    model_id="v5_5_ru",
                     locale="ru_RU",
                 ),
                 Voice(
                     id="ru_RU-v5_5_ru-baya",
                     name="baya",
                     speaker="baya",
-                    model="v5_5_ru",
+                    model_id="v5_5_ru",
                     locale="ru_RU",
                 ),
             ],
@@ -99,14 +97,14 @@ class TestGetVoices:
                     id="ru_RU-v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model="v5_5_ru",
+                    model_id="v5_5_ru",
                     locale="ru_RU",
                 ),
                 Voice(
                     id="en_US-v3_en-en_0",
                     name="en_0",
                     speaker="en_0",
-                    model="v3_en",
+                    model_id="v3_en",
                     locale="en_US",
                 ),
             ],
@@ -130,7 +128,7 @@ class TestGetVoice:
                     id="ru_RU-v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model="v5_5_ru",
+                    model_id="v5_5_ru",
                     locale="ru_RU",
                 )
             ],
@@ -139,7 +137,7 @@ class TestGetVoice:
 
         voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
         assert voice.speaker == "aidar"
-        assert voice.model == "v5_5_ru"
+        assert voice.model_id == "v5_5_ru"
 
 
 class TestYamlConstructor:
@@ -168,7 +166,7 @@ models:
         voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
         assert voice.name == "aidar"
         assert voice.speaker == "aidar"
-        assert voice.model == "v5_5_ru"
+        assert voice.model_id == "v5_5_ru"
 
     def test_loaded_voices_have_voice_configs(self, tmp_path):
         """get_voices should return Voice objects with computed id."""
@@ -237,6 +235,40 @@ models:
         storage = YamlDataStorage(str(config_yml))
         voice = storage.get_voice("ru_RU-v5_5_ru-aidar")
         assert voice.speaker == "aidar"
+
+
+class TestLocaleLessSchema:
+    """Tests for the new flat schema: voices live under models, IDs have no locale prefix."""
+
+    def test_loads_locale_less_voices_from_flat_schema(self, tmp_path):
+        """Loading a flat-schema YAML yields locale-less Voice objects with model-voice IDs."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    warmup: true
+    voices:
+      - name: aidar
+      - name: eugene
+  v3_en:
+    voices:
+      - name: henry
+        speaker: en_2
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert [v.id for v in storage.get_voices()] == [
+            "v5_5_ru-aidar",
+            "v5_5_ru-eugene",
+            "v3_en-henry",
+        ]
+        assert not hasattr(storage.get_voice("v5_5_ru-aidar"), "locale")
+        assert storage.get_voice("v3_en-henry").speaker == "en_2"
+        assert storage.get_model("v5_5_ru").warmup is True
 
 
 class TestEmptyData:
@@ -398,7 +430,7 @@ class TestGetModels:
                     id="ru_RU-v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model="v5_5_ru",
+                    model_id="v5_5_ru",
                     locale="ru_RU",
                 )
             ],
@@ -553,14 +585,14 @@ class TestDisabledModel:
                     id="ru_RU-v5_5_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model="v5_5_ru",
+                    model_id="v5_5_ru",
                     locale="ru_RU",
                 ),
                 Voice(
                     id="en_US-v3_en-en_0",
                     name="en_0",
                     speaker="en_0",
-                    model="v3_en",
+                    model_id="v3_en",
                     locale="en_US",
                 ),
             ],
@@ -680,7 +712,7 @@ models:
         assert vn is not None
         assert vn.voice_id == "ru_RU-v5_5_ru-aidar"
         assert vn.text_format == TextFormat.TEXT
-        assert vn.type == NormalizationType.LLM
+        assert vn.type == NormalizationType.OPENAI
         assert vn.enabled is True
         assert vn.prompt_id == "p1"
 
