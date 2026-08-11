@@ -27,16 +27,31 @@ Models can be enabled, disabled, or pre-warmed at startup. Each model supports
 one or more speakers.
 _Avoid_: Neural network, PyTorch model
 
+**Language**:
+A spoken-language code (e.g., `ru`, `en`) that a **Model** supports. The **TTS
+Engine Hub** advertises supported **Languages** per **Model**, and Wyoming
+clients select a voice by **Language** when not specifying a name.
+_Avoid_: locale, locale string
+
+**Text Format**:
+The input format a **TTS Engine** accepts for a **Model** during synthesis —
+either `text` or `ssml`. Not every **Model** supports every format, so the
+**TTS Engine Hub** advertises the supported **Text Formats** per **Model**.
+_Avoid_: format, text type
+
 **Speaker**:
-The engine-level Silero voice profile within a **Model** that the **TTS Engine**
-selects during synthesis (e.g., `aidar`, `eugene`, `baya`). Speakers are
-model-specific — the same speaker name may refer to different profiles across
-different models. One or more **Voices** can map to the same **Speaker**.
+The engine-level voice profile within a **Model** that the owning **TTS Engine**
+selects during synthesis (e.g., a Silero speaker like `aidar`, or an OpenAI
+voice name like `alloy`). Speakers are model-specific — the same speaker name
+may refer to different profiles across different models. One or more **Voices**
+can map to the same **Speaker**.
 _Avoid_: Voice (when meaning a speaker profile)
 
 **Voice**:
-A user-facing preset anchored to a **(Model, Speaker)** pair. Multiple
-**Voices** can map to the same **Speaker** within a **Model**.
+A user-facing preset that references exactly one **Model** and the
+engine-specific parameters needed to synthesize its speech — a **Speaker**
+within that **Model**, or reference audio/text for cloning-style engines.
+Multiple **Voices** can map to the same **Speaker** within a **Model**.
 _Avoid_: Speaker (when meaning a named voice)
 
 **Sentence**:
@@ -67,12 +82,12 @@ _Avoid_: LLM instruction
 - A **TTS Engine Hub** aggregates one or more **TTS Engines**
 - A **TTS Engine** owns one or more **Models**
 - A **Model** belongs to exactly one **TTS Engine**
-- A **Model** supports one or more **Speakers**
+- A **Model** supports one or more **Speakers** and one or more **Languages**
 - A **Speaker** belongs to exactly one **Model**
 - A **Speaker** within a **Model** may be referenced by one or more **Voices**
-- A **Voice** references exactly one **Model** and exactly one **Speaker**; the
-  language of its speech is derived from the **Model** (via the engine's
-  model→language mapping)
+- A **Voice** references exactly one **Model** and either exactly one **Speaker**
+  or engine-specific reference parameters; the language of its speech is
+  derived from the **Model**
 - The **TTS Engine** loads a **Model**, selects a **Speaker**, splits text into
   **Sentences**, applies **Text normalization** to each **Sentence**, synthesizes
   each **Sentence** into one or more **Chunks**, and streams the **Chunks** over
