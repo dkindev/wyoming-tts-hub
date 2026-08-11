@@ -1,20 +1,30 @@
-# Silero TTS Server — Domain Context
+# Wyoming TTS Hub — Domain Context
 
-A simple, robust, and performant **Wyoming protocol TTS server** that wraps the
-**Silero TTS** engine. Provides text-to-speech generation over TCP using the
-Wyoming protocol, enabling integration with Home Assistant and other Wyoming
-clients.
+A simple, robust, and performant **Wyoming protocol TTS server** built around a
+**TTS Engine Hub** that aggregates multiple **TTS Engines** (e.g., Silero,
+Qwen3-tts, OpenAI-compatible APIs). Provides text-to-speech generation over TCP
+using the Wyoming protocol, enabling integration with Home Assistant and other
+Wyoming clients.
 
 ## Language
 
+**TTS Engine Hub**:
+The top-level component that aggregates **TTS Engines**. Routes each synthesis
+request to the engine that owns the requested **Model**, splits text into
+**Sentences**, and applies **Text normalization**. Coordinates warmup and
+shutdown across engines.
+_Avoid_: TTS server, orchestrator
+
 **TTS Engine**:
-The core component that synthesizes speech from text input. Wraps Silero TTS
-models and produces raw PCM audio output.
+A backend that synthesizes speech from text input for one provider family (e.g.,
+Silero, Qwen3-tts, an OpenAI-compatible API). Owns one or more **Models** and
+produces raw PCM audio output.
 _Avoid_: Speech generator, voice synthesizer
 
 **Model**:
-A named, language-specific Silero TTS model. Models can be enabled, disabled, 
-or pre-warmed at startup. Each model supports one or more speakers.
+A named, language-specific model that belongs to exactly one **TTS Engine**.
+Models can be enabled, disabled, or pre-warmed at startup. Each model supports
+one or more speakers.
 _Avoid_: Neural network, PyTorch model
 
 **Speaker**:
@@ -54,6 +64,9 @@ _Avoid_: LLM instruction
 
 ## Relationships
 
+- A **TTS Engine Hub** aggregates one or more **TTS Engines**
+- A **TTS Engine** owns one or more **Models**
+- A **Model** belongs to exactly one **TTS Engine**
 - A **Model** supports one or more **Speakers**
 - A **Speaker** belongs to exactly one **Model**
 - A **Speaker** within a **Model** may be referenced by one or more **Voices**
@@ -95,3 +108,6 @@ _Avoid_: LLM instruction
 
 - "Model" was used to mean both a config entry and the loaded neural network —
   resolved: **Model** is a configuration concept
+- "TTS model" was used to mean both a provider family (Silero, Qwen3-tts, an
+  OpenAI-compatible API) and a specific named model — resolved: a provider
+  family is a **TTS Engine**; a specific named model is a **Model**
