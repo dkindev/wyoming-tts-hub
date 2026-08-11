@@ -1,4 +1,8 @@
-A simple, robust, and performant Wyoming protocol TTS server that wraps the Silero TTS engine, enabling Home Assistant and other Wyoming clients to generate speech audio over TCP with minimal latency and operational overhead.
+A simple, robust, and performant **Wyoming protocol TTS server** built around a
+**TTS Engine Hub** that aggregates multiple **TTS Engines** (e.g., Silero,
+Qwen3-tts, OpenAI-compatible APIs). Provides text-to-speech generation over TCP
+using the Wyoming protocol, enabling integration with Home Assistant and other
+Wyoming clients.
 
 ## Agent skills
 
