@@ -55,9 +55,9 @@ Multiple **Voices** can map to the same **Speaker** within a **Model**.
 _Avoid_: Speaker (when meaning a named voice)
 
 **Sentence**:
-A segment of text split from the input to stay within model length limits.
-Multiple Sentences are synthesized separately and streamed as a single audio
-response.
+A segment of text split from the input by the **TTS Engine Hub** to stay within
+model length limits. Multiple Sentences are synthesized separately and streamed
+as a single audio response.
 _Avoid_: Segment, fragment
 
 **Chunk**:
@@ -66,11 +66,17 @@ Wyoming protocol.
 _Avoid_: Audio packet, byte fragment, PCM segment
 
 **Text normalization**:
-The preprocessing step applied to text before TTS synthesis that ensures clean input by stripping whitespace and removing characters unavailable in the active model.
+The preprocessing step applied by the **TTS Engine Hub** to text before TTS
+synthesis that ensures clean input by stripping whitespace and removing
+characters unavailable in the active model.
 _Avoid_: Preprocessing, text cleaning, normalization (alone)
 
 **VoiceNormalization**:
-A per-voice, per-text-format, per-language override of normalization settings. Links a voice to a specific normalization type (simple or openai) for a bare language code, optionally referencing a reusable prompt. When present, it overrides the server-wide default for that voice, text format, and language combination.
+A per-voice, per-**Text Format**, per-**Language** override of normalization
+settings. Links a voice to a specific normalization type (simple or openai) for
+a bare **Language** code, optionally referencing a reusable prompt. When
+present, it overrides the server-wide default for that voice, **Text Format**,
+and **Language** combination.
 _Avoid_: Normalization override, voice normalisation config
 
 **Prompt**:
@@ -88,36 +94,39 @@ _Avoid_: LLM instruction
 - A **Voice** references exactly one **Model** and either exactly one **Speaker**
   or engine-specific reference parameters; the language of its speech is
   derived from the **Model**
-- The **TTS Engine** loads a **Model**, selects a **Speaker**, splits text into
-  **Sentences**, applies **Text normalization** to each **Sentence**, synthesizes
-  each **Sentence** into one or more **Chunks**, and streams the **Chunks** over
-  the Wyoming protocol
-- The server advertises supported **Voices** over the **Wyoming**
-  protocol
-- A **Voice** has zero or more **VoiceNormalizations** (per text format and language overrides)
-- A **Prompt** is referenced by zero or more **VoiceNormalizations** (shared LLM prompt definitions)
+- The **TTS Engine Hub** splits text into **Sentences**, applies **Text
+  normalization** to each **Sentence**, then routes the normalized **Sentences**
+  to the **TTS Engine** that owns the requested **Model**
+- A **TTS Engine** synthesizes each **Sentence** into one or more **Chunks**,
+  which the server streams over the Wyoming protocol
+- The server advertises supported **Voices**, plus per-**Model** **Languages**
+  and **Text Formats**, over the **Wyoming** protocol
+- A **Voice** has zero or more **VoiceNormalizations** (per **Text Format** and
+  **Language** overrides)
+- A **Prompt** is referenced by zero or more **VoiceNormalizations**
 
 ## Example dialogue
 
-> **Dev:** "If I configure a **Voice** `v5_5_ru-aidar` backed by
-> model `v5_5_ru`, does the **TTS Engine** load the model immediately?"
+> **Dev:** "If I configure a **Voice** `v5_5_ru-aidar` backed by model
+> `v5_5_ru` under the Silero **TTS Engine**, does the **TTS Engine Hub** load
+> the model immediately?"
 > **Domain expert:** "No — the **Model** is only loaded when the first synthesis
-> request arrives, unless its `warmup` is set to `true`."
+> request for it arrives, unless its `warmup` is set to `true`."
+> **Dev:** "How does the **TTS Engine Hub** pick an engine?"
+> **Domain expert:** "Each **Model** belongs to exactly one **TTS Engine**. The
+> Hub routes by **Model**, then splits the text into **Sentences** and applies
+> **Text normalization** before handing them to the engine."
 > **Dev:** "Can two voices share one speaker?"
 > **Domain expert:** "Yes — a **Voice** is a preset anchored to a
 > **(Model, Speaker)** pair. `aidar-soft` and `aidar-loud` under `v5_5_ru` can
-> both map to `speaker: aidar`, giving the distinct IDs `v5_5_ru-aidar-soft`
-> and `v5_5_ru-aidar-loud`."
-> **Dev:** "And if the text exceeds the **Sentence** limit, does each sentence
-> produce separate audio?"
-> **Domain expert:** "Each **Sentence** is synthesized into **Chunks** of PCM
-> audio. The server streams all the **Chunks** back as one continuous audio
-> response over the Wyoming protocol."
-> **Dev:** "How does LLM-based **Text normalization** work for a specific voice?"
-> **Domain expert:** "You create a **VoiceNormalization** linking the voice to
-> `NormalizationType.LLM`, and optionally attach a **Prompt** that tells the LLM
-> which model and instruction to use. If no **VoiceNormalization** exists for
-> that voice, text format, and language, the server-wide default applies."
+> both map to `speaker: aidar`."
+> **Dev:** "What if a Wyoming client selects a voice by language instead of by
+> name?"
+> **Domain expert:** "The **TTS Engine Hub** matches a **Voice** against the
+> **Model**'s supported **Languages**."
+> **Dev:** "Does every model support SSML?"
+> **Domain expert:** "No — the **TTS Engine Hub** advertises the **Text
+> Formats** each **Model** supports; some engines only accept plain text."
 
 ## Flagged ambiguities
 
