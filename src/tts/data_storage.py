@@ -87,13 +87,31 @@ class YamlDataStorage(DataStorage):
         seen_voice_ids: dict[str, str] = {}
 
         for model_id, model_data in data.get("models", {}).items():
+            engine_type_value = model_data.get("engine_type")
+            if engine_type_value is None:
+                raise ValueError(
+                    f"Model '{model_id}' is missing required 'engine_type' "
+                    "(one of: silero, qwen, openai)"
+                )
+            try:
+                engine_type = EngineType(engine_type_value)
+            except ValueError:
+                raise ValueError(
+                    f"Model '{model_id}' has unknown 'engine_type' '{engine_type_value}' "
+                    "(expected one of: silero, qwen, openai)"
+                ) from None
+
+            languages_raw = model_data.get("languages")
+            if not languages_raw:
+                raise ValueError(f"Model '{model_id}' must declare a non-empty 'languages' list")
+
             models_list.append(
                 Model(
                     id=model_id,
-                    engine_type=EngineType(model_data.get("engine_type", "silero")),
+                    engine_type=engine_type,
                     ssml_supported=model_data.get("ssml_supported", False),
                     language_auto_detected=model_data.get("language_auto_detected", False),
-                    languages=[lang.strip() for lang in model_data.get("languages", []) or []],
+                    languages=[lang.strip() for lang in languages_raw],
                     enabled=model_data.get("enabled", True),
                     warmup=model_data.get("warmup", False),
                     hash_prefix=model_data.get("hash_prefix") or None,

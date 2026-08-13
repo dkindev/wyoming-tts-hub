@@ -1,7 +1,7 @@
 import pytest
 
 from src.tts.data_storage import YamlDataStorage
-from src.tts.models import NormalizationType, PredefinedData, TextFormat, Voice
+from src.tts.models import EngineType, NormalizationType, PredefinedData, TextFormat, Voice
 from tests.helpers import make_model
 
 
@@ -149,6 +149,8 @@ class TestYamlConstructor:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
@@ -171,6 +173,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
@@ -193,6 +197,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         model: v5_5_ru
@@ -211,6 +217,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         speaker: ""
@@ -234,11 +242,15 @@ class TestLocaleLessSchema:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     warmup: true
     voices:
       - name: aidar
       - name: eugene
   v3_en:
+    engine_type: silero
+    languages: [en]
     voices:
       - name: henry
         speaker: en_2
@@ -265,6 +277,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar-soft
         speaker: aidar
@@ -290,6 +304,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
@@ -309,9 +325,13 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
   v3_en:
+    engine_type: silero
+    languages: [en]
     voices:
       - name: aidar
 """
@@ -329,6 +349,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         ref_audio: /audio/aidar.wav
@@ -378,6 +400,8 @@ class TestYamlEnabledField:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     enabled: false
     voices:
       - name: aidar
@@ -398,6 +422,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
@@ -417,6 +443,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     enabled: true
     voices:
       - name: aidar
@@ -437,12 +465,16 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     enabled: false
     voices:
       - name: aidar
         speaker: aidar
         model: v5_5_ru
   v3_en:
+    engine_type: silero
+    languages: [en]
     enabled: true
     voices:
       - name: en_0
@@ -517,6 +549,8 @@ class TestYamlWarmupField:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     warmup: true
     voices:
       - name: aidar
@@ -537,6 +571,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
@@ -560,6 +596,8 @@ class TestYamlHashPrefixField:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     hash_prefix: "a1b2c3d4"
     voices:
       - name: aidar
@@ -580,6 +618,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
@@ -599,6 +639,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     hash_prefix: ""
     voices:
       - name: aidar
@@ -736,6 +778,8 @@ class TestGetVoiceNormalization:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         normalization:
@@ -763,6 +807,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         normalization:
@@ -783,6 +829,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         normalization:
@@ -812,6 +860,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         normalization:
@@ -836,6 +886,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         normalization:
@@ -855,6 +907,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         normalization:
@@ -874,6 +928,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
 """
@@ -888,6 +944,8 @@ models:
             """
 models:
   v5_5_ru:
+    engine_type: silero
+    languages: [ru]
     voices:
       - name: aidar
         normalization:
@@ -902,3 +960,194 @@ models:
         assert vn is not None
         assert vn.enabled is False
         assert vn.type == NormalizationType.SIMPLE
+
+
+class TestModelCapabilities:
+    """Tests for parsing and validating Model capability fields from YAML."""
+
+    def test_missing_languages_raises_value_error(self, tmp_path):
+        """A model without a languages list fails fast at load."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError, match="languages"):
+            YamlDataStorage(str(config_yml))
+
+    @pytest.mark.parametrize(
+        ("yaml_value", "expected"),
+        [
+            ("silero", EngineType.SILERO),
+            ("qwen", EngineType.QWEN),
+            ("openai", EngineType.OPENAI),
+        ],
+    )
+    def test_engine_type_maps_to_enum(self, tmp_path, yaml_value, expected):
+        """engine_type maps the YAML name to the EngineType member."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            f"""
+models:
+  v5_5_ru:
+    engine_type: {yaml_value}
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert storage.get_model("v5_5_ru").engine_type is expected
+
+    def test_missing_engine_type_raises_value_error(self, tmp_path):
+        """A model without engine_type fails fast at load."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError, match="engine_type"):
+            YamlDataStorage(str(config_yml))
+
+    def test_unknown_engine_type_raises_value_error(self, tmp_path):
+        """An unrecognized engine_type value fails fast at load."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    engine_type: klingon
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError, match="engine_type"):
+            YamlDataStorage(str(config_yml))
+
+    def test_languages_parse_as_trimmed_list(self, tmp_path):
+        """languages parses into a list with each entry whitespace-trimmed."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages:
+      - " ru "
+      - "  en"
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert storage.get_model("v5_5_ru").languages == ["ru", "en"]
+
+    def test_empty_languages_raises_value_error(self, tmp_path):
+        """An explicitly empty languages list fails fast at load."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: []
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError, match="languages"):
+            YamlDataStorage(str(config_yml))
+
+    def test_ssml_supported_and_language_auto_detected_default_to_false(self, tmp_path):
+        """Omitted ssml_supported and language_auto_detected default to false."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+        model = storage.get_model("v5_5_ru")
+
+        assert model.ssml_supported is False
+        assert model.language_auto_detected is False
+
+    def test_ssml_supported_and_language_auto_detected_parse_true(self, tmp_path):
+        """Declared true ssml_supported and language_auto_detected parse as true."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru]
+    ssml_supported: true
+    language_auto_detected: true
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+        model = storage.get_model("v5_5_ru")
+
+        assert model.ssml_supported is True
+        assert model.language_auto_detected is True
+
+
+class TestSampleDataConfig:
+    """Tests against the bundled sample data/data.yml."""
+
+    def test_silero_models_declare_capabilities(self):
+        """v5_5_ru and v3_en declare engine_type, languages, and text-format flags."""
+
+        data_path = "data/data.yml"
+        storage = YamlDataStorage(data_path)
+
+        ru = storage.get_model("v5_5_ru")
+        en = storage.get_model("v3_en")
+
+        assert ru is not None
+        assert ru.engine_type is EngineType.SILERO
+        assert ru.languages == ["ru"]
+        assert ru.ssml_supported is True
+        assert ru.language_auto_detected is True
+
+        assert en is not None
+        assert en.engine_type is EngineType.SILERO
+        assert en.languages == ["en"]
+        assert en.ssml_supported is True
+        assert en.language_auto_detected is True

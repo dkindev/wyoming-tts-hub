@@ -183,19 +183,11 @@ class TestSynthesizeValidation:
             tmp_path,
             models={
                 "v5_5_ru": {
-                    "language": "ru",
-                    "locales": {
-                        "ru_RU": {
-                            "language": "ru",
-                            "voices": [
-                                {
-                                    "name": "aidar",
-                                    "speaker": "aidar",
-                                    "model": "v5_5_ru",
-                                }
-                            ],
-                        }
-                    },
+                    "engine_type": "silero",
+                    "languages": ["ru"],
+                    "voices": [
+                        {"name": "aidar", "speaker": "aidar"},
+                    ],
                 }
             },
         )
@@ -222,19 +214,11 @@ class TestSynthesizeValidation:
             tmp_path,
             models={
                 "v5_5_ru": {
-                    "language": "ru",
-                    "locales": {
-                        "ru_RU": {
-                            "language": "ru",
-                            "voices": [
-                                {
-                                    "name": "aidar",
-                                    "speaker": "aidar",
-                                    "model": "v5_5_ru",
-                                }
-                            ],
-                        }
-                    },
+                    "engine_type": "silero",
+                    "languages": ["ru"],
+                    "voices": [
+                        {"name": "aidar", "speaker": "aidar"},
+                    ],
                 }
             },
         )
@@ -248,7 +232,7 @@ class TestSynthesizeValidation:
         )
 
         with pytest.raises(TTSEngineError):
-            async for _ in engine.synthesize_pcm_chunks("hello", "ru_RU-v5_5_ru-aidar", "INVALID"):
+            async for _ in engine.synthesize_pcm_chunks("hello", "v5_5_ru-aidar", "INVALID"):
                 pass
 
     @pytest.mark.asyncio
