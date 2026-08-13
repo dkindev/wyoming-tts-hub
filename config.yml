@@ -29,6 +29,11 @@ active_models: [v5_5_ru]
 # Env: TTS_STREAMING
 streaming: true
 
+# TTS backend engine type.
+# CLI: --backend_type
+# Env: TTS_BACKEND_TYPE
+backend_type: torch
+
 # Timeout for inference of one sentence in seconds.
 # CLI: --inference_timeout
 # Env: TTS_INFERENCE_TIMEOUT

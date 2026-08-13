@@ -13,7 +13,7 @@ from pydantic_settings import (
 )
 
 from src import __metadata__
-from src.tts.models import NormalizationType
+from src.tts.models import BackendType, NormalizationType
 
 
 class TorchSettings(BaseModel):
@@ -229,6 +229,12 @@ class Settings(BaseSettings):
         description="Enable audio streaming.",
     )
     """Enable audio streaming."""
+
+    backend_type: BackendType = Field(
+        default=BackendType.TORCH,
+        description="TTS backend engine type.",
+    )
+    """TTS backend engine type."""
 
     inference_timeout: float = Field(
         default=5,

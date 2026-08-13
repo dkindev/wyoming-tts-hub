@@ -3,6 +3,7 @@ from pydantic import ValidationError
 from pydantic_settings import YamlConfigSettingsSource
 
 from src.config import Settings
+from src.tts.models import BackendType
 
 
 class TestTtsStreaming:
@@ -158,6 +159,35 @@ class TestActiveModels:
 
         settings = Settings()
         assert settings.active_models == ["a", "b"]
+
+
+class TestBackendType:
+    def test_default_is_torch(self):
+        """backend_type defaults to BackendType.TORCH."""
+        settings = Settings()
+        assert settings.backend_type == BackendType.TORCH
+
+    def test_env_var_populates(self, monkeypatch):
+        """TTS_BACKEND_TYPE=torch sets backend_type to TORCH."""
+        monkeypatch.setenv("TTS_BACKEND_TYPE", "torch")
+        settings = Settings()
+        assert settings.backend_type == BackendType.TORCH
+
+    def test_yaml_populates(self, monkeypatch, tmp_path):
+        """backend_type: torch in YAML populates the setting."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("backend_type: torch\nactive_models: [v5_5_ru]\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        settings = Settings()
+        assert settings.backend_type == BackendType.TORCH
+
+    def test_cli_flag_populates(self, monkeypatch):
+        """--backend_type torch CLI flag populates the setting."""
+        monkeypatch.setattr("sys.argv", ["prog", "--backend_type", "torch"])
+
+        settings = Settings()
+        assert settings.backend_type == BackendType.TORCH
 
 
 class TestYamlConfigSource:
