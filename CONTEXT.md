@@ -87,6 +87,10 @@ _Avoid_: Normalization override, voice normalisation config
 A reusable LLM prompt definition that specifies the instruction text and which LLM model to use for LLM-based text normalization.
 _Avoid_: LLM instruction
 
+**Active Model**:
+A **Model** that the running instance actually serves — enabled **and** listed in the instance's `active_models` allowlist. Only **Active Models**' **Voices** are advertised over the **Wyoming** protocol.
+_Avoid_: loaded model, warmed-up model
+
 ## Relationships
 
 - A **TTS Engine Hub** aggregates one or more **TTS Engines**
@@ -141,3 +145,6 @@ _Avoid_: LLM instruction
 - "TTS model" was used to mean both a provider family (Silero, Qwen3-tts, an
   OpenAI-compatible API) and a specific named model — resolved: a provider
   family is a **TTS Engine**; a specific named model is a **Model**
+- "Active" was used overlapping with the `enabled` flag — resolved:
+  `active_models` is a runtime allowlist filter layered on top of `enabled`; a
+  model must be both to be served
