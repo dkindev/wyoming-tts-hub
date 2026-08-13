@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from src.config import NormalizationSettings
-from src.tts.models import NormalizationOptions, TTSConfig
+from src.tts.models import NormalizationOptions, TtsConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures — shared by all test files
@@ -32,7 +32,7 @@ def mock_importer(mock_model):
 @pytest.fixture
 def default_tts_config():
     """Return a TTSConfig with sensible defaults for testing."""
-    return TTSConfig(
+    return TtsConfig(
         device="cpu",
         inference_timeout=5,
         frame_duration=50,

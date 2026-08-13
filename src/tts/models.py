@@ -78,7 +78,7 @@ class PredefinedData:
 
 
 @dataclass(frozen=True)
-class TTSConfig:
+class TtsConfig:
     device: str
     inference_timeout: float
     frame_duration: int
@@ -109,7 +109,7 @@ class OpenAiNormalizationConfig:
 
 
 @dataclass(frozen=True)
-class TTSResult:
+class TtsResult:
     audio: np.ndarray
     sample_rate: int
     bytes_per_sample: int

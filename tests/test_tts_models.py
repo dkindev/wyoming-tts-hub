@@ -12,8 +12,8 @@ from src.tts.models import (
     PredefinedData,
     Prompt,
     TextFormat,
-    TTSConfig,
-    TTSResult,
+    TtsConfig,
+    TtsResult,
     Voice,
     VoiceNormalization,
 )
@@ -238,7 +238,7 @@ class TestTTSConfigModel:
 class TestTTSConfig:
     def test_tts_config_has_max_models_field(self):
         """TTSConfig dataclass has max_models field."""
-        config = TTSConfig(
+        config = TtsConfig(
             device="cpu",
             inference_timeout=5,
             frame_duration=50,
@@ -256,7 +256,7 @@ class TestTTSConfig:
     def test_tts_config_accepts_models_yml_url_and_hash(self):
         """TTSConfig accepts models_yml_url and models_yml_hash."""
         settings = Settings()
-        config = TTSConfig(
+        config = TtsConfig(
             device="cpu",
             inference_timeout=5,
             frame_duration=50,
@@ -274,7 +274,7 @@ class TestTTSConfig:
 
     def test_tts_config_models_yml_hash_accepts_none(self):
         """TTSConfig.models_yml_hash accepts None (skip validation)."""
-        config = TTSConfig(
+        config = TtsConfig(
             device="cpu",
             inference_timeout=5,
             frame_duration=50,
@@ -291,7 +291,7 @@ class TestTTSConfig:
 
     def test_tts_config_is_frozen(self):
         """TTSConfig dataclass is immutable (frozen)."""
-        config = TTSConfig(
+        config = TtsConfig(
             device="cpu",
             inference_timeout=5,
             frame_duration=50,
@@ -322,7 +322,7 @@ class TestTTSResult:
     def test_tts_result_has_all_fields(self):
         """TTSResult dataclass has audio (np.ndarray), sample_rate, bytes_per_sample, channels."""
         audio = np.array([0, 1, 2, 3], dtype=np.int16)
-        result = TTSResult(audio=audio, sample_rate=48000, bytes_per_sample=2, channels=1)
+        result = TtsResult(audio=audio, sample_rate=48000, bytes_per_sample=2, channels=1)
         assert isinstance(result.audio, np.ndarray)
         assert np.array_equal(result.audio, audio)
         assert result.sample_rate == 48000

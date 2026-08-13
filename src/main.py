@@ -12,7 +12,7 @@ from src.handler import SileroEventHandler
 from src.logger import setup_logging
 from src.tts.data_storage import DataStorage, YamlDataStorage
 from src.tts.engine import SileroTTSEngine
-from src.tts.models import TTSConfig
+from src.tts.models import TtsConfig
 from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
 
 setup_logging()
@@ -47,7 +47,7 @@ def create_engine(
     if settings.torch.flush_denormal and hasattr(torch, "set_flush_denormal"):
         torch.set_flush_denormal(True)
 
-    config = TTSConfig(
+    config = TtsConfig(
         device=settings.torch.device,
         inference_timeout=settings.inference_timeout,
         frame_duration=settings.frame_duration,
