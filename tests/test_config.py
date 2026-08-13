@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 from pydantic_settings import YamlConfigSettingsSource
 
 from src.config import Settings
@@ -110,6 +111,53 @@ class TestSileroSettings:
         """models_dir is 'models' from config.yml (overrides Python default)."""
         settings = Settings()
         assert settings.models_dir == "models"
+
+
+class TestActiveModels:
+    def test_missing_active_models_is_validation_error(self, monkeypatch, tmp_path):
+        """A config without active_models is a startup validation error."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("app_name: test\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_empty_active_models_is_validation_error(self, monkeypatch, tmp_path):
+        """An empty active_models list is a startup validation error."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("active_models: []\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        with pytest.raises(ValidationError, match="non-empty list"):
+            Settings()
+
+    def test_yaml_list_populates_active_models(self, monkeypatch, tmp_path):
+        """active_models: [a, b] in YAML populates the setting."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("active_models: [a, b]\n")
+        monkeypatch.delenv("TTS_ACTIVE_MODELS", raising=False)
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        settings = Settings()
+        assert settings.active_models == ["a", "b"]
+
+    def test_cli_repeated_flags_populate_active_models(self, monkeypatch):
+        """Repeated --active_models CLI flags populate the setting as a list."""
+        monkeypatch.setattr(
+            "sys.argv",
+            ["prog", "--active_models", "a", "--active_models", "b"],
+        )
+
+        settings = Settings()
+        assert settings.active_models == ["a", "b"]
+
+    def test_env_json_populates_active_models(self, monkeypatch):
+        """TTS_ACTIVE_MODELS as a JSON array populates the setting."""
+        monkeypatch.setenv("TTS_ACTIVE_MODELS", '["a", "b"]')
+
+        settings = Settings()
+        assert settings.active_models == ["a", "b"]
 
 
 class TestYamlConfigSource:

@@ -1,4 +1,7 @@
+import io
+
 import pytest
+from loguru import logger
 
 from src.tts.data_storage import YamlDataStorage
 from src.tts.models import EngineType, NormalizationType, PredefinedData, TextFormat, Voice
@@ -1126,3 +1129,50 @@ models:
 
         assert model.ssml_supported is True
         assert model.language_auto_detected is True
+
+
+class TestActiveModelsAllowlist:
+    """Tests for the active_models runtime allowlist."""
+
+    def test_active_model_is_served(self):
+        """A model listed in active_models and enabled is served; unlisted models' voices are dropped."""
+        config_model = PredefinedData(
+            models=[
+                make_model(),
+                make_model(id="v3_en"),
+            ],
+            voices=[
+                Voice(id="v5_5_ru-aidar", name="aidar", speaker="aidar", model_id="v5_5_ru"),
+                Voice(id="v3_en-en_0", name="en_0", speaker="en_0", model_id="v3_en"),
+            ],
+        )
+
+        storage = YamlDataStorage(config_model, active_models=["v5_5_ru"])
+
+        assert storage.get_model("v5_5_ru") is not None
+        assert storage.get_model("v3_en") is None
+        assert not any(v.model_id == "v3_en" for v in storage.get_voices())
+
+    def test_listed_but_disabled_model_is_not_served_and_warns(self):
+        """A model listed in active_models but disabled is not served and logs a warning."""
+        config_model = PredefinedData(
+            models=[
+                make_model(),
+                make_model(id="v3_en", enabled=False),
+            ],
+            voices=[
+                Voice(id="v5_5_ru-aidar", name="aidar", speaker="aidar", model_id="v5_5_ru"),
+                Voice(id="v3_en-en_0", name="en_0", speaker="en_0", model_id="v3_en"),
+            ],
+        )
+
+        sink = io.StringIO()
+        handler = logger.add(sink, level="WARNING")
+        try:
+            storage = YamlDataStorage(config_model, active_models=["v5_5_ru", "v3_en"])
+        finally:
+            logger.remove(handler)
+
+        assert storage.get_model("v3_en") is None
+        assert not any(v.model_id == "v3_en" for v in storage.get_voices())
+        assert "v3_en" in sink.getvalue()

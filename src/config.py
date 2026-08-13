@@ -199,10 +199,30 @@ class Settings(BaseSettings):
         return value
 
     zeroconf: str = Field(
-        default="silero-tts",
+        default="wyoming-tts-hub",
         description="Zeroconf discovery name. Empty string means disabled. Set to a name (e.g. 'silero-tts') to enable.",
     )
     """Zeroconf discovery name. Empty string means disabled. Set to a name (e.g. 'silero-tts') to enable."""
+
+    active_models: list[str] = Field(
+        default_factory=list,
+        description="Strict runtime allowlist of model ids this instance serves. Must be non-empty.",
+    )
+    """Strict runtime allowlist of model ids this instance serves. Must be non-empty."""
+
+    @field_validator("active_models", mode="before")
+    @classmethod
+    def coerce_active_models_none(cls, v: object) -> object:
+        if v is None:
+            return []
+        return v
+
+    @field_validator("active_models")
+    @classmethod
+    def active_models_must_be_non_empty(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("active_models must be a non-empty list of model ids")
+        return v
 
     streaming: bool = Field(
         default=True,
@@ -354,6 +374,10 @@ class CliArgsSource(PydanticBaseSettingsSource):
             elif "enum" in sub_info:
                 parser.add_argument(
                     f"--{cli_name}", type=str, choices=sub_info["enum"], help=help_text
+                )
+            elif type == "array":
+                parser.add_argument(
+                    f"--{cli_name}", action="append", metavar="ITEM", help=help_text
                 )
             else:
                 parser.add_argument(f"--{cli_name}", metavar=type, type=str, help=help_text)

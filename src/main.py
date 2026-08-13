@@ -19,7 +19,7 @@ setup_logging()
 
 
 def create_storage(settings: Settings) -> DataStorage:
-    return YamlDataStorage(settings.data_yml_path)
+    return YamlDataStorage(settings.data_yml_path, active_models=settings.active_models)
 
 
 def create_text_sentenizer_factory() -> TextSentenizerFactory:

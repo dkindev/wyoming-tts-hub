@@ -46,13 +46,19 @@ class DataStorage(ABC):
 
 
 class YamlDataStorage(DataStorage):
-    def __init__(self, config_path_or_model: str | Path | PredefinedData):
+    def __init__(
+        self,
+        config_path_or_model: str | Path | PredefinedData,
+        active_models: list[str] | None = None,
+    ):
         if isinstance(config_path_or_model, str | Path):
             config_model = self._load_config_model(config_path_or_model)
         else:
             config_model = config_path_or_model
 
-        config_model = self._filter_enabled(config_model)
+        self._check_active_models(config_model, active_models)
+
+        config_model = self._filter_served(config_model, active_models)
 
         self._models: dict[str, Model] = {m.id: m for m in config_model.models}
         self._voices_by_id: dict[str, Voice] = {v.id: v for v in config_model.voices}
@@ -198,14 +204,39 @@ class YamlDataStorage(DataStorage):
         return prompts_list
 
     @staticmethod
-    def _filter_enabled(config: PredefinedData) -> PredefinedData:
-        enabled_models = [m for m in config.models if m.enabled]
-        enabled_model_ids = {m.id for m in enabled_models}
+    def _check_active_models(config: PredefinedData, active_models: list[str] | None) -> None:
+        if active_models is None:
+            return
+        declared_ids = {m.id for m in config.models}
+        unknown_ids = sorted(set(active_models) - declared_ids)
+        if unknown_ids:
+            raise ValueError(
+                f"active_models references unknown model id(s): {', '.join(unknown_ids)}"
+            )
 
-        filtered_voices = [v for v in config.voices if v.model_id in enabled_model_ids]
+    @staticmethod
+    def _filter_served(config: PredefinedData, active_models: list[str] | None) -> PredefinedData:
+        allowed_ids = set(active_models) if active_models is not None else None
+
+        served_models: list[Model] = []
+        for model in config.models:
+            if allowed_ids is not None and model.id not in allowed_ids:
+                continue
+            if not model.enabled:
+                if allowed_ids is not None and model.id in allowed_ids:
+                    logger.warning(
+                        "Model '{model_id}' is listed in active_models but disabled "
+                        "in the model config; it will not be served",
+                        model_id=model.id,
+                    )
+                continue
+            served_models.append(model)
+
+        served_model_ids = {m.id for m in served_models}
+        filtered_voices = [v for v in config.voices if v.model_id in served_model_ids]
 
         return PredefinedData(
-            models=enabled_models,
+            models=served_models,
             voices=filtered_voices,
             prompts=config.prompts,
             voice_normalizations=config.voice_normalizations,

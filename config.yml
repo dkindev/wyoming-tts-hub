@@ -18,6 +18,12 @@ uri: tcp://127.0.0.1:10200
 # Env: TTS_ZEROCONF
 zeroconf: wyoming-tts-hub
 
+# Strict runtime allowlist of model ids this instance serves.
+# A Model is served if enabled AND listed here.
+# CLI: --active_models a --active_models b
+# Env: TTS_ACTIVE_MODELS=["v5_5_ru","v3_en"]
+active_models: [v5_5_ru]
+
 # Enable audio streaming.
 # CLI: --streaming / --no-streaming
 # Env: TTS_STREAMING
