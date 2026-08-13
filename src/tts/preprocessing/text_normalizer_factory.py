@@ -3,7 +3,7 @@ from collections.abc import Callable
 from loguru import logger
 from openai import AsyncOpenAI
 
-from src.config import BaseNormalizationSettings, NormalizationSettings
+from src.config import NormalizationSettings, TextFormatNormalizationSettings
 from src.tts.data_storage import DataStorage
 from src.tts.models import (
     OpenAiNormalizationConfig,
@@ -33,7 +33,7 @@ class TextNormalizerFactory:
         def _create_openai_normalizer(
             voice: Voice,
             voice_normalization: VoiceNormalization,
-            settings: BaseNormalizationSettings,
+            settings: TextFormatNormalizationSettings,
         ) -> TextNormalizer:
             if self._openai_client is None:
                 return None
@@ -69,7 +69,8 @@ class TextNormalizerFactory:
             )
 
         self._builders: dict[
-            str, Callable[[Voice, VoiceNormalization, BaseNormalizationSettings], TextNormalizer]
+            str,
+            Callable[[Voice, VoiceNormalization, TextFormatNormalizationSettings], TextNormalizer],
         ] = {
             # key: "{locale}__{text_format}__{normalization_type}"
             "default__text__simple": lambda v, vn, s: PlainTextNormalizer(),
@@ -107,7 +108,7 @@ class TextNormalizerFactory:
         voice: Voice,
         format: TextFormat,
         default_normalization_enabled: bool,
-        settings: BaseNormalizationSettings,
+        settings: TextFormatNormalizationSettings,
     ) -> TextNormalizer:
         voice_normalization = self._storage.get_voice_normalization(
             voice_id=voice.id, text_format=format

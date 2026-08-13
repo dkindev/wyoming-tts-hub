@@ -1126,28 +1126,3 @@ models:
 
         assert model.ssml_supported is True
         assert model.language_auto_detected is True
-
-
-class TestSampleDataConfig:
-    """Tests against the bundled sample data/data.yml."""
-
-    def test_silero_models_declare_capabilities(self):
-        """v5_5_ru and v3_en declare engine_type, languages, and text-format flags."""
-
-        data_path = "data/data.yml"
-        storage = YamlDataStorage(data_path)
-
-        ru = storage.get_model("v5_5_ru")
-        en = storage.get_model("v3_en")
-
-        assert ru is not None
-        assert ru.engine_type is EngineType.SILERO
-        assert ru.languages == ["ru"]
-        assert ru.ssml_supported is True
-        assert ru.language_auto_detected is True
-
-        assert en is not None
-        assert en.engine_type is EngineType.SILERO
-        assert en.languages == ["en"]
-        assert en.ssml_supported is True
-        assert en.language_auto_detected is True

@@ -55,51 +55,22 @@ class NormalizationPrompt(BaseModel):
     """System LLM model name for normalization."""
 
 
-class BaseNormalizationSettings(BaseModel):
-    type: NormalizationType = Field(
-        default=NormalizationType.SIMPLE, description="Normalizer type (simple, llm)."
+class TextFormatNormalizationSettings(BaseModel):
+    enabled: bool = Field(
+        default=False,
+        description="Enable normalization.",
     )
-    """Normalizer type (simple, llm)."""
+    """Enable normalization."""
+
+    type: NormalizationType = Field(
+        default=NormalizationType.SIMPLE, description="Normalizer type (simple, openai)."
+    )
+    """Normalizer type (simple, openai)."""
 
     prompts: dict[str, NormalizationPrompt] | None = Field(
         default_factory=dict, description="A dictionary of prompts indexed by locale."
     )
     """A dictionary of prompts indexed by locale."""
-
-
-class TextNormalizationSettings(BaseNormalizationSettings):
-    enabled: bool = Field(
-        default=True,
-        description="Enable plain text normalization.",
-    )
-    """Enable plain text normalization."""
-
-
-class SsmlNormalizationSettings(BaseNormalizationSettings):
-    enabled: bool = Field(
-        default=False,
-        description="Enable SSML markup normalization.",
-    )
-    """Enable SSML markup normalization."""
-
-
-class NormalizationSettings(BaseModel):
-    timeout: float = Field(
-        default=5,
-        ge=1,
-        description="Timeout for input text normalization in seconds.",
-    )
-    """Timeout for input text normalization in seconds."""
-
-    max_concurrent_sentences_per_request: int = Field(
-        default=2,
-        ge=1,
-        description="Maximum concurrent sentences per request for normalization.",
-    )
-    """Maximum concurrent sentences per request for normalization."""
-
-    text: TextNormalizationSettings = Field(default_factory=TextNormalizationSettings)
-    ssml: SsmlNormalizationSettings = Field(default_factory=SsmlNormalizationSettings)
 
 
 class OpenAiSettings(BaseModel):
@@ -130,6 +101,26 @@ class OpenAiSettings(BaseModel):
                 self.base_url = standard_url
 
         return self
+
+
+class NormalizationSettings(BaseModel):
+    timeout: float = Field(
+        default=5,
+        ge=1,
+        description="Timeout for input text normalization in seconds.",
+    )
+    """Timeout for input text normalization in seconds."""
+
+    max_concurrent_sentences_per_request: int = Field(
+        default=2,
+        ge=1,
+        description="Maximum concurrent sentences per request for normalization.",
+    )
+    """Maximum concurrent sentences per request for normalization."""
+
+    text: TextFormatNormalizationSettings = Field(default_factory=TextFormatNormalizationSettings)
+    ssml: TextFormatNormalizationSettings = Field(default_factory=TextFormatNormalizationSettings)
+    openai: OpenAiSettings = Field(default_factory=OpenAiSettings)
 
 
 class SileroSettings(BaseModel):
@@ -276,7 +267,6 @@ class Settings(BaseSettings):
     normalization: NormalizationSettings = Field(
         default_factory=NormalizationSettings,
     )
-    openai: OpenAiSettings = Field(default_factory=OpenAiSettings)
     torch: TorchSettings = Field(default_factory=TorchSettings)
 
     model_config = SettingsConfigDict(

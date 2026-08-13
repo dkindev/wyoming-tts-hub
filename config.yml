@@ -119,7 +119,7 @@ normalization:
     # Env: TTS_NORMALIZATION__TEXT__ENABLED
     enabled: true
 
-    # Normalizer type (simple, llm).
+    # Normalizer type (simple, openai).
     # Env: TTS_NORMALIZATION__TEXT__TYPE
     type: simple
 
@@ -142,7 +142,7 @@ normalization:
     # Env: TTS_NORMALIZATION__SSML__ENABLED
     enabled: false
 
-    # Normalizer type (simple, llm).
+    # Normalizer type (simple, openai).
     # Env: TTS_NORMALIZATION__SSML__TYPE
     type: simple
 
@@ -152,14 +152,12 @@ normalization:
     #     text: Normalize english text for TTS...
     #     model: qwen3.5:4b
 
-# OpenAI-compatible API settings for LLM-based normalization.
-openai:
-  # Base URL for OpenAI-compatible API.
-  # CLI: --openai_base_url
-  # Env: TTS_OPENAI__BASE_URL (fallback: OPENAI_BASE_URL)
-  base_url: ""
+  # OpenAI-compatible API settings for OpenAi-based normalization.
+  openai:
+    # Base URL for OpenAI-compatible API.
+    # Env: TTS_NORMALIZATION__OPENAI__BASE_URL (fallback: OPENAI_BASE_URL)
+    base_url: ""
 
-  # API key for OpenAI-compatible API.
-  # CLI: --openai_api_key
-  # Env: TTS_OPENAI__API_KEY (fallback: OPENAI_API_KEY)
-  api_key: ""
+    # API key for OpenAI-compatible API.
+    # Env: TTS_NORMALIZATION__OPENAI__API_KEY (fallback: OPENAI_API_KEY)
+    api_key: ""
