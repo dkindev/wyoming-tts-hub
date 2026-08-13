@@ -17,18 +17,16 @@ _Avoid_: TTS server, orchestrator
 
 **TTS Engine**:
 A backend that synthesizes speech from text input for one provider family (e.g.,
-Silero, Qwen3-tts, an OpenAI-compatible API). Owns one or more **Models** and
-produces raw PCM audio output.
+Silero, Qwen3-tts, an OpenAI-compatible API). Produces raw PCM audio output.
 _Avoid_: Speech generator, voice synthesizer
 
 **Model**:
 A named, language-specific model that belongs to exactly one **TTS Engine**.
-Models can be enabled, disabled, or pre-warmed at startup. Each model supports
-one or more speakers. A **Model** declares its `engine_type` (which **TTS
+Models can be enabled, disabled, or pre-warmed at startup. A **Model** declares its `engine_type` (which **TTS
 Engine** family owns it), the **Languages** it supports, whether it
 auto-detects its language (`language_auto_detected`), and whether it accepts
 **SSML** (`ssml_supported`). The declared **Languages** are the source of truth
-advertised by the **TTS Engine Hub** for the **Model**'s **Voices**.
+advertised for the **Model**'s **Voices**.
 _Avoid_: Neural network, PyTorch model
 
 **Language**:
@@ -43,16 +41,14 @@ _Avoid_: locale, locale string
 **Text Format**:
 The input format a **TTS Engine** accepts for a **Model** during synthesis —
 either `text` or `ssml`. Not every **Model** supports every format; a **Model**'s
-support for `ssml` is declared via its `ssml_supported` flag. The **TTS Engine
-Hub** advertises the supported **Text Formats** per **Model**.
+support for `ssml` is declared via its `ssml_supported` flag.
 _Avoid_: format, text type
 
 **Speaker**:
 The engine-level voice profile within a **Model** that the owning **TTS Engine**
 selects during synthesis (e.g., a Silero speaker like `aidar`, or an OpenAI
 voice name like `alloy`). Speakers are model-specific — the same speaker name
-may refer to different profiles across different models. One or more **Voices**
-can map to the same **Speaker**.
+may refer to different profiles across different models.
 _Avoid_: Voice (when meaning a speaker profile)
 
 **Voice**:
@@ -135,8 +131,8 @@ _Avoid_: LLM instruction
 > from the **Model**'s sole declared **Language**, or falls back to
 > auto-detection when the **Model** declares `language_auto_detected`."
 > **Dev:** "Does every model support SSML?"
-> **Domain expert:** "No — the **TTS Engine Hub** advertises the **Text
-> Formats** each **Model** supports; some engines only accept plain text."
+> **Domain expert:** "No — the **Model** supports SSML if `ssml_supported` flag
+> is set for **Model**; some engines only accept plain text."
 
 ## Flagged ambiguities
 
