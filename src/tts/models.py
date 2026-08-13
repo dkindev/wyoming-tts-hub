@@ -1,6 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, unique
 from typing import Any
+
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,18 @@ class NormalizationType(Enum):
     OPENAI = "openai"
 
 
+@unique
+class BackendType(Enum):
+    TORCH = "torch"
+
+
+@unique
+class EngineType(Enum):
+    SILERO = "silero"
+    QWEN = "qwen"
+    OPENAI = "openai"
+
+
 @dataclass(frozen=True)
 class VoiceNormalization:
     voice_id: str
@@ -35,6 +49,10 @@ class VoiceNormalization:
 @dataclass(frozen=True)
 class Model:
     id: str
+    engine_type: EngineType
+    ssml_supported: bool = False
+    language_auto_detected: bool = False
+    languages: list[str] = field(default_factory=list)
     enabled: bool = True
     warmup: bool = False
     hash_prefix: str | None = None
@@ -92,7 +110,7 @@ class OpenAiNormalizationConfig:
 
 @dataclass(frozen=True)
 class TTSResult:
-    audio: bytes
+    audio: np.ndarray
     sample_rate: int
     bytes_per_sample: int
     channels: int

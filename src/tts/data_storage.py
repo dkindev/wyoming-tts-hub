@@ -6,6 +6,7 @@ import yaml
 from loguru import logger
 
 from src.tts.models import (
+    EngineType,
     Model,
     NormalizationType,
     PredefinedData,
@@ -89,6 +90,10 @@ class YamlDataStorage(DataStorage):
             models_list.append(
                 Model(
                     id=model_id,
+                    engine_type=EngineType(model_data.get("engine_type", "silero")),
+                    ssml_supported=model_data.get("ssml_supported", False),
+                    language_auto_detected=model_data.get("language_auto_detected", False),
+                    languages=[lang.strip() for lang in model_data.get("languages", []) or []],
                     enabled=model_data.get("enabled", True),
                     warmup=model_data.get("warmup", False),
                     hash_prefix=model_data.get("hash_prefix") or None,

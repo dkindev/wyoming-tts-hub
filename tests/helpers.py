@@ -3,7 +3,7 @@ import os
 
 import yaml
 
-from src.tts.models import Model, TextFormat, Voice
+from src.tts.models import EngineType, Model, TextFormat, Voice
 
 
 def hash_models_yml(yml_path: str) -> str:
@@ -81,12 +81,11 @@ def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru", locale="ru_RU")
         name=name,
         speaker=speaker or name,
         model_id=model,
-        locale=locale,
     )
 
 
-def make_model(id="v5_5_ru", language="ru", warmup=False, enabled=True):
-    return Model(id=id, language=language, warmup=warmup, enabled=enabled)
+def make_model(id="v5_5_ru", engine_type=EngineType.SILERO, warmup=False, enabled=True):
+    return Model(id=id, engine_type=engine_type, warmup=warmup, enabled=enabled)
 
 
 def make_merged_yaml(tmp_path, models_data: dict) -> str:

@@ -1,10 +1,12 @@
 from dataclasses import FrozenInstanceError
 
+import numpy as np
 import pytest
 
 from src.config import Settings
 from src.tts.exceptions import TTSEngineError
 from src.tts.models import (
+    EngineType,
     Model,
     NormalizationType,
     PredefinedData,
@@ -17,82 +19,140 @@ from src.tts.models import (
 )
 
 
+class TestEngineType:
+    def test_engine_type_has_silero_qwen_openai_values(self):
+        """EngineType exposes SILERO, QWEN, and OPENAI members with expected values."""
+        assert EngineType.SILERO.value == "silero"
+        assert EngineType.QWEN.value == "qwen"
+        assert EngineType.OPENAI.value == "openai"
+
+
 class TestModel:
-    def test_model_has_name_and_language_fields(self):
-        """Model dataclass has name and language fields."""
-        model = Model(id="test_model", language="en")
-        assert model.id == "test_model"
-        assert model.language == "en"
+    def test_model_requires_engine_type(self):
+        """Model.engine_type is required — constructing without it raises TypeError."""
+        with pytest.raises(TypeError):
+            Model(id="test_model")
+
+    def test_model_stores_engine_type(self):
+        """Model stores the given engine_type."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO)
+        assert model.engine_type is EngineType.SILERO
+
+    def test_model_accepts_any_engine_type(self):
+        """Model accepts each EngineType member."""
+        for engine_type in EngineType:
+            model = Model(id="test_model", engine_type=engine_type)
+            assert model.engine_type is engine_type
+
+    def test_model_ssml_supported_defaults_to_false(self):
+        """Model.ssml_supported defaults to False."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO)
+        assert model.ssml_supported is False
+
+    def test_model_ssml_supported_can_be_set_to_true(self):
+        """Model(ssml_supported=True) sets ssml_supported to True."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO, ssml_supported=True)
+        assert model.ssml_supported is True
+
+    def test_model_language_auto_detected_defaults_to_false(self):
+        """Model.language_auto_detected defaults to False."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO)
+        assert model.language_auto_detected is False
+
+    def test_model_language_auto_detected_can_be_set_to_true(self):
+        """Model(language_auto_detected=True) sets language_auto_detected to True."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO, language_auto_detected=True)
+        assert model.language_auto_detected is True
+
+    def test_model_languages_defaults_to_empty_list(self):
+        """Model.languages defaults to an empty list."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO)
+        assert model.languages == []
+
+    def test_model_languages_stores_declared_languages(self):
+        """Model stores the declared list of languages."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO, languages=["ru", "en"])
+        assert model.languages == ["ru", "en"]
 
     def test_model_warmup_defaults_to_false(self):
         """Model.warmup defaults to False."""
-        model = Model(id="test_model", language="en")
+        model = Model(id="test_model", engine_type=EngineType.SILERO)
         assert model.warmup is False
 
     def test_model_warmup_can_be_set_to_true(self):
-        """Model(language, warmup=True) sets warmup to True."""
-        model = Model(id="test_model", language="en", warmup=True)
+        """Model(warmup=True) sets warmup to True."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO, warmup=True)
         assert model.warmup is True
 
     def test_model_hash_prefix_defaults_to_none(self):
         """Model.hash_prefix defaults to None."""
-        model = Model(id="test_model", language="en")
+        model = Model(id="test_model", engine_type=EngineType.SILERO)
         assert model.hash_prefix is None
 
     def test_model_hash_prefix_can_be_set(self):
-        """Model(name, language, hash_prefix=...) stores the value."""
-        model = Model(id="test_model", language="en", hash_prefix="a1b2c3")
+        """Model(hash_prefix=...) stores the value."""
+        model = Model(id="test_model", engine_type=EngineType.SILERO, hash_prefix="a1b2c3")
         assert model.hash_prefix == "a1b2c3"
 
     def test_model_is_frozen(self):
         """Model dataclass is immutable (frozen)."""
-        model = Model(id="test_model", language="en")
+        model = Model(id="test_model", engine_type=EngineType.SILERO)
         with pytest.raises(FrozenInstanceError):
-            model.language = "fr"
+            model.engine_type = EngineType.QWEN
 
 
 class TestVoice:
     def test_voice_has_all_fields(self):
-        """Voice dataclass has id, name, speaker, model, locale fields."""
+        """Voice dataclass has id, name, speaker, model_id fields."""
         voice = Voice(
-            id="en_US-v3_en-en_0",
-            name="en_0",
-            speaker="en_0",
-            model_id="v3_en",
-            locale="en_US",
+            id="v5_5_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_5_ru",
         )
-        assert voice.id == "en_US-v3_en-en_0"
-        assert voice.name == "en_0"
-        assert voice.speaker == "en_0"
-        assert voice.model_id == "v3_en"
-        assert voice.locale == "en_US"
+        assert voice.id == "v5_5_ru-aidar"
+        assert voice.name == "aidar"
+        assert voice.speaker == "aidar"
+        assert voice.model_id == "v5_5_ru"
 
-    def test_voice_can_be_created_without_gender(self):
-        """Voice can be constructed with only the 5 essential fields — no gender required."""
+    def test_voice_has_optional_reference_fields(self):
+        """Voice can be constructed with reference audio/text and instruct fields."""
         voice = Voice(
-            id="en_US-v3_en-en_0",
-            name="en_0",
-            speaker="en_0",
-            model_id="v3_en",
-            locale="en_US",
+            id="v5_5_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_5_ru",
+            ref_audio="path/to/ref.wav",
+            ref_text="reference text",
+            instruct="instructive prompt",
         )
-        assert voice.id == "en_US-v3_en-en_0"
-        assert voice.name == "en_0"
-        assert voice.speaker == "en_0"
-        assert voice.model_id == "v3_en"
-        assert voice.locale == "en_US"
+        assert voice.ref_audio == "path/to/ref.wav"
+        assert voice.ref_text == "reference text"
+        assert voice.instruct == "instructive prompt"
+
+    def test_voice_can_be_created_with_only_required_fields(self):
+        """Voice can be constructed with only the 4 essential fields."""
+        voice = Voice(
+            id="v5_5_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_5_ru",
+        )
+        assert voice.id == "v5_5_ru-aidar"
+        assert voice.name == "aidar"
+        assert voice.speaker == "aidar"
+        assert voice.model_id == "v5_5_ru"
 
     def test_voice_is_frozen(self):
         """Voice dataclass is immutable (frozen)."""
         voice = Voice(
-            id="en_US-v3_en-en_0",
-            name="en_0",
-            speaker="en_0",
-            model_id="v3_en",
-            locale="en_US",
+            id="v5_5_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_5_ru",
         )
         with pytest.raises(FrozenInstanceError):
-            voice.speaker = "en_1"
+            voice.speaker = "baya"
 
 
 class TestPrompt:
@@ -155,7 +215,7 @@ class TestVoiceNormalization:
 class TestTTSConfigModel:
     def test_tts_config_model_has_models_and_voices(self):
         """TTSConfigModel dataclass has models list and voices list."""
-        models = [Model(id="v3_en", language="en")]
+        models = [Model(id="v3_en", engine_type=EngineType.SILERO)]
         voices = [
             Voice(
                 id="en_US-v3_en-en_0",
@@ -260,10 +320,11 @@ class TestExceptions:
 
 class TestTTSResult:
     def test_tts_result_has_all_fields(self):
-        """TTSResult dataclass has audio, sample_rate, bytes_per_sample, channels."""
-        audio = b"\x00\x00\x00\x00"
+        """TTSResult dataclass has audio (np.ndarray), sample_rate, bytes_per_sample, channels."""
+        audio = np.array([0, 1, 2, 3], dtype=np.int16)
         result = TTSResult(audio=audio, sample_rate=48000, bytes_per_sample=2, channels=1)
-        assert result.audio == audio
+        assert isinstance(result.audio, np.ndarray)
+        assert np.array_equal(result.audio, audio)
         assert result.sample_rate == 48000
         assert result.bytes_per_sample == 2
         assert result.channels == 1
