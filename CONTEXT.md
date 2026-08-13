@@ -24,19 +24,27 @@ _Avoid_: Speech generator, voice synthesizer
 **Model**:
 A named, language-specific model that belongs to exactly one **TTS Engine**.
 Models can be enabled, disabled, or pre-warmed at startup. Each model supports
-one or more speakers.
+one or more speakers. A **Model** declares its `engine_type` (which **TTS
+Engine** family owns it), the **Languages** it supports, whether it
+auto-detects its language (`language_auto_detected`), and whether it accepts
+**SSML** (`ssml_supported`). The declared **Languages** are the source of truth
+advertised by the **TTS Engine Hub** for the **Model**'s **Voices**.
 _Avoid_: Neural network, PyTorch model
 
 **Language**:
-A spoken-language code (e.g., `ru`, `en`) that a **Model** supports. The **TTS
-Engine Hub** advertises supported **Languages** per **Model**, and Wyoming
-clients select a voice by **Language** when not specifying a name.
+A spoken-language code (e.g., `ru`, `en`) that a **Model** declares it
+supports. A Wyoming client *may* send a **Language** with a synthesis request;
+when sent, the **TTS Engine Hub** validates it against the selected **Model**'s
+declared **Languages** and rejects the request on a mismatch. When omitted, the
+Hub resolves it from the **Model**'s sole declared **Language**, falling back to
+auto-detection when the **Model** declares `language_auto_detected`.
 _Avoid_: locale, locale string
 
 **Text Format**:
 The input format a **TTS Engine** accepts for a **Model** during synthesis —
-either `text` or `ssml`. Not every **Model** supports every format, so the
-**TTS Engine Hub** advertises the supported **Text Formats** per **Model**.
+either `text` or `ssml`. Not every **Model** supports every format; a **Model**'s
+support for `ssml` is declared via its `ssml_supported` flag. The **TTS Engine
+Hub** advertises the supported **Text Formats** per **Model**.
 _Avoid_: format, text type
 
 **Speaker**:
@@ -120,10 +128,12 @@ _Avoid_: LLM instruction
 > **Domain expert:** "Yes — a **Voice** is a preset anchored to a
 > **(Model, Speaker)** pair. `aidar-soft` and `aidar-loud` under `v5_5_ru` can
 > both map to `speaker: aidar`."
-> **Dev:** "What if a Wyoming client selects a voice by language instead of by
-> name?"
-> **Domain expert:** "The **TTS Engine Hub** matches a **Voice** against the
-> **Model**'s supported **Languages**."
+> **Dev:** "How does the Hub handle a **Language** from a Wyoming client?"
+> **Domain expert:** "It's optional. If the client sends one, the **TTS Engine
+> Hub** validates it against the selected **Model**'s declared **Languages** and
+> rejects the request on a mismatch. If the client omits one, the Hub derives it
+> from the **Model**'s sole declared **Language**, or falls back to
+> auto-detection when the **Model** declares `language_auto_detected`."
 > **Dev:** "Does every model support SSML?"
 > **Domain expert:** "No — the **TTS Engine Hub** advertises the **Text
 > Formats** each **Model** supports; some engines only accept plain text."
