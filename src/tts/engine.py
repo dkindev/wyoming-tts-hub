@@ -3,6 +3,7 @@ import gc
 import hashlib
 import os
 import urllib.request
+from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -15,8 +16,32 @@ from loguru import logger
 from src.tts.cache import ExponentialDecayCache
 from src.tts.data_storage import DataStorage
 from src.tts.exceptions import TTSEngineError
-from src.tts.models import Model, NormalizationOptions, TextFormat, TTSConfig, TTSResult, Voice
+from src.tts.models import (
+    Model,
+    NormalizationOptions,
+    TextFormat,
+    TtsConfig,
+    TtsResult,
+    Voice,
+)
 from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
+
+
+class TtsEngine(ABC):
+    @abstractmethod
+    async def synthesize_pcm(
+        self, text: str, voice: Voice, text_format: TextFormat, language: str | None = None
+    ) -> AsyncIterator[TtsResult]:
+        ...
+
+    @abstractmethod
+    async def warmup(self) -> None:
+        ...
+
+    @abstractmethod
+    async def close(self) -> None:
+        ...
+
 
 BYTES_PER_SAMPLE = 2
 CHANNELS = 1
@@ -36,7 +61,7 @@ class SileroTTSEngine:
 
     def __init__(
         self,
-        config: TTSConfig,
+        config: TtsConfig,
         storage: DataStorage,
         text_sentenizer_factory: TextSentenizerFactory,
         text_normalizer_factory: TextNormalizerFactory,
@@ -59,7 +84,7 @@ class SileroTTSEngine:
         text: str,
         voice_id: str,
         text_format: TextFormat,
-    ) -> AsyncIterator[TTSResult]:
+    ) -> AsyncIterator[TtsResult]:
         if text_format not in self.get_supported_text_formats():
             raise TTSEngineError(f"Invalid text format: {text_format}")
 
@@ -71,9 +96,9 @@ class SileroTTSEngine:
         if voice is None:
             raise TTSEngineError(f"Unsupported voice: {voice_id}")
 
-        model = self._storage.get_model(voice.model)
+        model = self._storage.get_model(voice.model_id)
         if model is None:
-            raise TTSEngineError(f"Unsupported model: {voice.model}")
+            raise TTSEngineError(f"Unsupported model: {voice.model_id}")
 
         logger.info(
             "Synthesizing TTS. Text length: {text_length}. Voice: {voice_id}. Text format: {text_format}. Model: {model_id}",
@@ -205,7 +230,7 @@ class SileroTTSEngine:
         cached_model: CachedModel,
         voice: Voice,
         text_format: TextFormat,
-    ) -> AsyncIterator[TTSResult]:
+    ) -> AsyncIterator[TtsResult]:
         queue = asyncio.Queue(maxsize=10)
         active_tasks = set()
 
@@ -324,7 +349,7 @@ class SileroTTSEngine:
         self,
         buffer: np.ndarray,
         sample_rate: int,
-    ) -> Iterator[TTSResult]:
+    ) -> Iterator[TtsResult]:
         duration_sec = self._config.frame_duration / 1000.0
         chunk_size = int(sample_rate * BYTES_PER_SAMPLE * CHANNELS * duration_sec)
 
@@ -334,7 +359,7 @@ class SileroTTSEngine:
         total_samples = buffer.shape[0]
 
         for i in range(0, total_samples, chunk_size):
-            yield TTSResult(
+            yield TtsResult(
                 audio=buffer[i : i + chunk_size].tobytes(),
                 sample_rate=sample_rate,
                 bytes_per_sample=BYTES_PER_SAMPLE,
