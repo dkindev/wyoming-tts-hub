@@ -34,7 +34,8 @@ class TextNormalizerFactory:
             voice: Voice,
             voice_normalization: VoiceNormalization,
             settings: TextFormatNormalizationSettings,
-        ) -> TextNormalizer:
+            language: str,
+        ) -> TextNormalizer | None:
             if self._openai_client is None:
                 return None
 
@@ -51,7 +52,7 @@ class TextNormalizerFactory:
                 if settings.prompts is None:
                     return None
 
-                default_prompt = settings.prompts.get(voice.locale)
+                default_prompt = settings.prompts.get(language)
                 if default_prompt is None:
                     return None
 
@@ -70,81 +71,55 @@ class TextNormalizerFactory:
 
         self._builders: dict[
             str,
-            Callable[[Voice, VoiceNormalization, TextFormatNormalizationSettings], TextNormalizer],
+            Callable[
+                [Voice, VoiceNormalization, TextFormatNormalizationSettings, str],
+                TextNormalizer,
+            ],
         ] = {
-            # key: "{locale}__{text_format}__{normalization_type}"
-            "default__text__simple": lambda v, vn, s: PlainTextNormalizer(),
-            "default__ssml__simple": lambda v, vn, s: SsmlNormalizer(),
-            "default__text__llm": _create_openai_normalizer,
-            "default__ssml__llm": _create_openai_normalizer,
+            # key: "{language}__{text_format}__{normalization_type}"
+            "default__text__simple": lambda v, vn, s, language: PlainTextNormalizer(),
+            "default__ssml__simple": lambda v, vn, s, language: SsmlNormalizer(),
+            "default__text__openai": _create_openai_normalizer,
+            "default__ssml__openai": _create_openai_normalizer,
         }
 
-        self._factories: dict[str, Callable[[Voice, TextFormat], TextNormalizer]] = {
-            # key: "{locale}__{text_format}"
-            "default__text": self._create_text_normalizer_factory,
-            "default__ssml": self._create_ssml_normalizer_factory,
-        }
+    def create(self, voice: Voice, text_format: TextFormat, language: str) -> TextNormalizer | None:
+        if voice is None:
+            raise TypeError("voice cannot be None")
 
-    def _create_text_normalizer_factory(self, voice: Voice, format: TextFormat) -> TextNormalizer:
-        settings = self._settings.text
-        return self._create_text_normalizer(
-            voice=voice,
-            format=format,
-            default_normalization_enabled=settings.enabled,
-            settings=settings,
-        )
+        if language is None:
+            raise TypeError("language cannot be None")
 
-    def _create_ssml_normalizer_factory(self, voice: Voice, format: TextFormat) -> TextNormalizer:
-        settings = self._settings.ssml
-        return self._create_text_normalizer(
-            voice=voice,
-            format=format,
-            default_normalization_enabled=settings.enabled,
-            settings=settings,
-        )
+        settings = self._settings.text if text_format is TextFormat.TEXT else self._settings.ssml
 
-    def _create_text_normalizer(
-        self,
-        voice: Voice,
-        format: TextFormat,
-        default_normalization_enabled: bool,
-        settings: TextFormatNormalizationSettings,
-    ) -> TextNormalizer:
         voice_normalization = self._storage.get_voice_normalization(
-            voice_id=voice.id, text_format=format
+            voice_id=voice.id, text_format=text_format, language=language
         )
         if voice_normalization is not None:
             if not voice_normalization.enabled:
                 return None
 
-            type = voice_normalization.type
+            normalization_type = voice_normalization.type
         else:
-            if not default_normalization_enabled:
+            if not settings.enabled:
                 return None
 
-            type = settings.type
+            normalization_type = settings.type
 
-        builder = self._builders.get(f"{voice.locale}__{format.value}__{type.value}")
+        builder = self._builders.get(f"{language}__{text_format.value}__{normalization_type.value}")
         if builder is None:
-            builder = self._builders.get(f"default__{format.value}__{type.value}")
+            builder = self._builders.get(
+                f"default__{text_format.value}__{normalization_type.value}"
+            )
 
         if builder is None:
             logger.warning(
-                "Text normalizer not found in factory. Locale: {locale}. Format: {format}. Type: {type}",
-                locale=voice.locale,
-                format=format.value,
-                type=type.value,
+                "Text normalizer not found in factory. Language: {language}. "
+                "Format: {format}. Type: {type}",
+                language=language,
+                format=text_format.value,
+                type=normalization_type.value,
             )
             return None
 
-        return builder(voice, voice_normalization, settings)
-
-    def create_text_normalizer(self, voice: Voice, format: TextFormat) -> TextNormalizer:
-        if voice is None:
-            raise TypeError("voice cannot be None")
-
-        factory = self._factories.get(f"{voice.locale}__{format.value}")
-        if factory is None:
-            factory = self._factories.get(f"default__{format.value}")
-
-        return factory(voice, format)
+        return builder(voice, voice_normalization, settings, language)

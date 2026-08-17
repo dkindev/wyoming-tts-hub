@@ -2,11 +2,7 @@ import unittest.mock
 
 import pytest
 
-from src.config import (
-    NormalizationSettings,
-    SsmlNormalizationSettings,
-    TextNormalizationSettings,
-)
+from src.config import NormalizationSettings, TextFormatNormalizationSettings
 from src.tts.models import NormalizationType, Prompt, TextFormat, VoiceNormalization
 from src.tts.preprocessing import (
     OpenAiTextNormalizer,
@@ -18,29 +14,30 @@ from tests.helpers import make_voice
 
 
 class TestTextNormalizerFactory:
-    """Tests for TextNormalizerFactory.create_text_normalizer behavior."""
+    """Tests for TextNormalizerFactory.create behavior."""
 
-    def test_text_simple_returns_plain_text_normalizer(
-        self, default_normalization_settings, mock_openai_client, mock_storage
-    ):
+    def test_text_simple_returns_plain_text_normalizer(self, mock_openai_client, mock_storage):
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(enabled=True),
+        )
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client,
-            settings=default_normalization_settings,
+            settings=settings,
             storage=mock_storage,
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert isinstance(result, PlainTextNormalizer)
 
     def test_ssml_simple_returns_ssml_normalizer(self, mock_openai_client, mock_storage):
         settings = NormalizationSettings(
-            ssml=SsmlNormalizationSettings(enabled=True),
+            ssml=TextFormatNormalizationSettings(enabled=True),
         )
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client, settings=settings, storage=mock_storage
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.SSML)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.SSML, language="ru")
         assert isinstance(result, SsmlNormalizer)
 
     def test_text_llm_returns_openai_normalizer(self, mock_openai_client, mock_storage):
@@ -61,8 +58,8 @@ class TestTextNormalizerFactory:
             settings=NormalizationSettings(),
             storage=mock_storage,
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert isinstance(result, OpenAiTextNormalizer)
 
     def test_text_llm_no_prompt_returns_none(self, mock_openai_client, mock_storage):
@@ -78,13 +75,13 @@ class TestTextNormalizerFactory:
         mock_storage.get_prompt.return_value = None
 
         settings = NormalizationSettings(
-            text=TextNormalizationSettings(prompts={}),
+            text=TextFormatNormalizationSettings(prompts={}),
         )
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client, settings=settings, storage=mock_storage
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert result is None
 
     def test_text_llm_no_client_returns_none(self, default_normalization_settings):
@@ -103,8 +100,8 @@ class TestTextNormalizerFactory:
             settings=default_normalization_settings,
             storage=mock_storage,
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert result is None
 
     def test_raises_type_error_for_none_voice(
@@ -116,41 +113,67 @@ class TestTextNormalizerFactory:
             storage=mock_storage,
         )
         with pytest.raises(TypeError):
-            factory.create_text_normalizer(voice=None, format=TextFormat.TEXT)
+            factory.create(voice=None, text_format=TextFormat.TEXT, language="ru")
+
+    def test_raises_type_error_for_none_language(
+        self, default_normalization_settings, mock_openai_client, mock_storage
+    ):
+        factory = TextNormalizerFactory(
+            openai_client=mock_openai_client,
+            settings=default_normalization_settings,
+            storage=mock_storage,
+        )
+        voice = make_voice(voice_id="v1", name="Test")
+        with pytest.raises(TypeError):
+            factory.create(voice=voice, text_format=TextFormat.TEXT, language=None)
 
     def test_text_normalization_disabled_returns_none(self, mock_openai_client, mock_storage):
         settings = NormalizationSettings(
-            text=TextNormalizationSettings(enabled=False),
+            text=TextFormatNormalizationSettings(enabled=False),
         )
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client, settings=settings, storage=mock_storage
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert result is None
 
     def test_ssml_normalization_disabled_returns_none(self, mock_openai_client, mock_storage):
         settings = NormalizationSettings(
-            ssml=SsmlNormalizationSettings(enabled=False),
+            ssml=TextFormatNormalizationSettings(enabled=False),
         )
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client, settings=settings, storage=mock_storage
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.SSML)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.SSML, language="ru")
         assert result is None
 
-    def test_llm_with_none_prompts_returns_none(self, mock_storage):
+    def test_llm_with_none_prompts_returns_none(self, mock_openai_client, mock_storage):
         settings = NormalizationSettings(
-            text=TextNormalizationSettings(
+            text=TextFormatNormalizationSettings(
+                enabled=True,
                 type=NormalizationType.OPENAI,
                 prompts=None,
             ),
         )
-        factory = TextNormalizerFactory(openai_client=None, settings=settings, storage=mock_storage)
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        factory = TextNormalizerFactory(
+            openai_client=mock_openai_client, settings=settings, storage=mock_storage
+        )
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert result is None
+
+    def test_unknown_language_falls_back_to_default(self, mock_openai_client, mock_storage):
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(enabled=True),
+        )
+        factory = TextNormalizerFactory(
+            openai_client=mock_openai_client, settings=settings, storage=mock_storage
+        )
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="en")
+        assert isinstance(result, PlainTextNormalizer)
 
 
 class TestTextNormalizerFactoryVoiceNormalization:
@@ -173,8 +196,8 @@ class TestTextNormalizerFactoryVoiceNormalization:
             settings=default_normalization_settings,
             storage=mock_storage,
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert result is None
 
     def test_voice_normalization_simple_text_returns_plain_text_normalizer(
@@ -194,8 +217,8 @@ class TestTextNormalizerFactoryVoiceNormalization:
             settings=default_normalization_settings,
             storage=mock_storage,
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert isinstance(result, PlainTextNormalizer)
 
     def test_voice_normalization_simple_ssml_returns_ssml_normalizer(
@@ -215,8 +238,8 @@ class TestTextNormalizerFactoryVoiceNormalization:
             settings=default_normalization_settings,
             storage=mock_storage,
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.SSML)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.SSML, language="ru")
         assert isinstance(result, SsmlNormalizer)
 
     def test_voice_normalization_llm_returns_openai_normalizer(
@@ -239,11 +262,24 @@ class TestTextNormalizerFactoryVoiceNormalization:
             settings=default_normalization_settings,
             storage=mock_storage,
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
         assert isinstance(result, OpenAiTextNormalizer)
 
-    def test_no_voice_normalization_falls_through(
+    def test_no_voice_normalization_falls_through(self, mock_openai_client, mock_storage):
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(enabled=True),
+        )
+        factory = TextNormalizerFactory(
+            openai_client=mock_openai_client,
+            settings=settings,
+            storage=mock_storage,
+        )
+        voice = make_voice(voice_id="v1", name="Test")
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
+        assert isinstance(result, PlainTextNormalizer)
+
+    def test_language_reaches_storage_lookup(
         self, default_normalization_settings, mock_openai_client
     ):
         mock_storage = unittest.mock.Mock()
@@ -253,6 +289,8 @@ class TestTextNormalizerFactoryVoiceNormalization:
             settings=default_normalization_settings,
             storage=mock_storage,
         )
-        voice = make_voice(voice_id="v1", name="Test", locale="ru_RU")
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
-        assert isinstance(result, PlainTextNormalizer)
+        voice = make_voice(voice_id="v1", name="Test")
+        factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
+        mock_storage.get_voice_normalization.assert_called_once_with(
+            voice_id="v1", text_format=TextFormat.TEXT, language="ru"
+        )
