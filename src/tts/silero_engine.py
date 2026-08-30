@@ -220,7 +220,7 @@ class SileroTtsEngine(TtsEngine):
         registry = self._get_models_data(yml_path, self._models_yml_url, self._models_yml_hash)
 
         tts_models = registry.get("tts_models", {})
-        language = self._resolve_model_section(tts_models, model)
+        language = self._resolve_internal_model_language(tts_models, model)
 
         lang_dir = os.path.join(models_dir, "silero", language)
         os.makedirs(lang_dir, exist_ok=True)
@@ -266,7 +266,7 @@ class SileroTtsEngine(TtsEngine):
         return model_path, sample_rates, example_text, speakers
 
     @staticmethod
-    def _resolve_model_section(tts_models: dict, model: Model) -> str:
+    def _resolve_internal_model_language(tts_models: dict, model: Model) -> str:
         """Return the registry section (keyed by language) that owns the model.
 
         Prefers the model's sole declared Language when it owns the model, then
