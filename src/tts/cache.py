@@ -14,6 +14,7 @@ class ExponentialDecayCache:
         eviction_interval: float | None = None,
         on_evict: Callable[[list[tuple[Any, Any]]], None] | None = None,
     ):
+        self._lock = asyncio.Lock()
         self._closed = False
         self._capacity = capacity
 
@@ -26,6 +27,7 @@ class ExponentialDecayCache:
         self._eviction_queue = asyncio.Queue() if on_evict else None
         self._eviction_interval = eviction_interval
         self._cleaner_task = asyncio.create_task(self._cleaner_worker()) if on_evict else None
+        self._current_batch: list[tuple[Any, Any]] = []
 
         self._cache = {}
         # Metadata: {key: {"score": current_RPS_score, "last_updated": last_updated_timestamp}}
@@ -43,29 +45,32 @@ class ExponentialDecayCache:
                 if not batch:
                     continue
 
+                self._current_batch = batch
+
                 try:
                     await asyncio.to_thread(self._on_evict, batch)
                 except asyncio.CancelledError:
-                    try:
-                        self._on_evict(batch)
-                    except Exception:
-                        logger.exception(
-                            "Emergency batch eviction failed inside worker cancellation"
-                        )
-
                     raise
                 except Exception:
                     logger.exception("Eviction callback failed")
                 finally:
                     self._close_batch(batch)
+                    self._current_batch = []
             except asyncio.CancelledError:
                 logger.debug("Background cleanup worker was forcibly cancelled.")
 
                 raise
 
     def _sync_cleanup(self):
-        batch = self._get_batch_nowait()
+        if self._current_batch:
+            try:
+                self._on_evict(self._current_batch)
+            except Exception:
+                logger.exception("Emergency fallback batch eviction failed")
 
+            self._current_batch = []
+
+        batch = self._get_batch_nowait()
         if batch:
             try:
                 # call synchronously
@@ -197,21 +202,25 @@ class ExponentialDecayCache:
         if self._closed:
             return
 
-        self._closed = True
+        async with self._lock:
+            if self._closed:
+                return
 
-        self.clear()
+            self._closed = True
 
-        if self._cleaner_task and not self._cleaner_task.done():
-            self._cleaner_task.cancel()
+            self.clear()
 
-            try:
-                await self._cleaner_task
-            except asyncio.CancelledError:
-                current_task = asyncio.current_task()
-                if current_task and current_task.cancelling() > 0:
-                    raise
-            finally:
-                self._sync_cleanup()
-                self._cleaner_task = None
+            if self._cleaner_task and not self._cleaner_task.done():
+                self._cleaner_task.cancel()
 
-        logger.info("Сache was closed successfully, resources were released.")
+                try:
+                    await self._cleaner_task
+                except asyncio.CancelledError:
+                    current_task = asyncio.current_task()
+                    if current_task and current_task.cancelling() > 0:
+                        raise
+                finally:
+                    self._sync_cleanup()
+                    self._cleaner_task = None
+
+            logger.info("Сache was closed successfully, resources were released.")
