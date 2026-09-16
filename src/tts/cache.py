@@ -27,7 +27,6 @@ class ExponentialDecayCache:
         self._eviction_queue = asyncio.Queue() if on_evict else None
         self._eviction_interval = eviction_interval
         self._cleaner_task = asyncio.create_task(self._cleaner_worker()) if on_evict else None
-        self._current_batch: list[tuple[Any, Any]] = []
 
         self._cache = {}
         # Metadata: {key: {"score": current_RPS_score, "last_updated": last_updated_timestamp}}
@@ -41,44 +40,23 @@ class ExponentialDecayCache:
         while True:
             try:
                 batch = await self._get_batch()
-
                 if not batch:
                     continue
 
-                self._current_batch = batch
-
-                try:
-                    await asyncio.to_thread(self._on_evict, batch)
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    logger.exception("Eviction callback failed")
-                finally:
-                    self._close_batch(batch)
-                    self._current_batch = []
+                self._evict_batch(batch)
             except asyncio.CancelledError:
                 logger.debug("Background cleanup worker was forcibly cancelled.")
 
                 raise
 
-    def _sync_cleanup(self):
-        if self._current_batch:
-            try:
-                self._on_evict(self._current_batch)
-            except Exception:
-                logger.exception("Emergency fallback batch eviction failed")
-
-            self._current_batch = []
-
-        batch = self._get_batch_nowait()
-        if batch:
-            try:
-                # call synchronously
-                self._on_evict(batch)
-            except Exception:
-                logger.exception("Emergency eviction cleanup failed")
-            finally:
-                self._close_batch(batch)
+    def _evict_batch(self, batch: list[tuple[Any, Any]]):
+        try:
+            self._on_evict(batch)
+        except Exception:
+            logger.exception("Eviction callback failed")
+        finally:
+            for _ in range(len(batch)):
+                self._eviction_queue.task_done()
 
     async def _get_batch(self) -> list:
         interval = self._eviction_interval
@@ -99,7 +77,7 @@ class ExponentialDecayCache:
 
             return batch
 
-    def _get_batch_nowait(self) -> list:
+    def _get_batch_nowait(self) -> list[tuple[Any, Any]]:
         batch = []
 
         while not self._eviction_queue.empty():
@@ -110,10 +88,6 @@ class ExponentialDecayCache:
                 break
 
         return batch
-
-    def _close_batch(self, batch: list):
-        for _ in range(len(batch)):
-            self._eviction_queue.task_done()
 
     def _decay_score(self, key: str, current_time: float) -> float:
         """Recalculates the current RPS rating of an element taking into account the elapsed time."""
@@ -157,6 +131,9 @@ class ExponentialDecayCache:
 
     def get(self, key):
         """Gets value by key."""
+        if self._closed:
+            return None
+
         if key not in self._cache:
             return None
 
@@ -220,7 +197,10 @@ class ExponentialDecayCache:
                     if current_task and current_task.cancelling() > 0:
                         raise
                 finally:
-                    self._sync_cleanup()
+                    batch = self._get_batch_nowait()
+                    if batch:
+                        self._evict_batch(batch)
+
                     self._cleaner_task = None
 
             logger.info("Сache was closed successfully, resources were released.")
