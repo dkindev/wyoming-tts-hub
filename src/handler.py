@@ -1,5 +1,3 @@
-import re
-
 from loguru import logger
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.error import Error
@@ -16,21 +14,16 @@ from wyoming.tts import (
 )
 
 from src import __metadata__, __project_urls__
-from src.tts.engine import SileroTTSEngine
+from src.tts.data_storage import DataStorage
+from src.tts.engine_hub import TtsEngineHub
 from src.tts.models import TextFormat
 
 
-def _get_language_from_locale_string(locale_str: str) -> str | None:
-    if not locale_str:
-        return None
-    parts = re.split(r"[_.-]", locale_str)
-    return parts[0] if parts else None
-
-
-def _create_wyoming_info(engine: SileroTTSEngine, service_name: str, streaming: bool) -> Info:
-    storage = engine.get_storage()
+def _create_wyoming_info(data_storage: DataStorage, service_name: str, streaming: bool) -> Info:
     voices = []
-    for voice in storage.get_voices():
+    for voice in data_storage.get_voices():
+        model = data_storage.get_model(voice.model_id)
+
         voices.append(
             TtsVoice(
                 name=voice.id,
@@ -40,7 +33,7 @@ def _create_wyoming_info(engine: SileroTTSEngine, service_name: str, streaming: 
                     url="https://github.com/snakers4/silero-models",
                 ),
                 installed=True,
-                languages=[_get_language_from_locale_string(voice.locale)],
+                languages=model.languages,
                 version=None,
             )
         )
@@ -65,10 +58,11 @@ def _create_wyoming_info(engine: SileroTTSEngine, service_name: str, streaming: 
     )
 
 
-class SileroEventHandler(AsyncEventHandler):
+class TtsEngineHubEventHandler(AsyncEventHandler):
     def __init__(
         self,
-        engine: SileroTTSEngine,
+        engine: TtsEngineHub,
+        data_storage: DataStorage,
         wyoming_service_name: str,
         supports_synthesize_streaming: bool,
         throw_detailed_errors: bool,
@@ -77,6 +71,7 @@ class SileroEventHandler(AsyncEventHandler):
     ):
         super().__init__(*args, **kwargs)
         self._engine = engine
+        self._data_storage = data_storage
         self._wyoming_service_name = wyoming_service_name
         self._supports_synthesize_streaming = supports_synthesize_streaming
         self._throw_detailed_errors = throw_detailed_errors
@@ -158,7 +153,7 @@ class SileroEventHandler(AsyncEventHandler):
 
     async def _handle_describe(self, event: Event) -> bool:
         wyoming_info_event = _create_wyoming_info(
-            self._engine, self._wyoming_service_name, self._supports_synthesize_streaming
+            self._data_storage, self._wyoming_service_name, self._supports_synthesize_streaming
         ).event()
         await self.write_event(wyoming_info_event)
         return True
@@ -174,7 +169,7 @@ class SileroEventHandler(AsyncEventHandler):
             await self.write_event(Error(text="No voice specified in Synthesize event").event())
             return True
 
-        if not self._engine.get_storage().get_voice(voice_id):
+        if not self._data_storage.get_voice(voice_id):
             await self.write_event(Error(text=f"Unsupported voice: {voice_id}").event())
             return True
 
@@ -222,11 +217,9 @@ class SileroEventHandler(AsyncEventHandler):
         if not req_text_format:
             return text_format
 
-        supported_formats = [
-            supported_format.value for supported_format in self._engine.get_supported_text_formats()
-        ]
-
-        if req_text_format in supported_formats:
+        try:
             return TextFormat(req_text_format)
+        except ValueError:
+            pass
 
         return None

@@ -6,7 +6,6 @@ from openai import AsyncOpenAI
 from src.config import NormalizationSettings, TextFormatNormalizationSettings
 from src.tts.data_storage import DataStorage
 from src.tts.models import (
-    OpenAiNormalizationConfig,
     TextFormat,
     Voice,
     VoiceNormalization,
@@ -60,13 +59,7 @@ class TextNormalizerFactory:
                 prompt_model = default_prompt.model
 
             return OpenAiTextNormalizer(
-                client=self._openai_client,
-                config=OpenAiNormalizationConfig(
-                    timeout=self._settings.timeout,
-                    max_concurrent_sentences_per_request=self._settings.max_concurrent_sentences_per_request,
-                    default_model=prompt_model,
-                    default_prompt=prompt_text,
-                ),
+                client=self._openai_client, model=prompt_model, promt=prompt_text
             )
 
         self._builders: dict[

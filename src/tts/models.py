@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from enum import Enum, unique
-from typing import Any
 
 import numpy as np
 
@@ -75,37 +74,6 @@ class PredefinedData:
     voices: list[Voice]
     prompts: list[Prompt] | None = None
     voice_normalizations: list[VoiceNormalization] | None = None
-
-
-@dataclass(frozen=True)
-class TtsConfig:
-    device: str
-    inference_timeout: float
-    frame_duration: int
-    sample_rate: int
-    max_models: int
-    cache_half_life: float
-    max_concurrent_sentences_per_model: int
-    max_sentence_chars: int
-    models_dir: str
-    models_yml_url: str
-    models_yml_hash: str | None = None
-    normalization_type: NormalizationType | None = None
-
-
-@dataclass(frozen=True)
-class NormalizationOptions:
-    voice: Voice
-    model: Model
-    silero_model: Any
-
-
-@dataclass(frozen=True)
-class OpenAiNormalizationConfig:
-    timeout: float
-    max_concurrent_sentences_per_request: int
-    default_model: str
-    default_prompt: str
 
 
 @dataclass(frozen=True)

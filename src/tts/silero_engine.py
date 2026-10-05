@@ -9,12 +9,11 @@ import torch
 import yaml
 from loguru import logger
 
-from src.tts.engine import TtsEngine
-from src.tts.exceptions import TTSEngineError
+from src.tts.engine import TorchTtsEngine
 from src.tts.models import Model, TextFormat, TtsResult, Voice
 
 
-class SileroTtsEngine(TtsEngine):
+class SileroTtsEngine(TorchTtsEngine):
     def __init__(
         self,
         model: Model,
@@ -24,41 +23,30 @@ class SileroTtsEngine(TtsEngine):
         models_yml_url: str,
         models_yml_hash: str | None,
     ):
-        self._model = model
-        self._device = device
-        self._sample_rate = sample_rate
+        super().__init__(model, device)
+
+        self._sample_rate: int | None = None
+        self._target_sample_rate = sample_rate
         self._models_dir = models_dir
         self._models_yml_url = models_yml_url
         self._models_yml_hash = models_yml_hash
-        self._supported_text_formats = self._get_supported_text_formats(model)
+        self._loaded_model: Any | None = None
 
-        self._cached: Any | None = None
-        self._lock: asyncio.Lock | None = None
-
-    async def synthesize_pcm(
-        self, text: str, voice: Voice, text_format: TextFormat, language: str | None = None
+    async def _synthesize_pcm(
+        self,
+        text: str,
+        voice: Voice,
+        text_format: TextFormat,
+        language: str | None = None,
     ) -> AsyncIterator[TtsResult]:
-        if text_format not in self._supported_text_formats:
-            raise TTSEngineError(f"Invalid text format: {text_format}")
-
-        text = text.strip()
-        if not text:
-            raise TTSEngineError("Text is empty or whitespace")
-
-        if not voice:
-            raise TTSEngineError("Voice cannot be null")
-
-        if not language:
-            languages = self._model.languages
-            if not languages or len(languages) > 1:
-                raise TTSEngineError("Language cannot be null")
-
-            language = languages[0]
-
-        if not self._cached:
-            await self._warmup_model()
-
-        tensor = await asyncio.to_thread(self._run_tts_sync, text, voice.speaker, text_format)
+        tensor = await asyncio.to_thread(
+            self._run_tts_sync,
+            self._loaded_model,
+            text,
+            voice.speaker,
+            self._sample_rate,
+            text_format,
+        )
 
         audio_tensor = (
             tensor.detach()
@@ -75,130 +63,80 @@ class SileroTtsEngine(TtsEngine):
             channels=1,
         )
 
-    async def warmup(self) -> None:
-        """Warm up the engine."""
-        if not self._model.warmup:
-            return
+    def _release_resources(self) -> None:
+        del self._loaded_model
+        super()._release_resources()
 
-        if self._cached:
-            return
+    async def _warmup_on_device(self, device: torch.device) -> bool:
+        self._loaded_model = await asyncio.to_thread(
+            self._warmup_on_device_sync, self._model, device
+        )
+        return True
 
-        logger.debug("Warming up engine")
-        await self._warmup_model()
-        logger.debug("Engine has been warmed up")
+    def _warmup_on_device_sync(self, model: Model, device: torch.device) -> Any:
+        loaded_model, sample_rate, example_text, speakers = self._load_model(model, device)
 
-    async def close(self) -> None:
-        del self._cached
-        self._cached = None
+        speaker, text = self._determine_warmup_params(loaded_model, example_text, speakers)
 
-    async def _warmup_model(self) -> None:
-        if self._cached:
-            return
+        logger.debug(
+            "Silero model '{model_id}' is warming up. Speaker: '{speaker}' Text: '{text}'",
+            model_id=model.id,
+            speaker=speaker,
+            text=text,
+        )
 
-        async with self._get_lock():
-            if self._cached:
-                return
+        if speaker and text:
+            self._run_tts_sync(loaded_model, text, speaker, sample_rate)
 
-            model, sample_rate, example_text, speakers = await asyncio.to_thread(
-                self._load_model, self._model
-            )
+        self._sample_rate = sample_rate
 
-            self._cached = model
-            self._sample_rate = sample_rate
+        return loaded_model
 
-            if speakers:
-                speaker = next(iter(speakers))
-                text = speakers[speaker]
-            else:
-                speaker = model.speakers[0]
-                text = example_text
+    def _determine_warmup_params(
+        self, loaded_model: Any, example_text: str, speakers: dict[str, str] | None
+    ) -> tuple[str, str]:
+        if speakers:
+            speaker = next(iter(speakers))
+            return speaker, speakers[speaker]
 
-            logger.debug(
-                "Model '{model}' is warming up. Speaker: '{speaker}' Text: '{text}'",
-                model=self._model.id,
-                speaker=speaker,
-                text=text,
-            )
+        speaker = loaded_model.speakers[0] if getattr(loaded_model, "speakers", None) else None
 
-            try:
-                await asyncio.to_thread(self._run_tts_sync, text, speaker)
-                logger.debug("Model '{model}' has been warmed up.", model=self._model.id)
-            except Exception:
-                logger.error("Failed to warm up the model '{model}'", model=self._model.id)
-
-                raise
-
-    def _get_lock(self) -> asyncio.Lock:
-        if self._lock is None:
-            self._lock = asyncio.Lock()
-        return self._lock
-
-    @staticmethod
-    def _get_supported_text_formats(model: Model) -> tuple[TextFormat, ...]:
-        supported_text_formats = [TextFormat.TEXT]
-
-        if model.ssml_supported:
-            supported_text_formats.append(TextFormat.SSML)
-
-        return supported_text_formats
+        return speaker, example_text
 
     def _run_tts_sync(
         self,
+        loaded_model: Any,
         text: str,
         speaker: str,
+        sample_rate: int,
         text_format: TextFormat = TextFormat.TEXT,
     ) -> torch.Tensor:
         with torch.inference_mode():
-            logger.debug(
-                "Synthesizing TTS. Speaker: {speaker}. Sample rate: {sample_rate}. Type: {type}. Text: {text}",
-                speaker=speaker,
-                sample_rate=self._sample_rate,
-                type=text_format.value,
-                text=text,
-            )
-
             audio = (
-                self._cached.apply_tts(
-                    ssml_text=text, speaker=speaker, sample_rate=self._sample_rate
-                )
+                loaded_model.apply_tts(ssml_text=text, speaker=speaker, sample_rate=sample_rate)
                 if text_format == TextFormat.SSML
-                else self._cached.apply_tts(
-                    text=text, speaker=speaker, sample_rate=self._sample_rate
-                )
+                else loaded_model.apply_tts(text=text, speaker=speaker, sample_rate=sample_rate)
             )
-
-            logger.debug("TTS synthesized on device '{device}'", device=audio.device.type)
 
             return audio
 
-    def _load_model(self, model: Model) -> tuple[Any, int, str, dict[str, str]]:
+    def _load_model(
+        self, model: Model, device: torch.device
+    ) -> tuple[Any, int, str, dict[str, str]]:
         """Loads and returns the Silero model, sample_rate, sample text, and speaker samples."""
 
         local_path, sample_rates, example_text, speakers = self._resolve_model_metadata(model)
-        sample_rate = self._select_sample_rate(self._sample_rate, sample_rates)
-        device = self._resolve_device(self._device)
+        sample_rate = self._select_sample_rate(self._target_sample_rate, sample_rates)
 
         try:
-            logger.debug(
-                "Loading model '{model}' to '{device}'",
-                model=model.id,
-                device=device.type,
-            )
-
             importer = torch.package.PackageImporter(local_path)
             pt_model = importer.load_pickle("tts_models", "model", map_location=device)
             # Ensure the model modules are shifted as well
             pt_model.to(device)
 
-            logger.debug(
-                "Model '{model}' loaded to '{device}'",
-                model=model.id,
-                device=device.type,
-            )
-
             return pt_model, sample_rate, example_text, speakers
         except Exception as e:
-            raise TTSEngineError(
+            raise RuntimeError(
                 f"Failed to load model '{model.id}' with path: {local_path}. "
                 f"Try to delete model to force a fresh download"
             ) from e
@@ -207,13 +145,7 @@ class SileroTtsEngine(TtsEngine):
         """Return the local path, sample rates, example text and speaker examples.
 
         Downloads the Silero models.yml file and the model itself if they are not available locally.
-        Raises TTSEngineError on failure.
         """
-        logger.debug(
-            "Trying to resolve model '{model}'",
-            model=model.id,
-        )
-
         models_dir = self._models_dir
 
         yml_path = os.path.join(models_dir, "silero", "models.yml")
@@ -239,7 +171,7 @@ class SileroTtsEngine(TtsEngine):
 
         package_url = latest.get("package")
         if not package_url:
-            raise TTSEngineError(
+            raise RuntimeError(
                 f"Model '{model.id}' for language '{language}' not found in configuration file. "
                 f"Delete '{yml_path}' to force a fresh download"
             )
@@ -255,7 +187,7 @@ class SileroTtsEngine(TtsEngine):
         except Exception as e:
             if os.path.isfile(model_path):
                 os.remove(model_path)
-            raise TTSEngineError(
+            raise RuntimeError(
                 f"Failed to download model '{model.id}' for language '{language}'"
             ) from e
 
@@ -270,7 +202,7 @@ class SileroTtsEngine(TtsEngine):
         """Return the registry section (keyed by language) that owns the model.
 
         Prefers the model's sole declared Language when it owns the model, then
-        falls back to scanning every section. Raises TTSEngineError when no
+        falls back to scanning every section. Raises RuntimeError when no
         section owns the model.
         """
         declared_languages = model.languages
@@ -284,7 +216,7 @@ class SileroTtsEngine(TtsEngine):
             if model.id in section_models:
                 return section
 
-        raise TTSEngineError(
+        raise RuntimeError(
             f"Model '{model.id}' not found in the Silero models registry. "
             f"Delete the cached 'models.yml' to force a fresh download"
         )
@@ -299,7 +231,7 @@ class SileroTtsEngine(TtsEngine):
                     logger.debug("Models configuration loaded")
                     return models_config
             except Exception as e:
-                raise TTSEngineError(
+                raise RuntimeError(
                     f"Failed to parse the models configuration file: {e}. Delete '{yml_path}' to force a fresh download"
                 ) from e
 
@@ -351,7 +283,7 @@ class SileroTtsEngine(TtsEngine):
                         file.write(chunk)
                         hasher.update(chunk)
         except Exception as e:
-            raise TTSEngineError(
+            raise RuntimeError(
                 f"Failed to download the models configuration from '{models_yml_url}'"
             ) from e
 
@@ -359,7 +291,7 @@ class SileroTtsEngine(TtsEngine):
         if downloaded_hash != models_yml_hash:
             if os.path.exists(file_path):
                 os.remove(file_path)
-            raise TTSEngineError(
+            raise RuntimeError(
                 f"Error verifying hash of model configuration file loaded at '{models_yml_url}'"
             )
 
@@ -390,27 +322,3 @@ class SileroTtsEngine(TtsEngine):
             return candidates[-1]
 
         return max_rate
-
-    @staticmethod
-    def _resolve_device(target_device_str: str) -> torch.device:
-        try:
-            device = torch.device(target_device_str)
-        except RuntimeError:
-            logger.warning(
-                "Invalid device string '{device}'. Falling back to cpu.", device=target_device_str
-            )
-            return torch.device("cpu")
-
-        if device.type == "cuda" and not torch.cuda.is_available():
-            logger.warning("CUDA requested but not available. Falling back to cpu.")
-            return torch.device("cpu")
-        elif device.type == "mps" and (
-            not hasattr(torch.backends, "mps") or not torch.backends.mps.is_available()
-        ):
-            logger.warning("MPS requested but not available/supported. Falling back to cpu.")
-            return torch.device("cpu")
-        elif device.type == "xpu" and (not hasattr(torch, "xpu") or not torch.xpu.is_available()):
-            logger.warning("XPU requested but not available/supported. Falling back to cpu.")
-            return torch.device("cpu")
-
-        return device
