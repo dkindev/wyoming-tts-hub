@@ -16,4 +16,4 @@ Default labels: needs-triage, needs-info, ready-for-agent, ready-for-human, wont
 
 ### Domain docs
 
-Single-context layout: one `CONTEXT.md` at repo root + `docs/adr/`. See `docs/agents/domain.md`.
+Single-context layout: one `GLOSSARY.md` at repo root + `docs/adr/`. See `docs/agents/domain.md`.
