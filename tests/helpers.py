@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import hashlib
 import os
@@ -9,7 +10,7 @@ import yaml
 
 from src.tts.data_storage import DataStorage
 from src.tts.engine import TtsEngine
-from src.tts.models import EngineType, Model, TextFormat, TtsResult, Voice
+from src.tts.models import BackendType, EngineType, Model, TextFormat, TtsResult, Voice
 
 
 def hash_models_yml(yml_path: str) -> str:
@@ -155,15 +156,29 @@ class FakeTtsEngine(TtsEngine):
 
     Every synthesized sentence produces one chunk of `samples_per_sentence` audio,
     so callers can ask the fake what it emitted rather than restating the numbers.
+    Counts warmups and closes so lifecycle tests can assert on them. When `hold` is
+    given, synthesis blocks on it, letting a test observe concurrency from outside.
     """
 
     def __init__(
-        self, model: Model, *, sample_rate: int = 48000, samples_per_sentence: int = 48000
+        self,
+        model: Model,
+        *,
+        sample_rate: int = 48000,
+        samples_per_sentence: int = 48000,
+        warmup_error: Exception | None = None,
+        hold: asyncio.Event | None = None,
     ):
         super().__init__(model)
         self.sample_rate = sample_rate
         self.samples_per_sentence = samples_per_sentence
+        self.warmup_error = warmup_error
+        self.warmup_count = 0
+        self.close_count = 0
         self.requests: list[tuple[str, Voice, TextFormat, str | None]] = []
+        self.active_syntheses = 0
+        self.peak_syntheses = 0
+        self._hold = hold
 
     @property
     def synthesized_texts(self) -> list[str]:
@@ -174,6 +189,16 @@ class FakeTtsEngine(TtsEngine):
     def audio_size_bytes(self) -> int:
         """Total audio bytes this engine emits per sentence, at 2 bytes per sample."""
         return self.samples_per_sentence * 2
+
+    async def warmup(self) -> None:
+        self.warmup_count += 1
+        if self.warmup_error is not None:
+            raise self.warmup_error
+        await super().warmup()
+
+    async def close(self) -> None:
+        self.close_count += 1
+        await super().close()
 
     async def _warmup(self) -> bool:
         return True
@@ -186,12 +211,37 @@ class FakeTtsEngine(TtsEngine):
         language: str | None = None,
     ):
         self.requests.append((text, voice, text_format, language))
-        yield TtsResult(
-            audio=np.zeros(self.samples_per_sentence, dtype=np.int16),
-            sample_rate=self.sample_rate,
-            bytes_per_sample=2,
-            channels=1,
-        )
+        self.active_syntheses += 1
+        self.peak_syntheses = max(self.peak_syntheses, self.active_syntheses)
+        try:
+            if self._hold is not None:
+                await self._hold.wait()
+            yield TtsResult(
+                audio=np.zeros(self.samples_per_sentence, dtype=np.int16),
+                sample_rate=self.sample_rate,
+                bytes_per_sample=2,
+                channels=1,
+            )
+        finally:
+            self.active_syntheses -= 1
+
+
+class FakeEngineFactory:
+    """An Engine Factory that builds FakeTtsEngines and records what it was asked for.
+
+    `engines` maps a Model id to the engine to hand back, so a test can watch one
+    engine through its lifecycle. Model ids absent from it get a fresh FakeTtsEngine.
+    """
+
+    def __init__(self, engines: dict[str, FakeTtsEngine] | None = None):
+        self._engines = dict(engines or {})
+        self.requested_model_ids: list[str] = []
+
+    def create(self, model: Model, backend_type: BackendType) -> TtsEngine:
+        self.requested_model_ids.append(model.id)
+        if model.id not in self._engines:
+            self._engines[model.id] = FakeTtsEngine(model)
+        return self._engines[model.id]
 
 
 class FakeDataStorage(DataStorage):

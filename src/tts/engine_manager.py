@@ -11,6 +11,29 @@ from src.tts.engine import TorchTtsEngine, TtsEngine
 from src.tts.engine_factory import TtsEngineFactory
 from src.tts.models import BackendType, Model, TextFormat, TtsResult, Voice
 
+# Torch device namespaces whose accelerator cache is released after teardown.
+CACHE_CLEARABLE_DEVICES = frozenset({"cuda", "mps", "xpu"})
+
+# How often the background worker drains engines that are no longer in use.
+CLEANER_INTERVAL_SECONDS = 3.0
+
+
+def _take_engine(cached: "CachedTtsEngine | None") -> TtsEngine | None:
+    """Detach and return a cached engine, or None when it has already been freed.
+
+    Teardown can run twice over the same batch — a background cleaner mid-pass while
+    shutdown drains the same engines — so releasing an engine must be idempotent.
+    """
+    if cached is None:
+        return None
+
+    engine = getattr(cached, "engine", None)
+    if engine is None:
+        return None
+
+    del cached.engine
+    return engine
+
 
 @dataclass
 class CachedTtsEngine:
@@ -201,7 +224,7 @@ class TtsEngineManager:
 
                 model = self._data_storage.get_model(model_id)
                 if not model:
-                    raise RuntimeError("Model '{model_id}' not found", model_id=model_id)
+                    raise RuntimeError(f"Model '{model_id}' not found")
 
                 cached = await self._warmup_engine(model)
 
@@ -258,7 +281,7 @@ class TtsEngineManager:
                 self._dead_pool.append((model_id, cached_engine))
 
     async def _cleaner_worker(self):
-        interval = 3.0
+        interval = CLEANER_INTERVAL_SECONDS
         while True:
             try:
                 await asyncio.sleep(interval)
@@ -281,8 +304,11 @@ class TtsEngineManager:
         logger.debug("Freeing up models resources. Models count: {count}", count=batch_count)
 
         for model_id, cached in engines_to_destroy:
+            engine = _take_engine(cached)
+            if engine is None:
+                continue
             try:
-                await cached.engine.close()
+                await engine.close()
             except Exception:
                 logger.exception(
                     "Error was occured when calling close() for engine with model '{model}'",
@@ -292,20 +318,16 @@ class TtsEngineManager:
         def _force_garbage_collect():
             import gc
 
-            free_cuda = False
-            free_mps = False
-            free_xpu = False
+            devices_needing_cache_clear = set()
 
             for _, cached in engines_to_destroy:
-                if isinstance(cached.engine, TorchTtsEngine):
-                    if cached.engine.device.type == "cuda":
-                        free_cuda = True
-                    if cached.engine.device.type == "mps":
-                        free_mps = True
-                    if cached.engine.device.type == "xpu":
-                        free_xpu = True
+                engine = _take_engine(cached)
+                if engine is None:
+                    continue
 
-                del cached.engine
+                if isinstance(engine, TorchTtsEngine):
+                    devices_needing_cache_clear.add(engine.device.type)
+
                 del cached.semaphore
 
             gc.collect()
@@ -313,12 +335,8 @@ class TtsEngineManager:
             if self._backendType is BackendType.TORCH:
                 import torch
 
-                if free_cuda:
-                    torch.cuda.empty_cache()
-                if free_mps:
-                    torch.mps.empty_cache()
-                if free_xpu:
-                    torch.xpu.empty_cache()
+                for device_type in devices_needing_cache_clear & CACHE_CLEARABLE_DEVICES:
+                    getattr(torch, device_type).empty_cache()
 
         await asyncio.to_thread(_force_garbage_collect)
 
