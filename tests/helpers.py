@@ -84,8 +84,22 @@ def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru", locale="ru_RU")
     )
 
 
-def make_model(id="v5_5_ru", engine_type=EngineType.SILERO, warmup=False, enabled=True):
-    return Model(id=id, engine_type=engine_type, warmup=warmup, enabled=enabled)
+def make_model(
+    id="v5_5_ru",
+    engine_type=EngineType.SILERO,
+    languages=None,
+    ssml_supported=False,
+    warmup=False,
+    enabled=True,
+):
+    return Model(
+        id=id,
+        engine_type=engine_type,
+        languages=languages if languages is not None else [],
+        ssml_supported=ssml_supported,
+        warmup=warmup,
+        enabled=enabled,
+    )
 
 
 def make_merged_yaml(tmp_path, models_data: dict) -> str:
@@ -95,6 +109,6 @@ def make_merged_yaml(tmp_path, models_data: dict) -> str:
     return str(config_yml)
 
 
-async def collect_sentences(engine, text, voice_id, input_type=TextFormat.TEXT):
-    """Collect all sentences from synthesize_pcm_chunks into a list."""
-    return [chunk async for chunk in engine.synthesize_pcm_chunks(text, voice_id, input_type)]
+async def collect_hub_sentences(hub, text, voice_id, input_type=TextFormat.TEXT):
+    """Collect all TtsResult chunks yielded by the Engine Hub's synthesize_pcm_chunks."""
+    return [chunk async for chunk in hub.synthesize_pcm_chunks(text, voice_id, input_type)]

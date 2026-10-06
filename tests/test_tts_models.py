@@ -3,8 +3,6 @@ from dataclasses import FrozenInstanceError
 import numpy as np
 import pytest
 
-from src.config import Settings
-from src.tts.exceptions import TTSEngineError
 from src.tts.models import (
     EngineType,
     Model,
@@ -12,7 +10,6 @@ from src.tts.models import (
     PredefinedData,
     Prompt,
     TextFormat,
-    TtsConfig,
     TtsResult,
     Voice,
     VoiceNormalization,
@@ -212,9 +209,9 @@ class TestVoiceNormalization:
             vn.enabled = False
 
 
-class TestTTSConfigModel:
-    def test_tts_config_model_has_models_and_voices(self):
-        """TTSConfigModel dataclass has models list and voices list."""
+class TestPredefinedData:
+    def test_predefined_data_has_models_and_voices(self):
+        """PredefinedData dataclass has models list and voices list."""
         models = [Model(id="v3_en", engine_type=EngineType.SILERO)]
         voices = [
             Voice(
@@ -224,98 +221,15 @@ class TestTTSConfigModel:
                 model_id="v3_en",
             )
         ]
-        config = PredefinedData(models=models, voices=voices)
-        assert config.models == models
-        assert config.voices == voices
+        data = PredefinedData(models=models, voices=voices)
+        assert data.models == models
+        assert data.voices == voices
 
-    def test_tts_config_model_is_frozen(self):
-        """TTSConfigModel dataclass is immutable (frozen)."""
-        config = PredefinedData(models=[], voices=[])
+    def test_predefined_data_is_frozen(self):
+        """PredefinedData dataclass is immutable (frozen)."""
+        data = PredefinedData(models=[], voices=[])
         with pytest.raises(FrozenInstanceError):
-            config.models = []
-
-
-class TestTTSConfig:
-    def test_tts_config_has_max_models_field(self):
-        """TTSConfig dataclass has max_models field."""
-        config = TtsConfig(
-            device="cpu",
-            inference_timeout=5,
-            frame_duration=50,
-            sample_rate=48000,
-            max_models=5,
-            cache_half_life=60,
-            max_concurrent_sentences_per_model=2,
-            max_sentence_chars=48000,
-            models_dir=".models/silero",
-            models_yml_url="https://example.com/models.yml",
-            models_yml_hash=None,
-        )
-        assert config.max_models == 5
-
-    def test_tts_config_accepts_models_yml_url_and_hash(self):
-        """TTSConfig accepts models_yml_url and models_yml_hash."""
-        settings = Settings()
-        config = TtsConfig(
-            device="cpu",
-            inference_timeout=5,
-            frame_duration=50,
-            sample_rate=48000,
-            max_models=2,
-            cache_half_life=60,
-            max_concurrent_sentences_per_model=2,
-            max_sentence_chars=48000,
-            models_dir=".models/silero",
-            models_yml_url=str(settings.silero.models_yml_url),
-            models_yml_hash=settings.silero.models_yml_hash,
-        )
-        assert str(config.models_yml_url) == str(settings.silero.models_yml_url)
-        assert config.models_yml_hash == settings.silero.models_yml_hash
-
-    def test_tts_config_models_yml_hash_accepts_none(self):
-        """TTSConfig.models_yml_hash accepts None (skip validation)."""
-        config = TtsConfig(
-            device="cpu",
-            inference_timeout=5,
-            frame_duration=50,
-            sample_rate=48000,
-            max_models=2,
-            cache_half_life=60,
-            max_concurrent_sentences_per_model=2,
-            max_sentence_chars=48000,
-            models_dir=".models/silero",
-            models_yml_url="https://example.com/models.yml",
-            models_yml_hash=None,
-        )
-        assert config.models_yml_hash is None
-
-    def test_tts_config_is_frozen(self):
-        """TTSConfig dataclass is immutable (frozen)."""
-        config = TtsConfig(
-            device="cpu",
-            inference_timeout=5,
-            frame_duration=50,
-            sample_rate=48000,
-            max_models=2,
-            cache_half_life=60,
-            max_concurrent_sentences_per_model=2,
-            max_sentence_chars=48000,
-            models_dir=".models/silero",
-            models_yml_url="https://example.com/models.yml",
-            models_yml_hash=None,
-        )
-        with pytest.raises(FrozenInstanceError):
-            config.max_models = 3
-
-
-class TestExceptions:
-    def test_tts_engine_error_message_only(self):
-        """TTSEngineError accepts only message — no locale/voice/status_code."""
-        err = TTSEngineError("test error")
-        assert str(err) == "test error"
-        assert not hasattr(err, "locale")
-        assert not hasattr(err, "voice")
-        assert not hasattr(err, "status_code")
+            data.models = []
 
 
 class TestTTSResult:

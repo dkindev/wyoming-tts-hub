@@ -1,46 +1,65 @@
-import pytest
+import unittest.mock
 
-from src.config import Settings
-from src.main import create_storage
-from tests.helpers import make_merged_yaml
+from openai import AsyncOpenAI
 
-
-@pytest.fixture
-def data_config(tmp_path):
-    """Return a path to a data.yml declaring two models with voices."""
-    return make_merged_yaml(
-        tmp_path,
-        {
-            "v5_5_ru": {
-                "engine_type": "silero",
-                "languages": ["ru"],
-                "voices": [{"name": "aidar"}],
-            },
-            "v3_en": {
-                "engine_type": "silero",
-                "languages": ["en"],
-                "voices": [{"name": "en_0", "speaker": "en_2"}],
-            },
-        },
-    )
+from src.config import OpenAiSettings, Settings
+from src.main import create_openai_client, setup_backend
 
 
-class TestCreateStorage:
-    def test_unknown_active_model_fails_boot_naming_ids(self, monkeypatch, data_config):
-        """create_storage fails at boot when active_models references an unknown model id."""
-        monkeypatch.setenv("TTS_DATA_YML_PATH", data_config)
-        monkeypatch.setenv("TTS_ACTIVE_MODELS", '["unknown_model"]')
+class TestSetupBackend:
+    def test_torch_backend_applies_thread_settings(self, monkeypatch):
+        """The torch backend pushes the configured thread counts into torch."""
+        monkeypatch.setenv("TTS_TORCH__NUM_THREADS", "3")
+        monkeypatch.setenv("TTS_TORCH__NUM_INTEROP_THREADS", "2")
+        monkeypatch.setenv("TTS_TORCH__FLUSH_DENORMAL", "false")
+        settings = Settings()
 
-        with pytest.raises(ValueError, match="unknown_model"):
-            create_storage(Settings())
+        with (
+            unittest.mock.patch("torch.set_num_threads") as set_num_threads,
+            unittest.mock.patch("torch.set_num_interop_threads") as set_interop,
+            unittest.mock.patch("torch.set_flush_denormal") as flush_denormal,
+        ):
+            setup_backend(settings)
 
-    def test_active_models_filter_applied(self, monkeypatch, data_config):
-        """create_storage serves only models listed in active_models."""
-        monkeypatch.setenv("TTS_DATA_YML_PATH", data_config)
-        monkeypatch.setenv("TTS_ACTIVE_MODELS", '["v5_5_ru"]')
+        set_num_threads.assert_called_once_with(3)
+        set_interop.assert_called_once_with(2)
+        flush_denormal.assert_not_called()
 
-        storage = create_storage(Settings())
+    def test_torch_backend_applies_flush_denormal_when_enabled(self, monkeypatch):
+        """flush_denormal is only pushed when the setting asks for it."""
+        monkeypatch.setenv("TTS_TORCH__FLUSH_DENORMAL", "true")
+        settings = Settings()
 
-        assert storage.get_model("v5_5_ru") is not None
-        assert storage.get_model("v3_en") is None
-        assert not any(v.model_id == "v3_en" for v in storage.get_voices())
+        with (
+            unittest.mock.patch("torch.set_num_threads"),
+            unittest.mock.patch("torch.set_num_interop_threads"),
+            unittest.mock.patch("torch.set_flush_denormal") as flush_denormal,
+        ):
+            setup_backend(settings)
+
+        flush_denormal.assert_called_once_with(True)
+
+
+class TestCreateOpenAiClient:
+    def test_no_settings_returns_none(self):
+        """Absent normalization settings mean no client."""
+        assert create_openai_client(None) is None
+
+    def test_missing_base_url_returns_none(self):
+        """Without a base_url there is nothing to point the client at."""
+        assert create_openai_client(OpenAiSettings(base_url="", api_key="key")) is None
+
+    def test_missing_api_key_returns_none(self):
+        """Without an api_key the client is not constructed."""
+        settings = OpenAiSettings(base_url="http://localhost:8080/v1", api_key="")
+
+        assert create_openai_client(settings) is None
+
+    def test_complete_settings_build_a_client(self):
+        """A fully configured settings object yields an AsyncOpenAI pointed at base_url."""
+        settings = OpenAiSettings(base_url="http://localhost:8080/v1", api_key="key")
+
+        client = create_openai_client(settings)
+
+        assert isinstance(client, AsyncOpenAI)
+        assert client.base_url == "http://localhost:8080/v1/"

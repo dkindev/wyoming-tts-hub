@@ -4,7 +4,6 @@ import unittest.mock
 
 import pytest
 
-from src.tts.exceptions import TTSEngineError
 from src.tts.models import EngineType, Model
 from src.tts.silero_engine import SileroTtsEngine
 
@@ -113,7 +112,7 @@ class TestResolveModelSection:
         assert speakers == {"aidar": "Привет"}
 
     def test_model_absent_from_registry_raises_clear_error(self, tmp_path):
-        """A Model present in no registry section raises a TTSEngineError naming the model
+        """A Model present in no registry section raises a RuntimeError naming the model
         and pointing at the cached models.yml."""
         registry = """
           ru:
@@ -124,7 +123,7 @@ class TestResolveModelSection:
         engine = make_engine(tmp_path, registry, {"ru": ["v5_5_ru"]})
         model = Model(id="v4_indic", engine_type=EngineType.SILERO, languages=["en"])
 
-        with pytest.raises(TTSEngineError) as exc_info:
+        with pytest.raises(RuntimeError) as exc_info:
             engine._resolve_model_metadata(model)
 
         message = str(exc_info.value)
