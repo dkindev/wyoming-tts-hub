@@ -1,9 +1,16 @@
 import unittest.mock
 
+import pytest
 from openai import AsyncOpenAI
 
 from src.config import OpenAiSettings, Settings
 from src.main import create_openai_client, setup_backend
+
+
+@pytest.fixture
+def usable_settings():
+    """OpenAiSettings complete enough for create_openai_client to build a client."""
+    return OpenAiSettings(base_url="http://localhost:8080/v1", api_key="key")
 
 
 class TestSetupBackend:
@@ -45,21 +52,21 @@ class TestCreateOpenAiClient:
         """Absent normalization settings mean no client."""
         assert create_openai_client(None) is None
 
-    def test_missing_base_url_returns_none(self):
+    def test_missing_base_url_returns_none(self, usable_settings):
         """Without a base_url there is nothing to point the client at."""
-        assert create_openai_client(OpenAiSettings(base_url="", api_key="key")) is None
-
-    def test_missing_api_key_returns_none(self):
-        """Without an api_key the client is not constructed."""
-        settings = OpenAiSettings(base_url="http://localhost:8080/v1", api_key="")
+        settings = usable_settings.model_copy(update={"base_url": ""})
 
         assert create_openai_client(settings) is None
 
-    def test_complete_settings_build_a_client(self):
-        """A fully configured settings object yields an AsyncOpenAI pointed at base_url."""
-        settings = OpenAiSettings(base_url="http://localhost:8080/v1", api_key="key")
+    def test_missing_api_key_returns_none(self, usable_settings):
+        """Without an api_key the client is not constructed."""
+        settings = usable_settings.model_copy(update={"api_key": ""})
 
-        client = create_openai_client(settings)
+        assert create_openai_client(settings) is None
+
+    def test_complete_settings_build_a_client(self, usable_settings):
+        """A fully configured settings object yields an AsyncOpenAI pointed at base_url."""
+        client = create_openai_client(usable_settings)
 
         assert isinstance(client, AsyncOpenAI)
-        assert client.base_url == "http://localhost:8080/v1/"
+        assert client.base_url == f"{usable_settings.base_url}/"

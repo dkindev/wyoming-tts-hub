@@ -75,7 +75,7 @@ def make_config_file(tmp_path, models=None):
     return str(config_yml)
 
 
-def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru", locale="ru_RU"):
+def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru"):
     return Voice(
         id=voice_id,
         name=name,
