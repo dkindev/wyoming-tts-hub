@@ -257,14 +257,67 @@ class TestEviction:
         assert held.close_count == 1
 
 
+class TestQueuedAcquire:
+    """A request already queued on the per-Model limit holds the Model meanwhile.
+
+    Taking the reference only after the wait would let eviction tear the Model
+    down underneath a queued waiter, stripping the engine and the very semaphore
+    the waiter is blocked on.
+    """
+
+    async def test_queued_acquire_defers_eviction_of_the_model(self):
+        """A request waiting for the per-Model limit keeps its Model from being closed."""
+        release = asyncio.Event()
+        held = make_engine("held", hold=release)
+        manager, _, _ = make_manager(
+            models=[make_model(id="held"), make_model(id="other")],
+            engines={"held": held},
+            cache_capacity=1,
+            max_concurrent_sentences_per_model=1,
+        )
+        voice = make_voice_for("held")
+
+        holder = await manager.get_context("held")
+        shared = await holder.__aenter__()
+        request = asyncio.create_task(
+            _drain(shared.synthesize_pcm("hello", voice, TextFormat.TEXT))
+        )
+        assert await wait_until(lambda: held.active_syntheses == 1, timeout=5.0)
+
+        # A second request queues behind the per-Model limit.
+        waiter = asyncio.create_task(synthesize_via(manager, model_id="held"))
+        for _ in range(3):
+            await asyncio.sleep(0)
+        assert not waiter.done(), "the queued request should be waiting on the limit"
+
+        # The holder finishes and releases the limit. The waiter is woken but has not
+        # resumed, so it still holds the reference it took before waiting.
+        release.set()
+        await request
+        await holder.__aexit__(None, None, None)
+
+        # Evicting "held" in that window must be deferred, and the cleaner must not
+        # strip the engine or the semaphore the waiter is blocked on.
+        cached = manager._cache.get("held")
+        assert cached is not None
+        manager._handle_cache_eviction([("held", cached)])
+        await manager._clear_engines(manager._dead_pool.copy())
+        manager._dead_pool.clear()
+
+        assert held.close_count == 0, "a queued request must defer eviction"
+
+        await asyncio.wait_for(waiter, timeout=CLEANER_TIMEOUT_SECONDS)
+        await manager.close()
+
+
 class TestCancelledAcquire:
     """A cancelled acquire must leave the Model as free as it was before the request.
 
-    Lands a failing test on purpose (ticket 08): it documents a defect rather than
-    fixing it. The Engine Context takes the Model's reference before awaiting the
-    per-Model concurrency limit, so a caller cancelled during that wait leaves the
-    reference behind for good — the Model then looks permanently in use, eviction
-    is deferred forever, and the engine is never closed.
+    The Engine Context takes the Model's reference before awaiting the per-Model
+    concurrency limit, so a caller cancelled during that wait must give the
+    reference back: __aexit__ never runs for a body that was never entered. The
+    Model then stays free, eviction is not deferred, and the engine is closed on
+    schedule.
     """
 
     async def test_cancelled_acquire_leaves_the_model_evictable(self):

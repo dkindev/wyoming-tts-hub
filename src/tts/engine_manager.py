@@ -59,9 +59,19 @@ class TtsEngineContext:
         self._release_engine_ref = release_engine_ref
 
     async def __aenter__(self):
+        # The reference is taken before the wait so that eviction is deferred for a
+        # request already queued on the limit: tearing the Model down underneath a
+        # queued waiter would strip the engine and the semaphore it is blocked on.
+        # A cancelled wait therefore has to give the reference back, since __aexit__
+        # never runs for a body that was never entered.
         self._acquire_engine_ref(self._model_id)
 
-        await self._cached_engine.semaphore.acquire()
+        try:
+            await self._cached_engine.semaphore.acquire()
+        except asyncio.CancelledError:
+            self._release_engine_ref(self._model_id, self._cached_engine)
+            raise
+
         self._acquired = True
         return ImmutableSharedTtsEngine(
             inference_timeout=self._inference_timeout, engine=self._cached_engine.engine
