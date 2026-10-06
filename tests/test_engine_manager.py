@@ -257,6 +257,61 @@ class TestEviction:
         assert held.close_count == 1
 
 
+class TestCancelledAcquire:
+    """A cancelled acquire must leave the Model as free as it was before the request.
+
+    Lands a failing test on purpose (ticket 08): it documents a defect rather than
+    fixing it. The Engine Context takes the Model's reference before awaiting the
+    per-Model concurrency limit, so a caller cancelled during that wait leaves the
+    reference behind for good — the Model then looks permanently in use, eviction
+    is deferred forever, and the engine is never closed.
+    """
+
+    async def test_cancelled_acquire_leaves_the_model_evictable(self):
+        """Cancelling a request blocked on the per-Model limit does not pin the Model."""
+        release = asyncio.Event()
+        evictable = make_engine("evictable", hold=release)
+        manager, _, _ = make_manager(
+            models=[make_model(id="evictable"), make_model(id="other")],
+            engines={"evictable": evictable},
+            cache_capacity=1,
+            max_concurrent_sentences_per_model=1,
+        )
+        voice = make_voice_for("evictable")
+
+        async with await manager.get_context("evictable") as shared:
+            held = asyncio.create_task(
+                _drain(shared.synthesize_pcm("hello", voice, TextFormat.TEXT))
+            )
+            assert await wait_until(lambda: evictable.active_syntheses == 1, timeout=5.0)
+
+            # A second request for the same Model waits for the concurrency limit.
+            # The Model is cached and the limit is taken, so the only await left on
+            # this path is the semaphore: yielding a few times puts the task there.
+            waiting = asyncio.create_task(synthesize_via(manager, model_id="evictable"))
+            for _ in range(3):
+                await asyncio.sleep(0)
+            assert not waiting.done()
+            assert evictable.peak_syntheses == 1, "the second request must not have started"
+
+            waiting.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await waiting
+
+            release.set()
+            await held
+
+        # Loading another Model evicts "evictable". A cancelled acquire must not be
+        # holding it, so the background cleaner closes the engine as usual.
+        await synthesize_via(manager, model_id="other")
+        await wait_for_cleaner_cycle()
+
+        assert evictable.close_count == 1
+        await manager.close()
+
+        assert evictable.close_count == 1, "shutdown must not close an already-closed engine"
+
+
 class TestShutdown:
     async def test_shutdown_closes_every_remaining_engine_exactly_once(self):
         """Shutting down closes each engine the manager still holds, once."""
