@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import hashlib
 import os
 import unittest.mock
@@ -10,7 +9,17 @@ import yaml
 
 from src.tts.data_storage import DataStorage
 from src.tts.engine import TtsEngine
-from src.tts.models import BackendType, EngineType, Model, TextFormat, TtsResult, Voice
+from src.tts.engine_hub import TtsEngineHub
+from src.tts.models import (
+    BackendType,
+    EngineType,
+    Model,
+    Prompt,
+    TextFormat,
+    TtsResult,
+    Voice,
+    VoiceNormalization,
+)
 
 
 def hash_models_yml(yml_path: str) -> str:
@@ -181,6 +190,11 @@ class FakeTtsEngine(TtsEngine):
         self._hold = hold
 
     @property
+    def model(self) -> Model:
+        """The Model this engine was built for."""
+        return self._model
+
+    @property
     def synthesized_texts(self) -> list[str]:
         """The text of every sentence this engine was asked to synthesize."""
         return [text for text, _, _, _ in self.requests]
@@ -251,9 +265,14 @@ class FakeDataStorage(DataStorage):
     absent, so Hub-side guards for that case can be exercised.
     """
 
-    def __init__(self, models=None, voices=None):
+    def __init__(self, models=None, voices=None, voice_normalizations=None, prompts=None):
         self._models = {model.id: model for model in models or []}
         self._voices = {voice.id: voice for voice in voices or []}
+        self._prompts = {prompt.id: prompt for prompt in prompts or []}
+        self._voice_normalizations = {
+            f"{vn.voice_id}__{vn.text_format.value}__{vn.language}": vn
+            for vn in voice_normalizations or []
+        }
 
     def get_voices(self) -> list[Voice]:
         return list(self._voices.values())
@@ -267,11 +286,41 @@ class FakeDataStorage(DataStorage):
     def get_models(self) -> list[Model]:
         return list(self._models.values())
 
-    def get_prompt(self, prompt_id: str):
-        return None
+    def get_prompt(self, prompt_id: str) -> Prompt | None:
+        return self._prompts.get(prompt_id)
 
-    def get_voice_normalization(self, voice_id: str, text_format: TextFormat, language: str):
-        return None
+    def get_voice_normalization(
+        self, voice_id: str, text_format: TextFormat, language: str
+    ) -> VoiceNormalization | None:
+        return self._voice_normalizations.get(f"{voice_id}__{text_format.value}__{language}")
+
+
+def make_hub(*, engine, middlewares, storage, frame_duration=50):
+    """Return a TTS Engine Hub wired to fakes around the given engine."""
+    return TtsEngineHub(
+        frame_duration=frame_duration,
+        middlewares=list(middlewares),
+        engine_manager=FakeEngineManager({engine.model.id: engine}),
+        data_storage=storage,
+    )
+
+
+class ReusableEngineContext:
+    """A reentrant async context manager yielding one engine.
+
+    The Hub enters the engine context once per sentence, and several sentences are
+    in flight concurrently, so the context must support overlapping entries. A
+    one-shot `@asynccontextmanager` cannot, hence this class.
+    """
+
+    def __init__(self, engine: TtsEngine):
+        self._engine = engine
+
+    async def __aenter__(self) -> TtsEngine:
+        return self._engine
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+        return False
 
 
 class FakeEngineManager:
@@ -281,14 +330,7 @@ class FakeEngineManager:
         self._engines = engines or {}
         self.requested_model_ids: list[str] = []
 
-    async def get_context(self, model_id: str):
+    async def get_context(self, model_id: str) -> ReusableEngineContext | None:
         self.requested_model_ids.append(model_id)
         engine = self._engines.get(model_id)
-        if engine is None:
-            return None
-
-        @contextlib.asynccontextmanager
-        async def acquire():
-            yield engine
-
-        return acquire()
+        return ReusableEngineContext(engine) if engine is not None else None

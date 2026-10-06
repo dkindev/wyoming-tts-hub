@@ -1,15 +1,16 @@
 import pytest
 
 from src.tts.data_storage import YamlDataStorage
-from src.tts.engine_hub import TtsEngineHub
 from src.tts.models import PredefinedData, TtsResult
 from tests.helpers import (
     FakeDataStorage,
-    FakeEngineManager,
     FakeTtsEngine,
     collect_hub_sentences,
     make_model,
     make_voice,
+)
+from tests.helpers import (
+    make_hub as make_tts_hub,
 )
 
 MODEL_ID = "v5_5_ru"
@@ -19,11 +20,11 @@ FRAME_DURATION_MS = 50
 
 def make_hub(*, engine, frame_duration=FRAME_DURATION_MS, middlewares=(), storage=None):
     """Return a TTS Engine Hub wired to a fake engine for one known Voice and Model."""
-    return TtsEngineHub(
+    return make_tts_hub(
+        engine=engine,
         frame_duration=frame_duration,
-        middlewares=list(middlewares),
-        engine_manager=FakeEngineManager({MODEL_ID: engine}),
-        data_storage=storage
+        middlewares=middlewares,
+        storage=storage
         if storage is not None
         else YamlDataStorage(
             PredefinedData(
