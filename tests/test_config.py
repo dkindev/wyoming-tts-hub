@@ -1,9 +1,19 @@
+import os
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 from pydantic_settings import YamlConfigSettingsSource
 
 from src.config import Settings
 from src.tts.models import BackendType
+
+
+def write_config(tmp_path, body, name="other-config.yml"):
+    """Write a config file body and return its path, for a test to point Settings at."""
+    config_path = tmp_path / name
+    config_path.write_text(body)
+    return str(config_path)
 
 
 class TestTtsStreaming:
@@ -33,7 +43,7 @@ class TestTtsStreaming:
 
 class TestTtsUri:
     def test_default_uri(self):
-        """uri defaults to tcp://127.0.0.1:10200 (from Field default and config.yml)."""
+        """uri defaults to tcp://127.0.0.1:10200."""
         settings = Settings()
         assert settings.uri == "tcp://127.0.0.1:10200"
 
@@ -108,10 +118,19 @@ class TestSileroSettings:
         settings = Settings()
         assert settings.models_dir == "/custom/models"
 
-    def test_models_dir_default_from_yaml(self):
-        """models_dir is 'models' from config.yml (overrides Python default)."""
+    def test_models_dir_comes_from_the_yaml_source(self, monkeypatch, tmp_path):
+        """models_dir in the config file wins over the Python default."""
+        cfg = write_config(tmp_path, "active_models: [a]\nmodels_dir: models\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", cfg])
+
         settings = Settings()
+
         assert settings.models_dir == "models"
+
+    def test_models_dir_falls_back_to_the_python_default(self):
+        """With no config file setting it, models_dir is the Python default."""
+        settings = Settings()
+        assert settings.models_dir == "models/silero"
 
 
 class TestActiveModels:
@@ -175,9 +194,10 @@ class TestBackendType:
 
     def test_yaml_populates(self, monkeypatch, tmp_path):
         """backend_type: torch in YAML populates the setting."""
-        cfg = tmp_path / "config.yml"
-        cfg.write_text("backend_type: torch\nactive_models: [v5_5_ru]\n")
-        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+        cfg = write_config(
+            tmp_path, "backend_type: torch\nactive_models: [v5_5_ru]\n", name="config.yml"
+        )
+        monkeypatch.setattr("sys.argv", ["prog", "--config", cfg])
 
         settings = Settings()
         assert settings.backend_type == BackendType.TORCH
@@ -190,15 +210,49 @@ class TestBackendType:
         assert settings.backend_type == BackendType.TORCH
 
 
-class TestYamlConfigSource:
-    def test_config_yml_overrides_defaults(self):
-        """config.yml values take priority over Field defaults."""
+class TestTorchSettings:
+    def test_device_defaults_to_cpu(self):
+        """device defaults to 'cpu' when no source sets it."""
         settings = Settings()
-        assert settings.env_type == "development"
         assert settings.torch.device == "cpu"
-        assert settings.torch.num_threads == 4
-        assert settings.silero.sample_rate == 48000
-        assert settings.max_models == 2
+
+    def test_device_from_env_var(self, monkeypatch):
+        """TTS_TORCH__DEVICE overrides the compute device."""
+        monkeypatch.setenv("TTS_TORCH__DEVICE", "cuda")
+        settings = Settings()
+        assert settings.torch.device == "cuda"
+
+    def test_device_from_the_config_file(self, monkeypatch, tmp_path):
+        """device in the config file overrides the Python default."""
+        cfg = write_config(tmp_path, "active_models: [a]\ntorch:\n  device: cuda\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", cfg])
+
+        settings = Settings()
+
+        assert settings.torch.device == "cuda"
+
+
+class TestYamlConfigSource:
+    def test_config_yml_overrides_defaults(self, monkeypatch, tmp_path):
+        """Values in the config file take priority over the Field defaults."""
+        cfg = write_config(
+            tmp_path,
+            "active_models: [a]\n"
+            "env_type: production\n"
+            "uri: tcp://0.0.0.0:10201\n"
+            "max_models: 5\n"
+            "torch:\n  num_threads: 8\n"
+            "silero:\n  sample_rate: 24000\n",
+        )
+        monkeypatch.setattr("sys.argv", ["prog", "--config", cfg])
+
+        settings = Settings()
+
+        assert settings.env_type == "production"
+        assert settings.uri == "tcp://0.0.0.0:10201"
+        assert settings.torch.num_threads == 8
+        assert settings.silero.sample_rate == 24000
+        assert settings.max_models == 5
 
     def test_yaml_source_is_in_priority_chain(self):
         """YamlConfigSettingsSource is present in the priority chain."""
@@ -209,3 +263,54 @@ class TestYamlConfigSource:
             else isinstance(s, YamlConfigSettingsSource)
             for s in sources
         )
+
+
+class TestHermeticConstruction:
+    """Settings see only what the test set up, whatever the machine has configured."""
+
+    def test_checked_in_config_file_is_not_read(self):
+        """The repository's config.yml does not reach a test.
+
+        That file sets env_type to production; a test that reads only its own
+        sources gets the Field default instead.
+        """
+        settings = Settings()
+
+        assert settings.env_type == "development"
+
+    def test_local_env_file_is_not_read(self):
+        """A .env file beside the test does not reach it."""
+        local_env = Path(".env")
+        local_env.write_text("TTS_MODELS_DIR=/from/local/env\nTTS_ACTIVE_MODELS=['local']\n")
+
+        settings = Settings()
+
+        assert settings.models_dir == "models/silero"
+        assert settings.active_models == ["test_model"]
+
+    def test_config_path_environment_variable_selects_the_config_file(self, monkeypatch, tmp_path):
+        """TTS_CONFIG_PATH decides which YAML file the source reads."""
+        cfg = write_config(
+            tmp_path,
+            "active_models: [elsewhere]\nmodels_dir: /from/config/path\n",
+            name="elsewhere.yml",
+        )
+        monkeypatch.setenv("TTS_CONFIG_PATH", cfg)
+
+        settings = Settings()
+
+        assert settings.models_dir == "/from/config/path"
+        assert settings.active_models == ["elsewhere"]
+
+    def test_a_test_can_still_override_through_the_environment(self, monkeypatch):
+        """The environment remains a way to set a setting when a test means to."""
+        monkeypatch.setenv("TTS_MODELS_DIR", "/set/by/test")
+
+        settings = Settings()
+
+        assert settings.models_dir == "/set/by/test"
+
+    def test_standard_openai_environment_does_not_leak(self):
+        """The unprefixed OpenAI variables Settings falls back to are cleared too."""
+        assert os.environ.get("OPENAI_API_KEY") is None
+        assert Settings().normalization.openai.api_key == ""
