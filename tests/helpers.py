@@ -1,11 +1,15 @@
+import contextlib
 import hashlib
 import os
 import unittest.mock
 
+import numpy as np
 import torch
 import yaml
 
-from src.tts.models import EngineType, Model, TextFormat, Voice
+from src.tts.data_storage import DataStorage
+from src.tts.engine import TtsEngine
+from src.tts.models import EngineType, Model, TextFormat, TtsResult, Voice
 
 
 def hash_models_yml(yml_path: str) -> str:
@@ -144,3 +148,97 @@ def make_captured_silero_model() -> CapturedSileroModel:
     importer.load_pickle.return_value = model
 
     return model, importer
+
+
+class FakeTtsEngine(TtsEngine):
+    """A TTS Engine that yields canned audio instead of inferring it.
+
+    Every synthesized sentence produces one chunk of `samples_per_sentence` audio,
+    so callers can ask the fake what it emitted rather than restating the numbers.
+    """
+
+    def __init__(
+        self, model: Model, *, sample_rate: int = 48000, samples_per_sentence: int = 48000
+    ):
+        super().__init__(model)
+        self.sample_rate = sample_rate
+        self.samples_per_sentence = samples_per_sentence
+        self.requests: list[tuple[str, Voice, TextFormat, str | None]] = []
+
+    @property
+    def synthesized_texts(self) -> list[str]:
+        """The text of every sentence this engine was asked to synthesize."""
+        return [text for text, _, _, _ in self.requests]
+
+    @property
+    def audio_size_bytes(self) -> int:
+        """Total audio bytes this engine emits per sentence, at 2 bytes per sample."""
+        return self.samples_per_sentence * 2
+
+    async def _warmup(self) -> bool:
+        return True
+
+    async def _synthesize_pcm(
+        self,
+        text: str,
+        voice: Voice,
+        text_format: TextFormat,
+        language: str | None = None,
+    ):
+        self.requests.append((text, voice, text_format, language))
+        yield TtsResult(
+            audio=np.zeros(self.samples_per_sentence, dtype=np.int16),
+            sample_rate=self.sample_rate,
+            bytes_per_sample=2,
+            channels=1,
+        )
+
+
+class FakeDataStorage(DataStorage):
+    """A DataStorage that returns exactly the Models and Voices it is given.
+
+    Unlike YamlDataStorage it does not filter a Voice away when its Model is
+    absent, so Hub-side guards for that case can be exercised.
+    """
+
+    def __init__(self, models=None, voices=None):
+        self._models = {model.id: model for model in models or []}
+        self._voices = {voice.id: voice for voice in voices or []}
+
+    def get_voices(self) -> list[Voice]:
+        return list(self._voices.values())
+
+    def get_voice(self, voice_id: str) -> Voice | None:
+        return self._voices.get(voice_id)
+
+    def get_model(self, model_id: str) -> Model | None:
+        return self._models.get(model_id)
+
+    def get_models(self) -> list[Model]:
+        return list(self._models.values())
+
+    def get_prompt(self, prompt_id: str):
+        return None
+
+    def get_voice_normalization(self, voice_id: str, text_format: TextFormat, language: str):
+        return None
+
+
+class FakeEngineManager:
+    """An Engine Manager that hands out pre-built engines keyed by Model id."""
+
+    def __init__(self, engines: dict[str, TtsEngine] | None = None):
+        self._engines = engines or {}
+        self.requested_model_ids: list[str] = []
+
+    async def get_context(self, model_id: str):
+        self.requested_model_ids.append(model_id)
+        engine = self._engines.get(model_id)
+        if engine is None:
+            return None
+
+        @contextlib.asynccontextmanager
+        async def acquire():
+            yield engine
+
+        return acquire()
