@@ -1,11 +1,13 @@
 import asyncio
 import hashlib
+import io
 import os
 import unittest.mock
 
 import numpy as np
 import torch
 import yaml
+from wyoming.event import Event, read_event
 
 from src.tts.data_storage import DataStorage
 from src.tts.engine import TtsEngine
@@ -251,6 +253,60 @@ class FakeEngineFactory:
         if model.id not in self._engines:
             self._engines[model.id] = FakeTtsEngine(model)
         return self._engines[model.id]
+
+
+class _MemoryTransport(asyncio.WriteTransport):
+    """A write transport that keeps every byte written to it instead of sending it."""
+
+    def __init__(self):
+        super().__init__()
+        self.data = bytearray()
+        self._closing = False
+
+    def write(self, data: bytes | bytearray | memoryview) -> None:
+        self.data.extend(data)
+
+    def close(self) -> None:
+        self._closing = True
+
+    def is_closing(self) -> bool:
+        return bool(self._closing)
+
+
+class WyomingClient:
+    """A Wyoming client talking to an event handler over an in-memory socket.
+
+    `reader` and `writer` are the two ends the handler is constructed with;
+    `written_events` parses back the bytes the handler wrote, the way a real
+    client would read them off the wire. Must be built inside a running loop.
+    """
+
+    def __init__(self):
+        self.reader = asyncio.StreamReader()
+        self._transport = _MemoryTransport()
+        self.writer = asyncio.StreamWriter(
+            self._transport, asyncio.streams.FlowControlMixin(), None, asyncio.get_running_loop()
+        )
+        self._consumed = 0
+
+    async def send(self, handler, *events: Event) -> list[Event]:
+        """Hand each event to `handler`, then return the events it wrote back."""
+        for event in events:
+            assert await handler.handle_event(event)
+
+        return self.written_events()
+
+    def written_events(self) -> list[Event]:
+        """Parse every event written so far that has not been read back yet."""
+        stream = io.BytesIO(bytes(self._transport.data))
+        stream.seek(self._consumed)
+
+        events = []
+        while (event := read_event(stream)) is not None:
+            events.append(event)
+
+        self._consumed = stream.tell()
+        return events
 
 
 class FakeDataStorage(DataStorage):
