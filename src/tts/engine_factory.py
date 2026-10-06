@@ -15,7 +15,7 @@ class TtsEngineFactory:
                 device=settings.torch.device,
                 sample_rate=settings.silero.sample_rate,
                 models_dir=settings.models_dir,
-                models_yml_url=settings.silero.models_yml_url,
+                models_yml_url=str(settings.silero.models_yml_url),
                 models_yml_hash=settings.silero.models_yml_hash,
             ),
         }

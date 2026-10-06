@@ -19,6 +19,11 @@ class TtsEngine(ABC):
         self._loaded = False
         self._lock = asyncio.Lock()
 
+    @property
+    def model(self) -> Model:
+        """The Model this engine was built for."""
+        return self._model
+
     async def synthesize_pcm(
         self, text: str, voice: Voice, text_format: TextFormat, language: str | None = None
     ) -> AsyncIterator[TtsResult]:

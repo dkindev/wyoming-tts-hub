@@ -190,11 +190,6 @@ class FakeTtsEngine(TtsEngine):
         self._hold = hold
 
     @property
-    def model(self) -> Model:
-        """The Model this engine was built for."""
-        return self._model
-
-    @property
     def synthesized_texts(self) -> list[str]:
         """The text of every sentence this engine was asked to synthesize."""
         return [text for text, _, _, _ in self.requests]
