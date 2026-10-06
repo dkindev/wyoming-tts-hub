@@ -1,6 +1,8 @@
 import hashlib
 import os
+import unittest.mock
 
+import torch
 import yaml
 
 from src.tts.models import EngineType, Model, TextFormat, Voice
@@ -112,3 +114,33 @@ def make_merged_yaml(tmp_path, models_data: dict) -> str:
 async def collect_hub_sentences(hub, text, voice_id, input_type=TextFormat.TEXT):
     """Collect all TtsResult chunks yielded by the Engine Hub's synthesize_pcm_chunks."""
     return [chunk async for chunk in hub.synthesize_pcm_chunks(text, voice_id, input_type)]
+
+
+class CapturedSileroModel:
+    """Stand-in for a loaded Silero package that records the rates it was asked for.
+
+    `apply_tts` returns one second of audio at the requested rate, so a caller can
+    check both the rate the TTS Engine selected and that audio of that rate came back.
+    """
+
+    def __init__(self):
+        self.requested_rates: list[int] = []
+        self.requested_devices: list[torch.device] = []
+
+    def apply_tts(self, *, text, speaker, sample_rate):
+        self.requested_rates.append(sample_rate)
+        return torch.zeros(1, sample_rate)
+
+    def to(self, device):
+        self.requested_devices.append(device)
+        return self
+
+
+def make_captured_silero_model() -> CapturedSileroModel:
+    """Return a CapturedSileroModel plus a PackageImporter patch that yields it."""
+    model = CapturedSileroModel()
+
+    importer = unittest.mock.MagicMock()
+    importer.load_pickle.return_value = model
+
+    return model, importer

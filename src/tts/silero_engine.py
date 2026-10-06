@@ -152,7 +152,7 @@ class SileroTtsEngine(TorchTtsEngine):
         registry = self._get_models_data(yml_path, self._models_yml_url, self._models_yml_hash)
 
         tts_models = registry.get("tts_models", {})
-        language = self._resolve_internal_model_language(tts_models, model)
+        language = self._resolve_internal_model_language(tts_models, model, yml_path)
 
         lang_dir = os.path.join(models_dir, "silero", language)
         os.makedirs(lang_dir, exist_ok=True)
@@ -198,7 +198,7 @@ class SileroTtsEngine(TorchTtsEngine):
         return model_path, sample_rates, example_text, speakers
 
     @staticmethod
-    def _resolve_internal_model_language(tts_models: dict, model: Model) -> str:
+    def _resolve_internal_model_language(tts_models: dict, model: Model, yml_path: str) -> str:
         """Return the registry section (keyed by language) that owns the model.
 
         Prefers the model's sole declared Language when it owns the model, then
@@ -217,8 +217,8 @@ class SileroTtsEngine(TorchTtsEngine):
                 return section
 
         raise RuntimeError(
-            f"Model '{model.id}' not found in the Silero models registry. "
-            f"Delete the cached 'models.yml' to force a fresh download"
+            f"Model '{model.id}' not found in the Silero models registry '{yml_path}'. "
+            f"Delete '{yml_path}' to force a fresh download"
         )
 
     @staticmethod
@@ -298,8 +298,6 @@ class SileroTtsEngine(TorchTtsEngine):
     @staticmethod
     def _select_sample_rate(config_rate: int, supported_rates: list[int]) -> int:
         if not supported_rates:
-            return config_rate
-        if supported_rates is None:
             return config_rate
 
         unique_rates = sorted(set(supported_rates))
