@@ -127,9 +127,11 @@ def make_merged_yaml(tmp_path, models_data: dict) -> str:
     return str(config_yml)
 
 
-async def collect_hub_sentences(hub, text, voice_id, input_type=TextFormat.TEXT):
+async def collect_hub_sentences(hub, text, voice_id, input_type=TextFormat.TEXT, language=None):
     """Collect all TtsResult chunks yielded by the Engine Hub's synthesize_pcm_chunks."""
-    return [chunk async for chunk in hub.synthesize_pcm_chunks(text, voice_id, input_type)]
+    return [
+        chunk async for chunk in hub.synthesize_pcm_chunks(text, voice_id, input_type, language)
+    ]
 
 
 class CapturedSileroModel:
@@ -195,6 +197,11 @@ class FakeTtsEngine(TtsEngine):
     def synthesized_texts(self) -> list[str]:
         """The text of every sentence this engine was asked to synthesize."""
         return [text for text, _, _, _ in self.requests]
+
+    @property
+    def languages(self) -> list[str | None]:
+        """The Language of every request this engine was asked to synthesize."""
+        return [language for _, _, _, language in self.requests]
 
     @property
     def audio_size_bytes(self) -> int:

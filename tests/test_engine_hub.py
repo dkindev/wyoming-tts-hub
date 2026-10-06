@@ -17,6 +17,20 @@ MODEL_ID = "v5_5_ru"
 VOICE_ID = "v5_5_ru-aidar"
 FRAME_DURATION_MS = 50
 
+# A Model id with no Language code in it, so an assertion about a declared Language
+# cannot be satisfied by the Model id itself.
+LANGUAGE_MODEL_ID = "tts_model"
+
+
+def make_storage(*, model_id=MODEL_ID, voice_id=VOICE_ID, languages=()):
+    """Return storage over one Model declaring `languages`, with one Voice on it."""
+    return YamlDataStorage(
+        PredefinedData(
+            models=[make_model(id=model_id, languages=list(languages))],
+            voices=[make_voice(voice_id=voice_id, name="aidar", model=model_id)],
+        )
+    )
+
 
 def make_hub(*, engine, frame_duration=FRAME_DURATION_MS, middlewares=(), storage=None):
     """Return a TTS Engine Hub wired to a fake engine for one known Voice and Model."""
@@ -24,21 +38,14 @@ def make_hub(*, engine, frame_duration=FRAME_DURATION_MS, middlewares=(), storag
         engine=engine,
         frame_duration=frame_duration,
         middlewares=middlewares,
-        storage=storage
-        if storage is not None
-        else YamlDataStorage(
-            PredefinedData(
-                models=[make_model(id=MODEL_ID)],
-                voices=[make_voice(voice_id=VOICE_ID, name="aidar", model=MODEL_ID)],
-            )
-        ),
+        storage=storage if storage is not None else make_storage(),
     )
 
 
-def make_engine(*, sample_rate=48000, samples_per_sentence=None):
+def make_engine(*, model_id=MODEL_ID, sample_rate=48000, samples_per_sentence=None):
     """Return a FakeTtsEngine holding one second of audio unless told otherwise."""
     return FakeTtsEngine(
-        make_model(id=MODEL_ID),
+        make_model(id=model_id),
         sample_rate=sample_rate,
         samples_per_sentence=(
             samples_per_sentence if samples_per_sentence is not None else sample_rate
@@ -162,6 +169,49 @@ class TestRequestValidation:
             )
 
         assert "ghost_model" in str(exc_info.value)
+
+
+class TestLanguageValidation:
+    """The Hub checks a client-supplied Language against the Model's declared Languages.
+
+    Lands a failing test on purpose (ticket 09): the domain context specifies this
+    rejection, and the Hub currently accepts any Language and hands it straight to
+    the engine, so a request in a Language the Model cannot speak gets audio back
+    with no error.
+    """
+
+    async def test_language_the_model_does_not_declare_is_rejected(self):
+        """A Language outside the Model's declared Languages is rejected by name.
+
+        The Model id carries no Language code, so "ru" can only reach the error
+        message as one of the Model's declared Languages.
+        """
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        hub = make_hub(
+            engine=engine,
+            storage=make_storage(
+                model_id=LANGUAGE_MODEL_ID,
+                voice_id=f"{LANGUAGE_MODEL_ID}-aidar",
+                languages=["ru"],
+            ),
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            await collect_hub_sentences(hub, "hello", f"{LANGUAGE_MODEL_ID}-aidar", language="en")
+
+        message = str(exc_info.value)
+        assert "en" in message, "the error must name the requested Language"
+        assert "ru" in message, "the error must name the Model's declared Languages"
+        assert engine.synthesized_texts == [], "a rejected request must not be synthesized"
+
+    async def test_declared_language_reaches_the_engine(self):
+        """A Language the Model declares is accepted and passed through untouched."""
+        engine = make_engine()
+        hub = make_hub(engine=engine, storage=make_storage(languages=["ru", "en"]))
+
+        await collect_hub_sentences(hub, "hello", VOICE_ID, language="en")
+
+        assert engine.languages == ["en"]
 
 
 class TestMiddlewareChain:
