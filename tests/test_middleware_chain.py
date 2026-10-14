@@ -2,8 +2,8 @@ import pytest
 
 from src.config import NormalizationPrompt, NormalizationSettings, TextFormatNormalizationSettings
 from src.tts.middleware import (
-    DetectLanguageMiddleware,
     NormalizeTextMiddleware,
+    ResolveLanguageMiddleware,
     SplitSentencesMiddleware,
 )
 from src.tts.models import (
@@ -22,10 +22,10 @@ from tests.helpers import (
     make_voice,
 )
 
-# DetectLanguageMiddleware assigns this fixed Language to every request (see ticket 09),
-# so it is what overrides are keyed on. Neither the Model nor Voice id contains it, so an
-# assertion on the Language cannot be satisfied by an id alone.
+# The Language these tests resolve to and key overrides on. Neither the Model nor
+# Voice id contains it, so an assertion on the Language cannot be satisfied by an id.
 LANGUAGE = "ru"
+OTHER_LANGUAGE = "en"
 MODEL_ID = "test-model"
 VOICE_ID = "test-voice-aidar"
 MAX_SENTENCE_CHARS = 20
@@ -35,10 +35,12 @@ OVERRIDE_PROMPT_TEXT = "PROMPT-FROM-OVERRIDE"
 DEFAULT_PROMPT_TEXT = "PROMPT-FROM-DEFAULT"
 
 
-def make_storage(*, overrides=(), prompts=(), languages=(LANGUAGE,)):
+def make_storage(*, overrides=(), prompts=(), languages=(LANGUAGE,), auto_detected=False):
     """Return a DataStorage holding the Voice under test plus normalization overrides."""
     return FakeDataStorage(
-        models=[make_model(id=MODEL_ID, languages=list(languages))],
+        models=[
+            make_model(id=MODEL_ID, languages=list(languages), language_auto_detected=auto_detected)
+        ],
         voices=[make_voice(voice_id=VOICE_ID, name="aidar", model=MODEL_ID)],
         voice_normalizations=list(overrides),
         prompts=list(prompts),
@@ -84,7 +86,7 @@ def build_chain(
 ):
     """Return the middleware chain as wired in main.py, with the given configuration."""
     return [
-        DetectLanguageMiddleware().invoke,
+        ResolveLanguageMiddleware().invoke,
         SplitSentencesMiddleware(
             max_sentence_chars=max_sentence_chars,
             text_sentenizer_factory=(
@@ -189,17 +191,12 @@ class TestSentenceSplitting:
         assert LANGUAGE in message
 
 
-class TestLanguageDetection:
-    async def test_a_language_is_assigned_to_every_request(self):
-        """Every request carries an assigned Language, whatever the Voice declares.
+class TestLanguageResolution:
+    """ResolveLanguageMiddleware fills in a Language only when there is one to fill in."""
 
-        Note: DetectLanguageMiddleware assigns a fixed Language rather than detecting
-        one, so a Voice declaring 'en' still gets 'ru'. This test pins current
-        behaviour; ticket 09 specifies real detection.
-        """
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
-        storage = make_storage(languages=("en",))
-
+    def make_recording_hub(self, engine, *, languages, auto_detected=False):
+        """Return a Hub whose chain reports the Language the engine is asked for."""
+        storage = make_storage(languages=languages, auto_detected=auto_detected)
         seen_languages = []
 
         async def record_language(ctx, next_call):
@@ -208,14 +205,64 @@ class TestLanguageDetection:
 
         hub = make_hub(
             engine=engine,
-            middlewares=[DetectLanguageMiddleware().invoke, record_language],
+            middlewares=[ResolveLanguageMiddleware().invoke, record_language],
             storage=storage,
+        )
+        return hub, seen_languages
+
+    async def test_a_request_without_a_language_gets_the_models_sole_language(self):
+        """No Language against a Model declaring one Language is filled in from it."""
+        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        hub, seen_languages = self.make_recording_hub(engine, languages=(LANGUAGE,))
+
+        await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert seen_languages == [LANGUAGE]
+        assert engine.languages == [LANGUAGE]
+
+    async def test_a_language_the_client_sent_is_left_alone(self):
+        """A Model declaring several Languages does not overwrite the request's Language."""
+        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        hub, seen_languages = self.make_recording_hub(engine, languages=(LANGUAGE, OTHER_LANGUAGE))
+
+        await collect_hub_sentences(hub, "hello", VOICE_ID, language=OTHER_LANGUAGE)
+
+        assert seen_languages == [OTHER_LANGUAGE]
+        assert engine.languages == [OTHER_LANGUAGE]
+
+    async def test_a_model_declaring_several_languages_supplies_none(self):
+        """Several declared Languages leave the request without one, for the Hub to judge."""
+        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        hub, seen_languages = self.make_recording_hub(
+            engine, languages=(LANGUAGE, OTHER_LANGUAGE), auto_detected=True
         )
 
         await collect_hub_sentences(hub, "hello", VOICE_ID)
 
-        assert seen_languages == ["ru"]
-        assert engine.requests[0][3] == "ru"
+        assert seen_languages == [None]
+        assert engine.languages == [None]
+
+    async def test_an_auto_detecting_model_is_never_guessed_at(self):
+        """A sole declared Language is not filled in when the Model auto-detects."""
+        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        hub, seen_languages = self.make_recording_hub(
+            engine, languages=(LANGUAGE,), auto_detected=True
+        )
+
+        await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert seen_languages == [None]
+        assert engine.languages == [None]
+
+    async def test_a_model_declaring_no_language_supplies_none(self):
+        """Nothing to fill in leaves the request without one."""
+        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        hub, seen_languages = self.make_recording_hub(engine, languages=(), auto_detected=True)
+
+        await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert seen_languages == [None]
+        assert engine.languages == [None]
 
 
 class TestNormalizationSelection:

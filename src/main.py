@@ -14,8 +14,8 @@ from src.tts.engine_factory import TtsEngineFactory
 from src.tts.engine_hub import TtsEngineHub
 from src.tts.engine_manager import TtsEngineManager
 from src.tts.middleware import (
-    DetectLanguageMiddleware,
     NormalizeTextMiddleware,
+    ResolveLanguageMiddleware,
     SplitSentencesMiddleware,
 )
 from src.tts.models import BackendType
@@ -88,7 +88,7 @@ async def main():
     )
 
     middlewares = [
-        DetectLanguageMiddleware().invoke,
+        ResolveLanguageMiddleware().invoke,
         SplitSentencesMiddleware(
             max_sentence_chars=settings.max_sentence_chars,
             text_sentenizer_factory=TextSentenizerFactory(),

@@ -106,6 +106,7 @@ def make_model(
     id="v5_5_ru",
     engine_type=EngineType.SILERO,
     languages=None,
+    language_auto_detected=False,
     ssml_supported=False,
     warmup=False,
     enabled=True,
@@ -114,6 +115,7 @@ def make_model(
         id=id,
         engine_type=engine_type,
         languages=languages if languages is not None else [],
+        language_auto_detected=language_auto_detected,
         ssml_supported=ssml_supported,
         warmup=warmup,
         enabled=enabled,
@@ -353,12 +355,16 @@ class FakeDataStorage(DataStorage):
         return self._voice_normalizations.get(f"{voice_id}__{text_format.value}__{language}")
 
 
-def make_hub(*, engine, middlewares, storage, frame_duration=50):
+def make_hub(*, engine, middlewares, storage, frame_duration=50, engine_manager=None):
     """Return a TTS Engine Hub wired to fakes around the given engine."""
     return TtsEngineHub(
         frame_duration=frame_duration,
         middlewares=list(middlewares),
-        engine_manager=FakeEngineManager({engine.model.id: engine}),
+        engine_manager=(
+            engine_manager
+            if engine_manager is not None
+            else FakeEngineManager({engine.model.id: engine})
+        ),
         data_storage=storage,
     )
 

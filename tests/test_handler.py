@@ -1,6 +1,7 @@
 import pytest
 from wyoming.audio import AudioChunk, AudioStart
 from wyoming.error import Error
+from wyoming.event import Event
 from wyoming.info import Describe, Info
 from wyoming.tts import (
     Synthesize,
@@ -14,6 +15,7 @@ from wyoming.tts import (
 
 from src.handler import TtsEngineHubEventHandler
 from src.tts.data_storage import YamlDataStorage
+from src.tts.middleware import ResolveLanguageMiddleware
 from src.tts.models import PredefinedData
 from tests.helpers import (
     FakeTtsEngine,
@@ -29,6 +31,8 @@ VOICE_ID = "v5_5_ru-aidar"
 OTHER_MODEL_ID = "v3_en"
 SAMPLE_RATE = 24000
 FRAME_DURATION_MS = 50
+LANGUAGE = "ru"
+OTHER_LANGUAGE = "en"
 
 # The fake engine holds one second of audio, so the frame duration decides how
 # many `audio-chunk` events the Hub hands the handler: 1000ms / 50ms = 20.
@@ -45,7 +49,7 @@ class ExplodingTtsEngine(FakeTtsEngine):
         yield  # pragma: no cover - unreachable, but makes this an async generator
 
 
-def make_storage(*, active_models=(MODEL_ID,), languages=("ru",)):
+def make_storage(*, active_models=(MODEL_ID,), languages=(LANGUAGE,)):
     """Return storage over two Models, serving only the Active Models' Voices."""
     return YamlDataStorage(
         PredefinedData(
@@ -81,7 +85,12 @@ def make_handler(
     """Return a handler wired to `client`, synthesizing through a Hub over fakes."""
     storage = storage if storage is not None else make_storage()
     engine = engine if engine is not None else make_engine()
-    hub = make_hub(engine=engine, storage=storage, middlewares=(), frame_duration=FRAME_DURATION_MS)
+    hub = make_hub(
+        engine=engine,
+        storage=storage,
+        middlewares=[ResolveLanguageMiddleware().invoke],
+        frame_duration=FRAME_DURATION_MS,
+    )
 
     return TtsEngineHubEventHandler(
         hub,
@@ -107,6 +116,23 @@ def start_event(voice_id=VOICE_ID, text_format=None):
         voice=SynthesizeVoice(name=voice_id) if voice_id is not None else None,
         text_format=text_format,
     ).event()
+
+
+def synthesize_event_with_language(text="hello", voice_id=VOICE_ID, language=OTHER_LANGUAGE):
+    """A synthesize event carrying a Language beside the Voice name.
+
+    Built as a raw payload on purpose: `SynthesizeVoice.to_dict` drops the Language
+    whenever a name is present, so the dataclass cannot express what a real client
+    sends.
+    """
+    return Event(
+        type="synthesize", data={"text": text, "voice": {"name": voice_id, "language": language}}
+    )
+
+
+def start_event_with_language(voice_id=VOICE_ID, language=OTHER_LANGUAGE):
+    """A synthesize-start event carrying a Language beside the Voice name, as a raw payload."""
+    return Event(type="synthesize-start", data={"voice": {"name": voice_id, "language": language}})
 
 
 def parsed_audio(event):
@@ -271,6 +297,50 @@ class TestErrorDetail:
         assert "Sentence inference error" in error.text
 
 
+class TestLanguageFromTheWire:
+    """A Language the client sends beside the Voice reaches the Model that serves it."""
+
+    async def test_language_beside_the_voice_name_reaches_the_engine(self):
+        """A Language on the wire is what the engine is asked to speak.
+
+        The request is built from a raw event payload because the `wyoming` library
+        discards `SynthesizeVoice.language` once a name is present.
+        """
+        client = WyomingClient()
+        engine = make_engine()
+        handler = make_handler(
+            client, engine=engine, storage=make_storage(languages=(LANGUAGE, OTHER_LANGUAGE))
+        )
+
+        events = await client.send(handler, synthesize_event_with_language())
+
+        assert events[0].type == "audio-start"
+        assert engine.languages == [OTHER_LANGUAGE]
+
+    async def test_request_without_a_language_synthesizes_in_the_models_language(self):
+        """A request naming only a Voice is served in the Model's declared Language."""
+        client = WyomingClient()
+        engine = make_engine()
+
+        events = await client.send(make_handler(client, engine=engine), synthesize_event())
+
+        assert events[0].type == "audio-start"
+        assert engine.languages == [LANGUAGE]
+
+    async def test_language_the_model_does_not_declare_is_answered_with_an_error(self):
+        """A Language the Model cannot speak is refused to the client, with no audio."""
+        client = WyomingClient()
+        engine = make_engine()
+
+        events = await client.send(
+            make_handler(client, engine=engine),
+            synthesize_event_with_language(language="fr"),
+        )
+
+        assert [event.type for event in events] == ["error"]
+        assert engine.synthesized_texts == []
+
+
 class TestStreaming:
     """Streaming requests are served as text arrives, and ignored when disabled."""
 
@@ -341,6 +411,42 @@ class TestStreaming:
         stopped = await client.send(handler, SynthesizeStop().event())
 
         assert [event.type for event in stopped] == [SynthesizeStopped().event().type]
+
+    async def test_language_from_the_start_event_reaches_every_chunk(self):
+        """The Language named at the start of a stream speaks for the whole stream."""
+        client = WyomingClient()
+        engine = make_engine()
+        handler = make_handler(
+            client, engine=engine, storage=make_storage(languages=(LANGUAGE, OTHER_LANGUAGE))
+        )
+
+        await client.send(handler, start_event_with_language())
+        await client.send(handler, SynthesizeChunk(text="hello").event())
+        await client.send(handler, SynthesizeChunk(text="goodbye").event())
+        await client.send(handler, SynthesizeStop().event())
+
+        assert engine.languages == [OTHER_LANGUAGE, OTHER_LANGUAGE]
+
+    async def test_language_from_a_finished_stream_does_not_leak_into_the_next(self):
+        """The stream's Language is forgotten at the stop, so the next stream resolves afresh."""
+        client = WyomingClient()
+        engine = make_engine()
+        handler = make_handler(
+            client, engine=engine, storage=make_storage(languages=(LANGUAGE, OTHER_LANGUAGE))
+        )
+
+        await client.send(handler, start_event_with_language())
+        await client.send(handler, SynthesizeChunk(text="hello").event())
+        await client.send(handler, SynthesizeStop().event())
+
+        # A stream naming no Language has nothing to resolve from, and a stale
+        # Language from the finished stream would paper over that by synthesizing.
+        await client.send(handler, start_event())
+        events = await client.send(handler, SynthesizeChunk(text="goodbye").event())
+        await client.send(handler, SynthesizeStop().event())
+
+        assert [event.type for event in events] == ["error"]
+        assert engine.languages == [OTHER_LANGUAGE]
 
     async def test_whole_request_synthesize_is_ignored_mid_stream(self):
         """A Synthesize arriving mid-stream is a compatibility no-op: the chunk

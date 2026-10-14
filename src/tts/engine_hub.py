@@ -57,6 +57,8 @@ class TtsEngineHub:
         if self._middlewares and len(self._middlewares) > 0:
             await run_middleware(0)
 
+        self._validate_language(ctx)
+
         engine_context = await self._engine_manager.get_context(model.id)
         if engine_context is None:
             raise ValueError(f"No engine found for synthesis with model '{model.id}'")
@@ -71,6 +73,32 @@ class TtsEngineHub:
 
         async for chunk in self._synthesize_pcm_chunks(ctx, engine_context):
             yield chunk
+
+    @staticmethod
+    def _validate_language(context: SynthesisContext) -> None:
+        """Reject a request whose Language the Model cannot be asked to speak.
+
+        Runs on the Language as it stands after the middleware chain, so a
+        middleware is trusted to have resolved it.
+        """
+        model = context.model
+        declared = ", ".join(model.languages) if model.languages else "none"
+
+        if context.language is not None and model.languages:
+            if context.language not in model.languages:
+                raise ValueError(
+                    f"Language '{context.language}' is not declared by model '{model.id}', "
+                    f"which declares: {declared}"
+                )
+            return
+
+        if model.language_auto_detected:
+            return
+
+        raise ValueError(
+            f"No Language given for model '{model.id}', which declares: {declared} "
+            f"and does not auto-detect its Language"
+        )
 
     async def _synthesize_pcm_chunks(  # noqa: C901
         self,

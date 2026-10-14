@@ -23,8 +23,8 @@ _Avoid_: Speech generator, voice synthesizer
 **Model**:
 A named, language-specific model that belongs to exactly one **TTS Engine**.
 Models can be enabled, disabled, or pre-warmed at startup. A **Model** declares its `engine_type` (which **TTS
-Engine** family owns it), the **Languages** it supports, whether it
-auto-detects its language (`language_auto_detected`), and whether it accepts
+Engine** family owns it), the **Languages** it supports, whether it may be
+asked to synthesize without one (`language_auto_detected`), and whether it accepts
 **SSML** (`ssml_supported`). The declared **Languages** are the source of truth
 advertised for the **Model**'s **Voices**.
 _Avoid_: Neural network, PyTorch model
@@ -34,8 +34,14 @@ A spoken-language code (e.g., `ru`, `en`) that a **Model** declares it
 supports. A Wyoming client *may* send a **Language** with a synthesis request;
 when sent, the **TTS Engine Hub** validates it against the selected **Model**'s
 declared **Languages** and rejects the request on a mismatch. When omitted, the
-Hub resolves it from the **Model**'s sole declared **Language**, falling back to
-auto-detection when the **Model** declares `language_auto_detected`.
+Hub fills it in from the **Model**'s sole declared **Language** — but only when
+the **Model** declares exactly one **Language** and does not auto-detect. A
+**Model** that declares several **Languages**, or one that declares
+`language_auto_detected`, is left to decide for itself; a request reaching it
+with no **Language** is an error naming the **Model** and its declared
+**Languages**. `language_auto_detected` means exactly "this **Model** may be
+asked to synthesize without a **Language**": no **Language** then reaches the
+**TTS Engine**, and nothing is detected on the server's behalf.
 _Avoid_: locale, locale string
 
 **Text Format**:
@@ -97,6 +103,9 @@ _Avoid_: loaded model, warmed-up model
 - A **TTS Engine** owns one or more **Models**
 - A **Model** belongs to exactly one **TTS Engine**
 - A **Model** supports one or more **Speakers** and one or more **Languages**
+- A **Model** declaring `language_auto_detected` may be asked to synthesize a
+  request that carries no **Language**; one declaring several **Languages** and
+  no **Language** on the request cannot be served
 - A **Speaker** belongs to exactly one **Model**
 - A **Speaker** within a **Model** may be referenced by one or more **Voices**
 - A **Voice** references exactly one **Model** and either exactly one **Speaker**
@@ -131,9 +140,12 @@ _Avoid_: loaded model, warmed-up model
 > **Dev:** "How does the Hub handle a **Language** from a Wyoming client?"
 > **Domain expert:** "It's optional. If the client sends one, the **TTS Engine
 > Hub** validates it against the selected **Model**'s declared **Languages** and
-> rejects the request on a mismatch. If the client omits one, the Hub derives it
-> from the **Model**'s sole declared **Language**, or falls back to
-> auto-detection when the **Model** declares `language_auto_detected`."
+> rejects the request on a mismatch. If the client omits one, the Hub fills it in
+> from the **Model**'s sole declared **Language**, but only when the **Model**
+> declares exactly one and doesn't auto-detect. Otherwise the **Model** decides:
+> one declaring `language_auto_detected` may be asked to synthesize without a
+> **Language**, and one declaring several **Languages** has no **Language** to
+> guess, so the request is refused with an error naming them."
 > **Dev:** "Does every model support SSML?"
 > **Domain expert:** "No — the **Model** supports SSML if `ssml_supported` flag
 > is set for **Model**; some engines only accept plain text."

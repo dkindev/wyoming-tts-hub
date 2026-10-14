@@ -58,6 +58,21 @@ def _create_wyoming_info(data_storage: DataStorage, service_name: str, streaming
     )
 
 
+def _language_from_voice(event: Event) -> str | None:
+    """Return the Language a client sent beside the Voice, if any.
+
+    Read from the raw event payload rather than the parsed dataclass: the `wyoming`
+    library drops `SynthesizeVoice.language` whenever `name` is present, so a Voice
+    named on the wire and a Language beside it never both survive parsing.
+    """
+    voice = event.data.get("voice")
+    if not isinstance(voice, dict):
+        return None
+
+    language = voice.get("language")
+    return language if isinstance(language, str) else None
+
+
 class TtsEngineHubEventHandler(AsyncEventHandler):
     def __init__(
         self,
@@ -77,6 +92,7 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
         self._throw_detailed_errors = throw_detailed_errors
         self._is_streaming: bool = False
         self._synthesize: Synthesize | None = None
+        self._language: str | None = None
 
     async def handle_event(self, event: Event) -> bool:
         try:
@@ -123,7 +139,7 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
 
     async def _handle_synthesize(self, event: Event) -> bool:
         synthesize = Synthesize.from_event(event)
-        state = await self._synthesize_pcm_chunks(synthesize)
+        state = await self._synthesize_pcm_chunks(synthesize, _language_from_voice(event))
         return state
 
     async def _handle_synthesize_start(self, event: Event) -> bool:
@@ -132,6 +148,7 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
         self._synthesize = Synthesize(
             text="", voice=stream_start.voice, text_format=stream_start.text_format
         )
+        self._language = _language_from_voice(event)
         logger.debug("Text stream started: voice='{voice}'", voice=stream_start.voice)
         return True
 
@@ -139,7 +156,7 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
         assert self._synthesize is not None
         stream_chunk = SynthesizeChunk.from_event(event)
         self._synthesize.text = stream_chunk.text
-        state = await self._synthesize_pcm_chunks(self._synthesize)
+        state = await self._synthesize_pcm_chunks(self._synthesize, self._language)
         logger.debug("Text stream processed.")
         return state
 
@@ -148,6 +165,7 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
         await self.write_event(SynthesizeStopped().event())
         self._is_streaming = False
         self._synthesize = None
+        self._language = None
         logger.debug("Text stream stopped")
         return True
 
@@ -158,7 +176,7 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
         await self.write_event(wyoming_info_event)
         return True
 
-    async def _synthesize_pcm_chunks(self, synthesize: Synthesize) -> bool:
+    async def _synthesize_pcm_chunks(self, synthesize: Synthesize, language: str | None) -> bool:
         text = synthesize.text.strip()
         if not text:
             await self.write_event(Error(text="Text is empty or whitespace").event())
@@ -181,7 +199,9 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
             return True
 
         send_start = True
-        async for chunk in self._engine.synthesize_pcm_chunks(text, voice_id, text_format):
+        async for chunk in self._engine.synthesize_pcm_chunks(
+            text, voice_id, text_format, language
+        ):
             if send_start:
                 await self.write_event(
                     AudioStart(

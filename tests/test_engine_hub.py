@@ -1,9 +1,11 @@
 import pytest
 
 from src.tts.data_storage import YamlDataStorage
+from src.tts.middleware import ResolveLanguageMiddleware
 from src.tts.models import PredefinedData, TtsResult
 from tests.helpers import (
     FakeDataStorage,
+    FakeEngineManager,
     FakeTtsEngine,
     collect_hub_sentences,
     make_model,
@@ -17,28 +19,51 @@ MODEL_ID = "v5_5_ru"
 VOICE_ID = "v5_5_ru-aidar"
 FRAME_DURATION_MS = 50
 
+# The Model every request is served by declares exactly this Language, which the
+# resolving middleware fills in when a request carries none.
+SOLE_LANGUAGE = "ru"
+
 # A Model id with no Language code in it, so an assertion about a declared Language
 # cannot be satisfied by the Model id itself.
 LANGUAGE_MODEL_ID = "tts_model"
+LANGUAGE_VOICE_ID = f"{LANGUAGE_MODEL_ID}-aidar"
 
 
-def make_storage(*, model_id=MODEL_ID, voice_id=VOICE_ID, languages=()):
+def make_storage(
+    *, model_id=MODEL_ID, voice_id=VOICE_ID, languages=(SOLE_LANGUAGE,), auto_detected=False
+):
     """Return storage over one Model declaring `languages`, with one Voice on it."""
     return YamlDataStorage(
         PredefinedData(
-            models=[make_model(id=model_id, languages=list(languages))],
+            models=[
+                make_model(
+                    id=model_id,
+                    languages=list(languages),
+                    language_auto_detected=auto_detected,
+                )
+            ],
             voices=[make_voice(voice_id=voice_id, name="aidar", model=model_id)],
         )
     )
 
 
-def make_hub(*, engine, frame_duration=FRAME_DURATION_MS, middlewares=(), storage=None):
+def make_hub(
+    *,
+    engine,
+    frame_duration=FRAME_DURATION_MS,
+    middlewares=None,
+    storage=None,
+    engine_manager=None,
+):
     """Return a TTS Engine Hub wired to a fake engine for one known Voice and Model."""
     return make_tts_hub(
         engine=engine,
         frame_duration=frame_duration,
-        middlewares=middlewares,
+        middlewares=(
+            middlewares if middlewares is not None else [ResolveLanguageMiddleware().invoke]
+        ),
         storage=storage if storage is not None else make_storage(),
+        engine_manager=engine_manager,
     )
 
 
@@ -172,13 +197,23 @@ class TestRequestValidation:
 
 
 class TestLanguageValidation:
-    """The Hub checks a client-supplied Language against the Model's declared Languages.
+    """The Hub checks the request's Language against the Model's declared Languages.
 
-    Lands a failing test on purpose (ticket 09): the domain context specifies this
-    rejection, and the Hub currently accepts any Language and hands it straight to
-    the engine, so a request in a Language the Model cannot speak gets audio back
-    with no error.
+    The Language is inspected as it stands after the middleware chain, so a
+    middleware is trusted to have resolved it.
     """
+
+    def make_language_hub(self, *, engine, languages, auto_detected=False):
+        """Return a Hub serving a Model whose id carries no Language code."""
+        return make_hub(
+            engine=engine,
+            storage=make_storage(
+                model_id=LANGUAGE_MODEL_ID,
+                voice_id=LANGUAGE_VOICE_ID,
+                languages=languages,
+                auto_detected=auto_detected,
+            ),
+        )
 
     async def test_language_the_model_does_not_declare_is_rejected(self):
         """A Language outside the Model's declared Languages is rejected by name.
@@ -187,17 +222,10 @@ class TestLanguageValidation:
         message as one of the Model's declared Languages.
         """
         engine = make_engine(model_id=LANGUAGE_MODEL_ID)
-        hub = make_hub(
-            engine=engine,
-            storage=make_storage(
-                model_id=LANGUAGE_MODEL_ID,
-                voice_id=f"{LANGUAGE_MODEL_ID}-aidar",
-                languages=["ru"],
-            ),
-        )
+        hub = self.make_language_hub(engine=engine, languages=["ru"])
 
         with pytest.raises(ValueError) as exc_info:
-            await collect_hub_sentences(hub, "hello", f"{LANGUAGE_MODEL_ID}-aidar", language="en")
+            await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID, language="en")
 
         message = str(exc_info.value)
         assert "en" in message, "the error must name the requested Language"
@@ -212,6 +240,105 @@ class TestLanguageValidation:
         await collect_hub_sentences(hub, "hello", VOICE_ID, language="en")
 
         assert engine.languages == ["en"]
+
+    async def test_absent_language_is_filled_in_from_the_models_sole_language(self):
+        """No Language against a Model declaring one Language synthesizes in that Language."""
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        hub = self.make_language_hub(engine=engine, languages=["ru"])
+
+        await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID)
+
+        assert engine.languages == ["ru"]
+
+    async def test_absent_language_reaches_no_engine_for_an_auto_detecting_model(self):
+        """A Model that auto-detects is asked to synthesize without a Language."""
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        hub = self.make_language_hub(engine=engine, languages=["ru"], auto_detected=True)
+
+        await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID)
+
+        assert engine.languages == [None]
+
+    @pytest.mark.parametrize(
+        ("auto_detected", "expected"),
+        [
+            pytest.param(False, "error", id="model-does-not-auto-detect"),
+            pytest.param(True, "audio", id="model-auto-detects"),
+        ],
+    )
+    async def test_absent_language_against_several_declared_languages(
+        self, auto_detected, expected
+    ):
+        """Several declared Languages leave nothing to resolve from, unless auto-detected.
+
+        The Model declares `ru` and `en`, and its id carries no Language code, so both
+        can only reach the error message as declared Languages.
+        """
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        hub = self.make_language_hub(
+            engine=engine, languages=["ru", "en"], auto_detected=auto_detected
+        )
+
+        if expected == "error":
+            with pytest.raises(ValueError) as exc_info:
+                await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID)
+
+            message = str(exc_info.value)
+            assert "ru" in message, "the error must name every declared Language"
+            assert "en" in message, "the error must name every declared Language"
+            assert engine.synthesized_texts == []
+        else:
+            await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID)
+
+            assert engine.languages == [None]
+
+    async def test_absent_language_against_a_model_declaring_none_is_rejected(self):
+        """Nothing to validate against and nothing to resolve from is still an error."""
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        hub = self.make_language_hub(engine=engine, languages=[])
+
+        with pytest.raises(ValueError):
+            await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID)
+
+        assert engine.synthesized_texts == []
+
+    async def test_language_survives_the_middleware_chain_unmodified(self):
+        """A Language the client supplied is what the engine is asked for."""
+        engine = make_engine()
+        seen_languages = []
+
+        async def record_language(ctx, next_call):
+            seen_languages.append(ctx.language)
+            await next_call()
+
+        hub = make_hub(
+            engine=engine,
+            middlewares=[ResolveLanguageMiddleware().invoke, record_language],
+            storage=make_storage(languages=["ru", "en"]),
+        )
+
+        await collect_hub_sentences(hub, "hello", VOICE_ID, language="en")
+
+        assert seen_languages == ["en"]
+        assert engine.languages == ["en"]
+
+    async def test_rejected_request_never_acquires_an_engine_context(self):
+        """Validation runs before the engine context is acquired, so the Model is not loaded."""
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        engine_manager = FakeEngineManager({LANGUAGE_MODEL_ID: engine})
+        hub = make_hub(
+            engine=engine,
+            storage=make_storage(
+                model_id=LANGUAGE_MODEL_ID, voice_id=LANGUAGE_VOICE_ID, languages=["ru"]
+            ),
+            engine_manager=engine_manager,
+        )
+
+        with pytest.raises(ValueError):
+            await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID, language="en")
+
+        assert engine_manager.requested_model_ids == []
+        assert engine.warmup_count == 0
 
 
 class TestMiddlewareChain:
@@ -230,7 +357,11 @@ class TestMiddlewareChain:
         engine = make_engine()
         hub = make_hub(
             engine=engine,
-            middlewares=[make_middleware("outer"), make_middleware("inner")],
+            middlewares=[
+                ResolveLanguageMiddleware().invoke,
+                make_middleware("outer"),
+                make_middleware("inner"),
+            ],
         )
 
         frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
@@ -246,7 +377,10 @@ class TestMiddlewareChain:
             await next_call()
 
         engine = make_engine()
-        hub = make_hub(engine=engine, middlewares=[uppercase_middleware])
+        hub = make_hub(
+            engine=engine,
+            middlewares=[ResolveLanguageMiddleware().invoke, uppercase_middleware],
+        )
 
         await collect_hub_sentences(hub, "hello", VOICE_ID)
 

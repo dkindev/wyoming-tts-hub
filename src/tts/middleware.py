@@ -30,12 +30,27 @@ class SynthesisContext:
 MiddlewareType = Callable[[SynthesisContext, Callable[[], Awaitable[None]]], Awaitable[None]]
 
 
-class DetectLanguageMiddleware:
-    def __init__(self):
-        pass
+class ResolveLanguageMiddleware:
+    """Fills in the request's Language from the Model when the client sent none.
+
+    Only a Model declaring exactly one Language and not auto-detecting can supply
+    one. Anything else is left alone for the Hub to reject, since guessing a
+    Language the Model does not declare would synthesize speech in the wrong one.
+    """
 
     async def invoke(self, ctx: SynthesisContext, next_call: Callable[[], Awaitable[None]]):
-        ctx.language = "ru"
+        if (
+            ctx.language is None
+            and len(ctx.model.languages) == 1
+            and not ctx.model.language_auto_detected
+        ):
+            ctx.language = ctx.model.languages[0]
+            logger.debug(
+                "Resolved Language '{language}' from the sole declared Language of model '{model_id}'",
+                language=ctx.language,
+                model_id=ctx.model.id,
+            )
+
         await next_call()
 
 
