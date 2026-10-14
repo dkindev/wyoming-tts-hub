@@ -35,13 +35,14 @@ supports. A Wyoming client *may* send a **Language** with a synthesis request;
 when sent, the **TTS Engine Hub** validates it against the selected **Model**'s
 declared **Languages** and rejects the request on a mismatch. When omitted, the
 Hub fills it in from the **Model**'s sole declared **Language** — but only when
-the **Model** declares exactly one **Language** and does not auto-detect. A
-**Model** that declares several **Languages**, or one that declares
-`language_auto_detected`, is left to decide for itself; a request reaching it
-with no **Language** is an error naming the **Model** and its declared
-**Languages**. `language_auto_detected` means exactly "this **Model** may be
-asked to synthesize without a **Language**": no **Language** then reaches the
-**TTS Engine**, and nothing is detected on the server's behalf.
+the **Model** declares exactly one **Language** and does not auto-detect.
+Otherwise the **Model** is left to speak for itself. `language_auto_detected`
+means exactly "this **Model** may be asked to synthesize without a **Language**":
+no **Language** then reaches the **TTS Engine**, and nothing is detected on the
+server's behalf. A **Model** that declares several **Languages** and no
+`language_auto_detected` has neither a **Language** to fill in nor one to invent,
+so a request reaching it without one is an error naming the **Model** and every
+declared **Language**.
 _Avoid_: locale, locale string
 
 **Text Format**:
@@ -105,7 +106,7 @@ _Avoid_: loaded model, warmed-up model
 - A **Model** supports one or more **Speakers** and one or more **Languages**
 - A **Model** declaring `language_auto_detected` may be asked to synthesize a
   request that carries no **Language**; one declaring several **Languages** and
-  no **Language** on the request cannot be served
+  no `language_auto_detected` cannot be served a request that carries none
 - A **Speaker** belongs to exactly one **Model**
 - A **Speaker** within a **Model** may be referenced by one or more **Voices**
 - A **Voice** references exactly one **Model** and either exactly one **Speaker**

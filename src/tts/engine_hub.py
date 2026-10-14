@@ -8,12 +8,18 @@ from src.tts.data_storage import DataStorage
 from src.tts.engine_manager import TtsEngineContext, TtsEngineManager
 from src.tts.middleware import MiddlewareType, SynthesisContext
 from src.tts.models import (
+    Model,
     TextFormat,
     TtsResult,
 )
 
 BYTES_PER_SAMPLE = 2
 CHANNELS = 1
+
+
+def _declared(model: Model) -> str:
+    """The Languages a Model declares, phrased for an error message."""
+    return ", ".join(model.languages)
 
 
 class TtsEngineHub:
@@ -82,23 +88,32 @@ class TtsEngineHub:
         middleware is trusted to have resolved it.
         """
         model = context.model
-        declared = ", ".join(model.languages) if model.languages else "none"
 
-        if context.language is not None and model.languages:
-            if context.language not in model.languages:
-                raise ValueError(
-                    f"Language '{context.language}' is not declared by model '{model.id}', "
-                    f"which declares: {declared}"
-                )
-            return
+        if context.language is None:
+            if model.language_auto_detected:
+                return
 
-        if model.language_auto_detected:
-            return
+            raise ValueError(
+                f"No Language given for model '{model.id}', which declares: {_declared(model)} "
+                f"and does not auto-detect its Language"
+            )
 
-        raise ValueError(
-            f"No Language given for model '{model.id}', which declares: {declared} "
-            f"and does not auto-detect its Language"
-        )
+        if not model.languages:
+            # Nothing to validate against, so the Language can only be honoured on
+            # the Model's own say-so.
+            if model.language_auto_detected:
+                return
+
+            raise ValueError(
+                f"Language '{context.language}' cannot be checked: model '{model.id}' "
+                f"declares no Languages and does not auto-detect its Language"
+            )
+
+        if context.language not in model.languages:
+            raise ValueError(
+                f"Language '{context.language}' is not declared by model '{model.id}', "
+                f"which declares: {_declared(model)}"
+            )
 
     async def _synthesize_pcm_chunks(  # noqa: C901
         self,

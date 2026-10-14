@@ -302,6 +302,32 @@ class TestLanguageValidation:
 
         assert engine.synthesized_texts == []
 
+    async def test_language_against_a_model_declaring_none_is_rejected_as_uncheckable(self):
+        """With nothing to validate against, the error blames the Model, not the request.
+
+        A Language was supplied here, so saying none was given would send whoever is
+        debugging it looking in the wrong place.
+        """
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        hub = self.make_language_hub(engine=engine, languages=[])
+
+        with pytest.raises(ValueError) as exc_info:
+            await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID, language="en")
+
+        message = str(exc_info.value)
+        assert "en" in message, "the error must name the requested Language"
+        assert "declares no Languages" in message
+        assert engine.synthesized_texts == []
+
+    async def test_language_against_an_auto_detecting_model_declaring_none_is_accepted(self):
+        """Nothing to validate against, and the Model decides for itself, so it proceeds."""
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        hub = self.make_language_hub(engine=engine, languages=[], auto_detected=True)
+
+        await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID, language="en")
+
+        assert engine.languages == ["en"]
+
     async def test_language_survives_the_middleware_chain_unmodified(self):
         """A Language the client supplied is what the engine is asked for."""
         engine = make_engine()
