@@ -92,6 +92,8 @@ class ImmutableSharedTtsEngine(TtsEngine):
         inference_timeout: float,
         engine: TtsEngine,
     ):
+        super().__init__(engine.model)
+
         self._inference_timeout = inference_timeout
         self._engine = engine
 
