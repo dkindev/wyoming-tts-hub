@@ -214,8 +214,11 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
 
             # A Frame is a view over its Chunk's audio, and Wyoming's writer
             # hands the payload straight to the stream, so a byte view of the frame
-            # goes out without being copied. Wyoming annotates its audio event as
-            # taking bytes, which is narrower than what its writer accepts.
+            # goes out without being copied. It is cast to bytes because Wyoming
+            # announces the payload's length before writing it, and a view of the
+            # samples would announce that length in samples. Wyoming annotates its
+            # audio event as taking bytes, which is narrower than what its writer
+            # accepts.
             await self.write_event(
                 AudioChunk(
                     rate=chunk.sample_rate,

@@ -295,9 +295,10 @@ class TestSynthesize:
         for payload in payloads:
             assert isinstance(payload, memoryview)
             assert payload.format == "B", "the announced length must count bytes, not samples"
-            assert len(payload) == payload.nbytes
-            assert payload.obj.dtype == engine.sample_dtype, "the view must be over the Frame"
+            assert payload.obj.dtype == engine.sample_dtype, "a re-typed copy, not the audio"
             assert np.shares_memory(payload.obj, engine.emitted_audio[0]), "a Frame must not copy"
+
+        assert sum(len(payload) for payload in payloads) == engine.audio_size_bytes
 
 
 class TestRejections:
