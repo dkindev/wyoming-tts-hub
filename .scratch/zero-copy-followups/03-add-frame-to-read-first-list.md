@@ -1,7 +1,7 @@
 ---
 title: "Add Frame to the domain read-first list"
 labels:
-  - ready-for-agent
+  - completed
 created: 2026-10-15
 ---
 
@@ -16,9 +16,9 @@ language, so a term it omits is a term nobody is pointed at.
 
 ## Acceptance criteria
 
-- [ ] The read-first list of domain terms includes **Frame**, alongside **Chunk** and the rest
-- [ ] The glossary entry for **Frame** is left as written
-- [ ] No other entry in that list is changed
+- [x] The read-first list of domain terms includes **Frame**, alongside **Chunk** and the rest
+- [x] The glossary entry for **Frame** is left as written
+- [x] No other entry in that list is changed
 
 ## Blocked by
 
