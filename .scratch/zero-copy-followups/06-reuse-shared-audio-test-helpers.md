@@ -1,7 +1,7 @@
 ---
 title: "Reuse the shared audio-capture helpers in the streaming tests"
 labels:
-  - ready-for-agent
+  - completed
 created: 2026-10-15
 ---
 
@@ -18,11 +18,11 @@ streaming tests to drift apart.
 
 ## Acceptance criteria
 
-- [ ] The handler test that reads audio off the wire uses the shared helper instead of
+- [x] The handler test that reads audio off the wire uses the shared helper instead of
       inlining its own join
-- [ ] The strided-audio arrangement is expressed once, not restated per test
-- [ ] The single-element loop used to unwrap one event is gone
-- [ ] No test loses coverage: the same assertions still run
+- [x] The strided-audio arrangement is expressed once, not restated per test
+- [x] The single-element loop used to unwrap one event is gone
+- [x] No test loses coverage: the same assertions still run
 
 ## Blocked by
 

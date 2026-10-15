@@ -1,7 +1,7 @@
 import numpy as np
 
 from src.tts.models import TextFormat
-from tests.helpers import FakeTtsEngine, make_model, make_voice
+from tests.helpers import FakeTtsEngine, make_model, make_voice, sample_index_audio
 
 MODEL_ID = "v5_5_ru"
 
@@ -39,6 +39,4 @@ class TestContiguousAudio:
         assert chunks[0].sample_rate == engine.sample_rate
         assert chunks[0].bytes_per_sample == 2
         assert chunks[0].channels == 1
-        assert np.array_equal(
-            chunks[0].audio, np.arange(engine.samples_per_sentence, dtype=np.int16)
-        )
+        assert np.array_equal(chunks[0].audio, sample_index_audio(engine.samples_per_sentence))

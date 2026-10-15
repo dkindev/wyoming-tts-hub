@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 from wyoming.audio import AudioChunk, AudioStart
 from wyoming.error import Error
@@ -26,6 +25,8 @@ from tests.helpers import (
     make_hub,
     make_model,
     make_voice,
+    sample_index_audio,
+    streamed_audio_bytes,
 )
 
 SERVICE_NAME = "wyoming-tts-hub"
@@ -158,15 +159,6 @@ def audio_start_and_chunk_events(events):
     ]
 
 
-def audio_payload_bytes(events):
-    """Total PCM bytes across the audio-chunk events of a response."""
-    return sum(
-        len(AudioChunk.from_event(event).audio)
-        for event in events
-        if AudioChunk.is_type(event.type)
-    )
-
-
 class TestDescribe:
     """A Describe request is answered with one program advertising the Active Models' Voices."""
 
@@ -208,7 +200,7 @@ class TestSynthesize:
 
         assert events[0].type == "audio-start"
         assert events[-1].type == "audio-stop"
-        assert audio_payload_bytes(events) == engine.audio_size_bytes
+        assert len(streamed_audio_bytes(events)) == engine.audio_size_bytes
 
     async def test_announces_the_format_the_chunk_declares(self):
         client = WyomingClient()
@@ -219,7 +211,7 @@ class TestSynthesize:
         expected = (engine.sample_rate, engine.bytes_per_sample, engine.channels)
         assert announced_audio_format(events) == expected
         assert audio_formats(events) == {expected}
-        assert audio_payload_bytes(events) == engine.audio_size_bytes
+        assert len(streamed_audio_bytes(events)) == engine.audio_size_bytes
 
     async def test_audio_start_is_emitted_once_however_many_chunks_follow(self):
         client = WyomingClient()
@@ -258,10 +250,7 @@ class TestSynthesize:
 
         events = await client.send(make_handler(client, engine=engine), synthesize_event())
 
-        payload = b"".join(
-            AudioChunk.from_event(event).audio for event in events if AudioChunk.is_type(event.type)
-        )
-        assert payload == np.arange(samples, dtype=np.int16).tobytes()
+        assert streamed_audio_bytes(events) == sample_index_audio(samples).tobytes()
 
 
 class TestRejections:

@@ -241,8 +241,10 @@ class FakeTtsEngine(TtsEngine):
         dtype = self.sample_dtype
         if not self._strided_audio:
             return np.zeros(samples, dtype=dtype)
+
         gapped = np.empty(samples * 2, dtype=dtype)
-        gapped[::2] = np.arange(samples, dtype=dtype)
+        gapped[::2] = sample_index_audio(samples, dtype)
+
         return gapped[::2]
 
     async def warmup(self) -> None:
@@ -453,12 +455,13 @@ def announced_audio_format(events: list[Event]) -> AudioFormat:
 
 def audio_formats(events: list[Event]) -> set[AudioFormat]:
     """The format of every `AudioChunk` in a response."""
-    return {
-        AudioFormat(chunk.rate, chunk.width, chunk.channels)
-        for event in events
-        if AudioChunk.is_type(event.type)
-        for chunk in [AudioChunk.from_event(event)]
-    }
+    formats = set()
+    for event in events:
+        if AudioChunk.is_type(event.type):
+            chunk = AudioChunk.from_event(event)
+            formats.add(AudioFormat(chunk.rate, chunk.width, chunk.channels))
+
+    return formats
 
 
 def streamed_audio_bytes(events: list[Event]) -> bytes:
@@ -466,3 +469,13 @@ def streamed_audio_bytes(events: list[Event]) -> bytes:
     return b"".join(
         AudioChunk.from_event(event).audio for event in events if AudioChunk.is_type(event.type)
     )
+
+
+def sample_index_audio(samples: int, dtype: type = np.int16) -> np.ndarray:
+    """The sample values a TTS Engine asked for strided audio carries, one per sample.
+
+    A strided TTS Engine emits gaps between its samples and leaves the sample index
+    in them, so a test can tell a sample from its neighbour after the audio has been
+    made contiguous and streamed.
+    """
+    return np.arange(samples, dtype=dtype)
