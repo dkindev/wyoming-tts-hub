@@ -1,7 +1,7 @@
 ---
 title: "Reject audio that is not a sequence of samples"
 labels:
-  - ready-for-agent
+  - completed
 created: 2026-10-15
 ---
 
@@ -16,11 +16,11 @@ payload is already skipped on the wire, which is the right behaviour for silence
 
 ## Acceptance criteria
 
-- [ ] Constructing a TtsResult with zero-dimensional audio raises, naming what is wrong with
+- [x] Constructing a TtsResult with zero-dimensional audio raises, naming what is wrong with
       the audio
-- [ ] Empty audio remains accepted
-- [ ] A test covers the rejection, and existing audio tests are unchanged
-- [ ] The rejection happens before any bytes are written to a client
+- [x] Empty audio remains accepted
+- [x] A test covers the rejection, and existing audio tests are unchanged
+- [x] The rejection happens before any bytes are written to a client
 
 ## Blocked by
 

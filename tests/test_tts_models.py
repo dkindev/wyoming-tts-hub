@@ -264,3 +264,25 @@ class TestContiguousAudio:
         result = TtsResult(audio=audio, sample_rate=48000, bytes_per_sample=2, channels=1)
 
         assert result.audio is audio
+
+
+class TestAudioShape:
+    """Audio is a sequence of samples, because everything downstream frames it as one."""
+
+    def test_audio_without_a_sample_axis_is_rejected(self):
+        """Audio carrying a single sample and no sample axis is refused where it arrives."""
+        with pytest.raises(ValueError, match="sample"):
+            TtsResult(
+                audio=np.zeros((), dtype=np.int16),
+                sample_rate=48000,
+                bytes_per_sample=2,
+                channels=1,
+            )
+
+    def test_empty_audio_is_accepted(self):
+        """Audio with no samples at all is silence, which a Chunk is allowed to carry."""
+        result = TtsResult(
+            audio=np.zeros(0, dtype=np.int16), sample_rate=48000, bytes_per_sample=2, channels=1
+        )
+
+        assert result.audio.shape == (0,)

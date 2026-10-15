@@ -17,7 +17,7 @@ from wyoming.tts import (
 from src.handler import TtsEngineHubEventHandler
 from src.tts.data_storage import YamlDataStorage
 from src.tts.middleware import ResolveLanguageMiddleware
-from src.tts.models import PredefinedData
+from src.tts.models import PredefinedData, TtsResult
 from tests.helpers import (
     FakeTtsEngine,
     WyomingClient,
@@ -52,6 +52,18 @@ class ExplodingTtsEngine(FakeTtsEngine):
     async def _synthesize_pcm(self, text, voice, text_format, language=None):
         raise RuntimeError(FAILURE)
         yield  # pragma: no cover - unreachable, but makes this an async generator
+
+
+class SamplelessAudioTtsEngine(FakeTtsEngine):
+    """A TTS Engine that hands over audio with no sample axis to frame."""
+
+    async def _synthesize_pcm(self, text, voice, text_format, language=None):
+        yield TtsResult(
+            audio=np.zeros((), dtype=np.int16),
+            sample_rate=self.sample_rate,
+            bytes_per_sample=2,
+            channels=1,
+        )
 
 
 def make_storage(*, active_models=(MODEL_ID,), languages=(LANGUAGE,)):
@@ -342,6 +354,20 @@ class TestRejections:
         events = await client.send(make_handler(client), synthesize_event(text_format=text_format))
 
         assert events[0].type == "audio-start"
+
+
+class TestSamplelessAudio:
+    """Audio that cannot be framed is refused before a client is told anything about it."""
+
+    async def test_audio_with_no_sample_axis_is_never_streamed(self):
+        """A Chunk the TTS Engine cannot frame is answered with an error, not with audio."""
+        client = WyomingClient()
+        engine = SamplelessAudioTtsEngine(make_model(id=MODEL_ID))
+
+        events = await client.send(make_handler(client, engine=engine), synthesize_event())
+
+        assert audio_start_and_chunk_events(events) == []
+        assert Error.is_type(events[0].type)
 
 
 class TestErrorDetail:
