@@ -213,15 +213,16 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
                 )
                 send_start = False
 
-            # The protocol wants bytes, so the frame is turned into a byte view here,
-            # at the write, rather than copied into one by the TTS Engine Hub. The
-            # view is cast to bytes because the frame's length is announced in them.
+            # A Frame is a view over its Chunk's audio, and Wyoming's writer hands
+            # the payload straight to the stream, so a byte view of the frame goes
+            # out without being copied. Wyoming's audio chunk is annotated as
+            # bytes, which is narrower than what its writer actually accepts.
             await self.write_event(
                 AudioChunk(
                     rate=chunk.sample_rate,
                     width=chunk.bytes_per_sample,
                     channels=chunk.channels,
-                    audio=chunk.audio.view(np.uint8).data,
+                    audio=chunk.audio.view(np.uint8).data,  # type: ignore[arg-type]
                 ).event()
             )
 
