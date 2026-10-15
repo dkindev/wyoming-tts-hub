@@ -471,11 +471,11 @@ def streamed_audio_bytes(events: list[Event]) -> bytes:
     )
 
 
-def sample_index_audio(samples: int, dtype: type = np.int16) -> np.ndarray:
+def sample_index_audio(samples: int, dtype: type) -> np.ndarray:
     """The sample values a TTS Engine asked for strided audio carries, one per sample.
 
-    A strided TTS Engine emits gaps between its samples and leaves the sample index
-    in them, so a test can tell a sample from its neighbour after the audio has been
-    made contiguous and streamed.
+    A strided TTS Engine lays its samples out with a gap after each one, so a test can
+    tell a sample from its neighbour by the value in it. The gaps are dropped when the
+    audio is made contiguous; this is what the samples are worth.
     """
     return np.arange(samples, dtype=dtype)

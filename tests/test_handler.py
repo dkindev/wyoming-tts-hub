@@ -250,7 +250,10 @@ class TestSynthesize:
 
         events = await client.send(make_handler(client, engine=engine), synthesize_event())
 
-        assert streamed_audio_bytes(events) == sample_index_audio(samples).tobytes()
+        assert (
+            streamed_audio_bytes(events)
+            == sample_index_audio(samples, engine.sample_dtype).tobytes()
+        )
 
 
 class TestRejections:

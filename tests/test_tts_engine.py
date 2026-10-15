@@ -39,4 +39,6 @@ class TestContiguousAudio:
         assert chunks[0].sample_rate == engine.sample_rate
         assert chunks[0].bytes_per_sample == 2
         assert chunks[0].channels == 1
-        assert np.array_equal(chunks[0].audio, sample_index_audio(engine.samples_per_sentence))
+        assert np.array_equal(
+            chunks[0].audio, sample_index_audio(engine.samples_per_sentence, engine.sample_dtype)
+        )
