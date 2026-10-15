@@ -1,7 +1,7 @@
 ---
 title: "Build the wire byte view with a cast, not a dtype view"
 labels:
-  - ready-for-agent
+  - completed
 created: 2026-10-15
 ---
 
@@ -23,13 +23,13 @@ dtype view refuses.
 
 ## Acceptance criteria
 
-- [ ] The announced payload length always equals the bytes written, for any audio a TTS
+- [x] The announced payload length always equals the bytes written, for any audio a TTS
       Engine can yield
-- [ ] The handler builds one memoryview per frame rather than a buffer view plus a memoryview
-- [ ] The audio still reaches the socket as a view; Frames continue to share their Chunk's buffer
-- [ ] Static analysis reports the same single known annotation mismatch at that site, with the
+- [x] The handler builds one memoryview per frame rather than a buffer view plus a memoryview
+- [x] The audio still reaches the socket as a view; Frames continue to share their Chunk's buffer
+- [x] Static analysis reports the same single known annotation mismatch at that site, with the
       same explanatory note
-- [ ] The full test suite passes and no other static-analysis finding changes
+- [x] The full test suite passes and no other static-analysis finding changes
 
 ## Blocked by
 

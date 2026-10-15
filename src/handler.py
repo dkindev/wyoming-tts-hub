@@ -1,4 +1,3 @@
-import numpy as np
 from loguru import logger
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.error import Error
@@ -222,7 +221,7 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
                     rate=chunk.sample_rate,
                     width=chunk.bytes_per_sample,
                     channels=chunk.channels,
-                    audio=chunk.audio.view(np.uint8).data,  # type: ignore[arg-type]
+                    audio=memoryview(chunk.audio).cast("B"),  # type: ignore[arg-type]
                 ).event()
             )
 

@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 from wyoming.audio import AudioChunk, AudioStart
 from wyoming.error import Error
@@ -159,6 +160,27 @@ def audio_start_and_chunk_events(events):
     ]
 
 
+class RecordingHandler:
+    """A handler that keeps the events it wrote, so a test can read their payloads.
+
+    A client parses events back off the wire, which turns every payload into bytes and
+    hides what the handler actually handed to the writer.
+    """
+
+    def __init__(self, handler):
+        self._handler = handler
+        self._send = handler.write_event
+        self.written: list[Event] = []
+        handler.write_event = self._write
+
+    async def _write(self, event):
+        self.written.append(event)
+        await self._send(event)
+
+    async def handle_event(self, event):
+        return await self._handler.handle_event(event)
+
+
 class TestDescribe:
     """A Describe request is answered with one program advertising the Active Models' Voices."""
 
@@ -254,6 +276,28 @@ class TestSynthesize:
             streamed_audio_bytes(events)
             == sample_index_audio(samples, engine.sample_dtype).tobytes()
         )
+
+    async def test_audio_reaches_the_wire_as_a_byte_view_of_the_engines_buffer(self):
+        """Each Frame is written as one byte view over the audio the TTS Engine produced.
+
+        Wyoming announces a payload's length before writing the payload, so a Frame has
+        to be addressed a byte at a time for the announced length to be the number of
+        bytes that follow it. A view of the samples would announce its length in samples.
+        """
+        client = WyomingClient()
+        engine = make_engine()
+        handler = RecordingHandler(make_handler(client, engine=engine))
+
+        await client.send(handler, synthesize_event())
+
+        payloads = [event.payload for event in handler.written if AudioChunk.is_type(event.type)]
+        assert payloads, "expected audio chunks to be written"
+        for payload in payloads:
+            assert isinstance(payload, memoryview)
+            assert payload.format == "B", "the announced length must count bytes, not samples"
+            assert len(payload) == payload.nbytes
+            assert payload.obj.dtype == engine.sample_dtype, "the view must be over the Frame"
+            assert np.shares_memory(payload.obj, engine.emitted_audio[0]), "a Frame must not copy"
 
 
 class TestRejections:
