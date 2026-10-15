@@ -173,6 +173,8 @@ class FakeTtsEngine(TtsEngine):
     so callers can ask the fake what it emitted rather than restating the numbers.
     Counts warmups and closes so lifecycle tests can assert on them. When `hold` is
     given, synthesis blocks on it, letting a test observe concurrency from outside.
+    When `strided_audio` is given, the audio it emits has gaps between its samples,
+    so tests can hand a TTS Engine a layout it did not choose.
     """
 
     def __init__(
@@ -183,6 +185,7 @@ class FakeTtsEngine(TtsEngine):
         samples_per_sentence: int = 48000,
         warmup_error: Exception | None = None,
         hold: asyncio.Event | None = None,
+        strided_audio: bool = False,
     ):
         super().__init__(model)
         self.sample_rate = sample_rate
@@ -194,6 +197,7 @@ class FakeTtsEngine(TtsEngine):
         self.active_syntheses = 0
         self.peak_syntheses = 0
         self._hold = hold
+        self._strided_audio = strided_audio
 
     @property
     def synthesized_texts(self) -> list[str]:
@@ -209,6 +213,14 @@ class FakeTtsEngine(TtsEngine):
     def audio_size_bytes(self) -> int:
         """Total audio bytes this engine emits per sentence, at 2 bytes per sample."""
         return self.samples_per_sentence * 2
+
+    def _audio(self) -> np.ndarray:
+        """The audio this engine emits, with gaps between samples when asked for."""
+        if not self._strided_audio:
+            return np.zeros(self.samples_per_sentence, dtype=np.int16)
+        gapped = np.empty(self.samples_per_sentence * 2, dtype=np.int16)
+        gapped[::2] = np.arange(self.samples_per_sentence, dtype=np.int16)
+        return gapped[::2]
 
     async def warmup(self) -> None:
         self.warmup_count += 1
@@ -237,7 +249,7 @@ class FakeTtsEngine(TtsEngine):
             if self._hold is not None:
                 await self._hold.wait()
             yield TtsResult(
-                audio=np.zeros(self.samples_per_sentence, dtype=np.int16),
+                audio=self._audio(),
                 sample_rate=self.sample_rate,
                 bytes_per_sample=2,
                 channels=1,

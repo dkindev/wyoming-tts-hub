@@ -242,3 +242,25 @@ class TestTTSResult:
         assert result.sample_rate == 48000
         assert result.bytes_per_sample == 2
         assert result.channels == 1
+
+
+class TestContiguousAudio:
+    """A Chunk's audio can be addressed as raw bytes, without a copy on the way."""
+
+    def test_strided_audio_becomes_contiguous(self):
+        """Audio with gaps between its samples reaches the caller as one run of samples."""
+        strided = np.zeros(8, dtype=np.int16)[::2]
+        assert not strided.flags["C_CONTIGUOUS"]
+
+        result = TtsResult(audio=strided, sample_rate=48000, bytes_per_sample=2, channels=1)
+
+        assert result.audio.flags["C_CONTIGUOUS"]
+        assert np.array_equal(result.audio, strided)
+
+    def test_contiguous_audio_is_not_copied(self):
+        """Audio already contiguous is handed straight over, so no copy is paid for."""
+        audio = np.zeros(8, dtype=np.int16)
+
+        result = TtsResult(audio=audio, sample_rate=48000, bytes_per_sample=2, channels=1)
+
+        assert result.audio is audio

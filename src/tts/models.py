@@ -82,3 +82,16 @@ class TtsResult:
     sample_rate: int
     bytes_per_sample: int
     channels: int
+
+    def __post_init__(self) -> None:
+        """Guarantee the audio is C-contiguous, so it can be addressed as raw bytes.
+
+        A TTS Engine synthesizes into a buffer whose layout it does not choose, so the
+        guarantee is made here rather than left to each TTS Engine to remember. Audio
+        that is already contiguous is kept as it is, so no copy is paid for it.
+        """
+        audio = self.audio
+        # The TTS Engine Hub still hands over frames as bytes, so only a strided
+        # array is a layout this needs fixing.
+        if isinstance(audio, np.ndarray) and not audio.flags["C_CONTIGUOUS"]:
+            object.__setattr__(self, "audio", np.ascontiguousarray(audio))
