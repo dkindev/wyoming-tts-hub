@@ -17,7 +17,9 @@ _Avoid_: TTS server, orchestrator
 
 **TTS Engine**:
 A backend that synthesizes speech from text input for one provider family (e.g.,
-Silero, Qwen3-tts, an OpenAI-compatible API). Produces raw PCM audio output.
+Silero, Qwen3-tts, an OpenAI-compatible API). Produces raw PCM audio output. That audio
+is streamed as **Frames** read straight from the **Chunk** it arrived in, so an Engine
+must not recycle or mutate a **Chunk** it has yielded.
 _Avoid_: Speech generator, voice synthesizer
 
 **Model**:
@@ -74,12 +76,16 @@ _Avoid_: Segment, fragment
 **Chunk**:
 Raw PCM audio produced by the **TTS Engine** for streaming over the
 Wyoming protocol. Its samples are C-contiguous, so the Wyoming handler can turn a
-Chunk into bytes without copying it.
+Chunk into bytes without copying it. Yielding a Chunk hands over the buffer behind it:
+the **TTS Engine Hub** draws **Frames** from that buffer for as long as the response
+streams, so a **TTS Engine** must not recycle or mutate audio it has yielded.
 _Avoid_: Audio packet, byte fragment, PCM segment
 
 **Frame**:
 A bounded slice of one **Chunk** in samples, sized by the configured frame duration.
-Frames are views over their **Chunk**'s audio, not copies of it.
+Frames are views over their **Chunk**'s audio, not copies of it, so the **TTS Engine
+Hub** is reading that audio for as long as it streams. Nothing may write to it in the
+meantime — including the **TTS Engine** that produced it.
 _Avoid_: Packet, block, window
 
 **Text normalization**:

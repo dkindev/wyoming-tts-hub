@@ -1,7 +1,7 @@
 ---
 title: "State the frame-aliasing invariant for future TTS Engines"
 labels:
-  - ready-for-agent
+  - completed
 created: 2026-10-15
 ---
 
@@ -19,10 +19,10 @@ stop it.
 
 ## Acceptance criteria
 
-- [ ] The glossary states that Frames are views over their Chunk's audio, and that a TTS
+- [x] The glossary states that Frames are views over their Chunk's audio, and that a TTS
       Engine must not recycle or mutate the audio it has yielded
-- [ ] The invariant is recorded where an engine author meets the Chunk and Frame terms
-- [ ] The glossary's single-context layout is respected: no separate glossary file is created
+- [x] The invariant is recorded where an engine author meets the Chunk and Frame terms
+- [x] The glossary's single-context layout is respected: no separate glossary file is created
 
 ## Blocked by
 
