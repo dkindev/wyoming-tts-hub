@@ -216,8 +216,10 @@ class TestSynthesize:
 
         events = await client.send(make_handler(client, engine=engine), synthesize_event())
 
-        assert announced_audio_format(events) == (engine.sample_rate, 4, 2)
-        assert audio_formats(events) == {(engine.sample_rate, 4, 2)}
+        expected = (engine.sample_rate, engine.bytes_per_sample, engine.channels)
+        assert announced_audio_format(events) == expected
+        assert audio_formats(events) == {expected}
+        assert audio_payload_bytes(events) == engine.audio_size_bytes
 
     async def test_audio_start_is_emitted_once_however_many_chunks_follow(self):
         client = WyomingClient()

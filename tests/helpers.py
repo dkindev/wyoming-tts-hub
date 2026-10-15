@@ -25,7 +25,7 @@ from src.tts.models import (
     VoiceNormalization,
 )
 
-SAMPLE_DTYPES = {1: np.int8, 2: np.int16, 4: np.int32}
+SAMPLE_DTYPES = {2: np.int16, 4: np.int32}
 """Array dtype holding one sample, keyed by the bytes per sample an engine declares."""
 
 
@@ -223,8 +223,8 @@ class FakeTtsEngine(TtsEngine):
 
     @property
     def audio_size_bytes(self) -> int:
-        """Total audio bytes this engine emits per sentence, at its declared width."""
-        return self.samples_per_sentence * self.bytes_per_sample
+        """Total audio bytes this engine emits per sentence, at the format it declares."""
+        return self.samples_per_sentence * self.bytes_per_sample * self.channels
 
     @property
     def sample_dtype(self) -> type:
@@ -232,12 +232,17 @@ class FakeTtsEngine(TtsEngine):
         return SAMPLE_DTYPES[self.bytes_per_sample]
 
     def _audio(self) -> np.ndarray:
-        """The audio this engine emits, with gaps between samples when asked for."""
+        """The audio this engine emits, with gaps between samples when asked for.
+
+        One sample is emitted per channel, so a Chunk declaring more than one channel
+        carries more samples than `samples_per_sentence` names.
+        """
+        samples = self.samples_per_sentence * self.channels
         dtype = self.sample_dtype
         if not self._strided_audio:
-            return np.zeros(self.samples_per_sentence, dtype=dtype)
-        gapped = np.empty(self.samples_per_sentence * 2, dtype=dtype)
-        gapped[::2] = np.arange(self.samples_per_sentence, dtype=dtype)
+            return np.zeros(samples, dtype=dtype)
+        gapped = np.empty(samples * 2, dtype=dtype)
+        gapped[::2] = np.arange(samples, dtype=dtype)
         return gapped[::2]
 
     async def warmup(self) -> None:

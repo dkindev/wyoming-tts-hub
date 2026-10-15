@@ -142,10 +142,9 @@ class TestSuccessfulSynthesis:
 
     async def test_frames_carry_the_chunks_own_format(self):
         """A Chunk that is not 16-bit mono is framed with the width and channels it declares."""
-        engine = make_engine(sample_rate=48000, bytes_per_sample=4, channels=2)
-        hub = make_hub(engine=engine, frame_duration=50)
+        engine = make_engine(bytes_per_sample=4, channels=2)
 
-        frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
+        frames = await collect_hub_sentences(make_hub(engine=engine), "hello", VOICE_ID)
 
         assert len(frames) > 0
         for frame in frames:

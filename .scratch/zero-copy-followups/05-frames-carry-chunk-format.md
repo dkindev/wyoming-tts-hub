@@ -1,5 +1,5 @@
 ---
-title: "Frames carry the Chunk's announced width and channels (already satisfied)"
+title: "Test that a Frame carries the Chunk's own format"
 labels:
   - completed
 created: 2026-10-15
