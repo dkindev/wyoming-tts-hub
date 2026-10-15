@@ -1,7 +1,7 @@
 ---
 title: "Frame audio without copying"
 labels:
-  - ready-for-agent
+  - completed
 created: 2026-10-15
 ---
 
@@ -25,8 +25,10 @@ are all unchanged.
       copy of it
 - [x] The Wyoming handler converts each frame to a byte view at the write, so the bytes on
       the wire are unchanged
-- [x] A regression test asserts that all frames of one Sentence share memory with each
-      other, and therefore fails if a per-frame copy is reintroduced
+- [x] A regression test asserts that every Frame of a Sentence shares memory with the audio
+      the TTS Engine synthesised, and therefore fails if a per-frame copy is reintroduced.
+      The Frames cannot be checked against each other, because consecutive Frames cover
+      disjoint ranges of that buffer
 - [x] Total audio bytes across a Sentence's frames still equal what the TTS Engine produced
 - [x] Frame-size and trailing-partial-frame assertions express their expectations in samples
 - [x] Static analysis no longer reports the framing step handing bytes to an array-typed field

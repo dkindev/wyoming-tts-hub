@@ -1,7 +1,7 @@
 ---
 title: "Prove streamed audio is unchanged on a real Model"
 labels:
-  - ready-for-agent
+  - completed
 created: 2026-10-15
 ---
 
