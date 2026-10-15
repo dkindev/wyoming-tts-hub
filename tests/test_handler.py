@@ -54,7 +54,7 @@ class ExplodingTtsEngine(FakeTtsEngine):
         yield  # pragma: no cover - unreachable, but makes this an async generator
 
 
-class SamplelessAudioTtsEngine(FakeTtsEngine):
+class NoSampleAxisTtsEngine(FakeTtsEngine):
     """A TTS Engine that hands over audio with no sample axis to frame."""
 
     async def _synthesize_pcm(self, text, voice, text_format, language=None):
@@ -356,13 +356,13 @@ class TestRejections:
         assert events[0].type == "audio-start"
 
 
-class TestSamplelessAudio:
+class TestAudioWithNoSampleAxis:
     """Audio that cannot be framed is refused before a client is told anything about it."""
 
     async def test_audio_with_no_sample_axis_is_never_streamed(self):
         """A Chunk the TTS Engine cannot frame is answered with an error, not with audio."""
         client = WyomingClient()
-        engine = SamplelessAudioTtsEngine(make_model(id=MODEL_ID))
+        engine = NoSampleAxisTtsEngine(make_model(id=MODEL_ID))
 
         events = await client.send(make_handler(client, engine=engine), synthesize_event())
 

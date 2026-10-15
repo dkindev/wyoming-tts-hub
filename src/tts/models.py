@@ -84,21 +84,23 @@ class TtsResult:
     channels: int
 
     def __post_init__(self) -> None:
-        """Refuse audio that is not a sequence of samples, and keep what is contiguous.
+        """Refuse audio with no sample axis, and keep audio that is contiguous.
 
         A TTS Engine synthesizes into a buffer whose layout it does not choose, so the
         contiguity guarantee is made here rather than left to each Engine to remember.
         Audio that is already contiguous is kept as it is, so no copy is paid for it.
 
-        The shape is checked first because everything downstream frames audio by
-        slicing a sample axis: a Chunk with none cannot be framed, let alone announced
-        to a client. Failing here names the audio instead of surfacing as a numpy error
-        at the Wyoming write.
+        Audio with no sample axis is refused first, because the TTS Engine Hub frames
+        audio by slicing a leading axis: a Chunk without one fails there as an index
+        error, long after the TTS Engine that produced it has moved on, and it is the
+        Engine that can fix it.
+
+        Empty audio is not refused. A Chunk carrying no samples is silence, and an empty
+        payload is skipped on the wire.
         """
         if self.audio.ndim == 0:
             raise ValueError(
-                f"Audio must be a sequence of samples, but got a single sample with no "
-                f"sample axis (shape {self.audio.shape})"
+                f"Audio must have a sample axis to frame, but got shape {self.audio.shape}"
             )
 
         if not self.audio.flags["C_CONTIGUOUS"]:

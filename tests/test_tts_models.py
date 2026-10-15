@@ -266,8 +266,8 @@ class TestContiguousAudio:
         assert result.audio is audio
 
 
-class TestAudioShape:
-    """Audio is a sequence of samples, because everything downstream frames it as one."""
+class TestSampleAxis:
+    """Audio needs a sample axis, because the TTS Engine Hub frames audio by slicing one."""
 
     def test_audio_without_a_sample_axis_is_rejected(self):
         """Audio carrying a single sample and no sample axis is refused where it arrives."""
