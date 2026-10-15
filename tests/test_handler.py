@@ -21,6 +21,8 @@ from src.tts.models import PredefinedData
 from tests.helpers import (
     FakeTtsEngine,
     WyomingClient,
+    announced_audio_format,
+    audio_formats,
     make_hub,
     make_model,
     make_voice,
@@ -68,10 +70,13 @@ def make_storage(*, active_models=(MODEL_ID,), languages=(LANGUAGE,)):
     )
 
 
-def make_engine(*, sample_rate=SAMPLE_RATE):
+def make_engine(*, sample_rate=SAMPLE_RATE, **kwargs):
     """Return a fake TTS Engine holding one second of audio at `sample_rate`."""
     return FakeTtsEngine(
-        make_model(id=MODEL_ID), sample_rate=sample_rate, samples_per_sentence=sample_rate
+        make_model(id=MODEL_ID),
+        sample_rate=sample_rate,
+        samples_per_sentence=sample_rate,
+        **kwargs,
     )
 
 
@@ -204,6 +209,15 @@ class TestSynthesize:
         assert events[0].type == "audio-start"
         assert events[-1].type == "audio-stop"
         assert audio_payload_bytes(events) == engine.audio_size_bytes
+
+    async def test_announces_the_format_the_chunk_declares(self):
+        client = WyomingClient()
+        engine = make_engine(bytes_per_sample=4, channels=2)
+
+        events = await client.send(make_handler(client, engine=engine), synthesize_event())
+
+        assert announced_audio_format(events) == (engine.sample_rate, 4, 2)
+        assert audio_formats(events) == {(engine.sample_rate, 4, 2)}
 
     async def test_audio_start_is_emitted_once_however_many_chunks_follow(self):
         client = WyomingClient()

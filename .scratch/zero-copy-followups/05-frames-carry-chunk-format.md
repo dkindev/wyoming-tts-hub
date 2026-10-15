@@ -28,6 +28,20 @@ produces, which is the Engine's to declare.
 - [x] No 16-bit mono hardcode remains in the framing path
 - [x] The only remaining 16-bit mono declaration is a TTS Engine declaring the format it
       produces
+- [x] A test covers a Chunk whose width and channels are not 16-bit mono, at the Hub and at
+      the Wyoming handler, so the property cannot silently lapse
+
+## Notes
+
+The first three criteria were satisfied before this ticket was closed, and closing it that
+way was wrong in one respect: nothing tested them. The only framing test asserted 16-bit
+mono, which is also what the fake TTS Engine produced, so it passed just as happily with
+the framing path hardcoding 16-bit mono again. Reinstating the hardcode left every test
+green.
+
+The fake TTS Engine now declares the width and channels it produces, and audio is typed
+to match, so a Chunk can be something other than 16-bit mono. Both new tests fail if the
+format stops being carried, and both pass on the current code.
 
 ## Blocked by
 

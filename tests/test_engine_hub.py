@@ -68,7 +68,14 @@ def make_hub(
     )
 
 
-def make_engine(*, model_id=MODEL_ID, sample_rate=48000, samples_per_sentence=None):
+def make_engine(
+    *,
+    model_id=MODEL_ID,
+    sample_rate=48000,
+    samples_per_sentence=None,
+    bytes_per_sample=2,
+    channels=1,
+):
     """Return a FakeTtsEngine holding one second of audio unless told otherwise."""
     return FakeTtsEngine(
         make_model(id=model_id),
@@ -76,6 +83,8 @@ def make_engine(*, model_id=MODEL_ID, sample_rate=48000, samples_per_sentence=No
         samples_per_sentence=(
             samples_per_sentence if samples_per_sentence is not None else sample_rate
         ),
+        bytes_per_sample=bytes_per_sample,
+        channels=channels,
     )
 
 
@@ -130,6 +139,18 @@ class TestSuccessfulSynthesis:
             assert frame.sample_rate == 24000
             assert frame.bytes_per_sample == 2
             assert frame.channels == 1
+
+    async def test_frames_carry_the_chunks_own_format(self):
+        """A Chunk that is not 16-bit mono is framed with the width and channels it declares."""
+        engine = make_engine(sample_rate=48000, bytes_per_sample=4, channels=2)
+        hub = make_hub(engine=engine, frame_duration=50)
+
+        frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert len(frames) > 0
+        for frame in frames:
+            assert frame.bytes_per_sample == 4
+            assert frame.channels == 2
 
     @pytest.mark.parametrize(
         ("frame_duration_ms", "sample_rate"),

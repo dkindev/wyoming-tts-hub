@@ -25,6 +25,9 @@ from src.tts.models import (
     VoiceNormalization,
 )
 
+SAMPLE_DTYPES = {1: np.int8, 2: np.int16, 4: np.int32}
+"""Array dtype holding one sample, keyed by the bytes per sample an engine declares."""
+
 
 def hash_models_yml(yml_path: str) -> str:
     """Compute SHA256 hex digest of a models.yml file."""
@@ -190,6 +193,8 @@ class FakeTtsEngine(TtsEngine):
         warmup_error: Exception | None = None,
         hold: asyncio.Event | None = None,
         strided_audio: bool = False,
+        bytes_per_sample: int = 2,
+        channels: int = 1,
     ):
         super().__init__(model)
         self.sample_rate = sample_rate
@@ -201,6 +206,8 @@ class FakeTtsEngine(TtsEngine):
         self.emitted_audio: list[np.ndarray] = []
         self.active_syntheses = 0
         self.peak_syntheses = 0
+        self.bytes_per_sample = bytes_per_sample
+        self.channels = channels
         self._hold = hold
         self._strided_audio = strided_audio
 
@@ -216,15 +223,21 @@ class FakeTtsEngine(TtsEngine):
 
     @property
     def audio_size_bytes(self) -> int:
-        """Total audio bytes this engine emits per sentence, at 2 bytes per sample."""
-        return self.samples_per_sentence * 2
+        """Total audio bytes this engine emits per sentence, at its declared width."""
+        return self.samples_per_sentence * self.bytes_per_sample
+
+    @property
+    def sample_dtype(self) -> type:
+        """The array dtype holding one sample at the width this engine declares."""
+        return SAMPLE_DTYPES[self.bytes_per_sample]
 
     def _audio(self) -> np.ndarray:
         """The audio this engine emits, with gaps between samples when asked for."""
+        dtype = self.sample_dtype
         if not self._strided_audio:
-            return np.zeros(self.samples_per_sentence, dtype=np.int16)
-        gapped = np.empty(self.samples_per_sentence * 2, dtype=np.int16)
-        gapped[::2] = np.arange(self.samples_per_sentence, dtype=np.int16)
+            return np.zeros(self.samples_per_sentence, dtype=dtype)
+        gapped = np.empty(self.samples_per_sentence * 2, dtype=dtype)
+        gapped[::2] = np.arange(self.samples_per_sentence, dtype=dtype)
         return gapped[::2]
 
     async def warmup(self) -> None:
@@ -258,8 +271,8 @@ class FakeTtsEngine(TtsEngine):
             yield TtsResult(
                 audio=audio,
                 sample_rate=self.sample_rate,
-                bytes_per_sample=2,
-                channels=1,
+                bytes_per_sample=self.bytes_per_sample,
+                channels=self.channels,
             )
         finally:
             self.active_syntheses -= 1
