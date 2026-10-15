@@ -213,10 +213,10 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
                 )
                 send_start = False
 
-            # A Frame is a view over its Chunk's audio, and Wyoming's writer hands
-            # the payload straight to the stream, so a byte view of the frame goes
-            # out without being copied. Wyoming's audio chunk is annotated as
-            # bytes, which is narrower than what its writer actually accepts.
+            # A Frame is a view over its Chunk's audio, and Wyoming's writer
+            # hands the payload straight to the stream, so a byte view of the frame
+            # goes out without being copied. Wyoming annotates its audio event as
+            # taking bytes, which is narrower than what its writer accepts.
             await self.write_event(
                 AudioChunk(
                     rate=chunk.sample_rate,

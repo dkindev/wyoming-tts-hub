@@ -11,12 +11,14 @@ The landed zero-copy tickets describe the behaviour that actually shipped, so th
 agent who reads them is not misled by acceptance criteria marked done that the code does
 not satisfy.
 
-Two criteria drifted during implementation. The contiguity guarantee was specified as the
+Three criteria drifted during implementation. The contiguity guarantee was specified as the
 Silero TTS Engine's job and shipped as a guarantee on the shared audio type instead — a
 better home, but not what the criterion says. The shared-memory regression test was
 specified as Frames sharing memory with each other, which is unsatisfiable because Frames
 cover disjoint ranges; what the test asserts, and why, is Frames sharing memory with the
-Chunk they came from.
+Chunk they came from. And "existing tests pass unchanged" hid that the shared fake TTS
+Engine gained a strided-audio option, and that pre-existing framing assertions were
+rewritten to count samples rather than bytes.
 
 ## Acceptance criteria
 

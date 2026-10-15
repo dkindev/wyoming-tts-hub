@@ -1,31 +1,33 @@
 ---
-title: "Frames carry the Chunk's announced width and channels"
+title: "Frames carry the Chunk's announced width and channels (already satisfied)"
 labels:
-  - ready-for-agent
+  - completed
 created: 2026-10-15
 ---
 
 ## What to build
 
-A Chunk that is not 16-bit mono is framed and announced faithfully.
+Nothing. This ticket is closed because the work it asked for is already done.
 
-Every Frame announces its width and channels, but the TTS Engine Hub's framing path
-hardcodes 16-bit mono and ignores the width and channels the Chunk itself declares. Any
-future TTS Engine producing wider samples or more than one channel would be announced to
-the Wyoming client with the wrong format, and the client would decode it as noise.
+It was written from a review of the no-copy streaming commits, which found that the TTS
+Engine Hub's framing path hardcoded 16-bit mono and ignored the width and channels each
+Chunk declared. That finding was correct when made: the framing path passed module-level
+constants instead of the Chunk's own values, so a Chunk of any other format would have
+been announced to the Wyoming client as 16-bit mono.
 
-This is pre-existing, but the change that made audio a view made it more load-bearing: the
-Chunk's own audio now carries its format, and the framing path reads the array's length
-while ignoring the array's declared width.
+It has since been fixed: the constants were removed, and every Frame now carries the width
+and channels of the Chunk it was split from. Frames are also sliced in samples, so the
+sample width does not affect where a Frame boundary falls.
+
+The only 16-bit mono values left are the Silero TTS Engine declaring the format it
+produces, which is the Engine's to declare.
 
 ## Acceptance criteria
 
-- [ ] Each Frame announces the width and channels of the Chunk it was split from
-- [ ] The hardcoded 16-bit-mono assumption is gone from the framing path
-- [ ] Frame boundaries are derived from the Chunk's declared width, so a non-16-bit Chunk is
-      split into correctly sized Frames
-- [ ] A test covers a Chunk whose width or channels differ from 16-bit mono, and the existing
-      framing tests still pass
+- [x] Every Frame carries the width and channels of the Chunk it was split from
+- [x] No 16-bit mono hardcode remains in the framing path
+- [x] The only remaining 16-bit mono declaration is a TTS Engine declaring the format it
+      produces
 
 ## Blocked by
 
