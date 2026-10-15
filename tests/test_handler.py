@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 from wyoming.audio import AudioChunk, AudioStart
 from wyoming.error import Error
@@ -223,6 +224,28 @@ class TestSynthesize:
         for event in audio:
             parsed = parsed_audio(event)
             assert (parsed.rate, parsed.width, parsed.channels) == (SAMPLE_RATE, 2, 1)
+
+    async def test_audio_bytes_are_the_engines_audio_byte_for_byte(self):
+        """The bytes a client receives are the audio the TTS Engine produced, unchanged.
+
+        The Engine is asked for strided audio, so the frames the Hub streams are views
+        of it and the Wyoming handler is the one place that audio becomes bytes.
+        """
+        samples = 64
+        client = WyomingClient()
+        engine = FakeTtsEngine(
+            make_model(id=MODEL_ID),
+            sample_rate=SAMPLE_RATE,
+            samples_per_sentence=samples,
+            strided_audio=True,
+        )
+
+        events = await client.send(make_handler(client, engine=engine), synthesize_event())
+
+        payload = b"".join(
+            AudioChunk.from_event(event).audio for event in events if AudioChunk.is_type(event.type)
+        )
+        assert payload == np.arange(samples, dtype=np.int16).tobytes()
 
 
 class TestRejections:

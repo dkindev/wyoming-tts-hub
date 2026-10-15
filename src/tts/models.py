@@ -90,8 +90,5 @@ class TtsResult:
         guarantee is made here rather than left to each TTS Engine to remember. Audio
         that is already contiguous is kept as it is, so no copy is paid for it.
         """
-        audio = self.audio
-        # The TTS Engine Hub still hands over frames as bytes, so only a strided
-        # array is a layout this needs fixing.
-        if isinstance(audio, np.ndarray) and not audio.flags["C_CONTIGUOUS"]:
-            object.__setattr__(self, "audio", np.ascontiguousarray(audio))
+        if not self.audio.flags["C_CONTIGUOUS"]:
+            object.__setattr__(self, "audio", np.ascontiguousarray(self.audio))

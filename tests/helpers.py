@@ -174,7 +174,9 @@ class FakeTtsEngine(TtsEngine):
     Counts warmups and closes so lifecycle tests can assert on them. When `hold` is
     given, synthesis blocks on it, letting a test observe concurrency from outside.
     When `strided_audio` is given, the audio it emits has gaps between its samples,
-    so tests can hand a TTS Engine a layout it did not choose.
+    so tests can hand a TTS Engine a layout it did not choose. `emitted_audio` holds
+    the array each synthesis handed over, so callers can ask what was emitted rather
+    than inferring it from the result.
     """
 
     def __init__(
@@ -194,6 +196,7 @@ class FakeTtsEngine(TtsEngine):
         self.warmup_count = 0
         self.close_count = 0
         self.requests: list[tuple[str, Voice, TextFormat, str | None]] = []
+        self.emitted_audio: list[np.ndarray] = []
         self.active_syntheses = 0
         self.peak_syntheses = 0
         self._hold = hold
@@ -248,8 +251,10 @@ class FakeTtsEngine(TtsEngine):
         try:
             if self._hold is not None:
                 await self._hold.wait()
+            audio = self._audio()
+            self.emitted_audio.append(audio)
             yield TtsResult(
-                audio=self._audio(),
+                audio=audio,
                 sample_rate=self.sample_rate,
                 bytes_per_sample=2,
                 channels=1,

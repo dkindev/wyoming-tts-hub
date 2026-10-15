@@ -72,9 +72,15 @@ as a single audio response.
 _Avoid_: Segment, fragment
 
 **Chunk**:
-Raw PCM audio bytes produced by the **TTS Engine** for streaming over the
-Wyoming protocol.
+Raw PCM audio produced by the **TTS Engine** for streaming over the
+Wyoming protocol. Its samples are C-contiguous, so the Wyoming handler can turn a
+Chunk into bytes without copying it.
 _Avoid_: Audio packet, byte fragment, PCM segment
+
+**Frame**:
+A bounded slice of one **Chunk** in samples, sized by the configured frame duration.
+Frames are views over their **Chunk**'s audio, not copies of it.
+_Avoid_: Packet, block, window
 
 **Text normalization**:
 The preprocessing step applied by the **TTS Engine Hub** to text before TTS

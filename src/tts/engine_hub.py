@@ -227,14 +227,18 @@ class TtsEngineHub:
                 pass
 
     def _generate_frames(self, chunk: TtsResult) -> Iterator[TtsResult]:
-        """Split one engine chunk into frames of `frame_duration` milliseconds each."""
+        """Split one engine chunk into frames of `frame_duration` milliseconds each.
+
+        Each frame is a view over the chunk's audio rather than a copy of it, so a
+        Sentence costs one buffer of audio however many frames it is streamed in.
+        """
         duration_sec = self._frame_duration / 1000.0
         samples_per_frame = max(int(chunk.sample_rate * duration_sec), 1)
         total_samples = chunk.audio.shape[0]
 
         for i in range(0, total_samples, samples_per_frame):
             yield TtsResult(
-                audio=chunk.audio[i : i + samples_per_frame].tobytes(),
+                audio=chunk.audio[i : i + samples_per_frame],
                 sample_rate=chunk.sample_rate,
                 bytes_per_sample=BYTES_PER_SAMPLE,
                 channels=CHANNELS,

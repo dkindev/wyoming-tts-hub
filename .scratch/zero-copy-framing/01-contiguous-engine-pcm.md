@@ -28,10 +28,8 @@ channel count are all identical.
 ## Notes
 
 The guarantee is made in `TtsResult.__post_init__` rather than in the Silero TTS Engine:
-a Chunk cannot leave a TTS Engine strided even if the engine forgets, and no engine has to
-remember. Silero gets it through the type. `TtsEngineHub._generate_frames` still hands
-over frames as `bytes` in a field typed `np.ndarray`, so bytes are left alone — that goes
-away with `02-frame-audio-without-copying.md`.
+a Chunk cannot leave a TTS Engine strided even if the Engine forgets, and no Engine has to
+remember. Silero gets it through the type.
 
 ## Blocked by
 

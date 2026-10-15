@@ -1,3 +1,4 @@
+import numpy as np
 from loguru import logger
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.error import Error
@@ -212,12 +213,15 @@ class TtsEngineHubEventHandler(AsyncEventHandler):
                 )
                 send_start = False
 
+            # The protocol wants bytes, so the frame is turned into a byte view here,
+            # at the write, rather than copied into one by the TTS Engine Hub. The
+            # view is cast to bytes because the frame's length is announced in them.
             await self.write_event(
                 AudioChunk(
                     rate=chunk.sample_rate,
                     width=chunk.bytes_per_sample,
                     channels=chunk.channels,
-                    audio=chunk.audio,
+                    audio=chunk.audio.view(np.uint8).data,
                 ).event()
             )
 

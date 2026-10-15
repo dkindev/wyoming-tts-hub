@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from src.tts.data_storage import YamlDataStorage
@@ -80,7 +81,7 @@ def make_engine(*, model_id=MODEL_ID, sample_rate=48000, samples_per_sentence=No
 
 def total_audio_bytes(frames: list[TtsResult]) -> int:
     """Total audio bytes across the frames the Hub emitted."""
-    return sum(len(frame.audio) for frame in frames)
+    return sum(frame.audio.nbytes for frame in frames)
 
 
 class TestSuccessfulSynthesis:
@@ -93,6 +94,22 @@ class TestSuccessfulSynthesis:
         assert len(frames) > 0
         assert total_audio_bytes(frames) == engine.audio_size_bytes
         assert engine.synthesized_texts == ["hello"]
+
+    async def test_frames_are_views_over_the_engines_audio(self):
+        """Every frame of a Sentence addresses the Engine's own buffer, copying nothing.
+
+        Frames are checked against the buffer the Engine emitted rather than with
+        `np.shares_memory` between frames, because consecutive frames cover disjoint
+        ranges of it.
+        """
+        engine = make_engine(sample_rate=48000, samples_per_sentence=12500)
+
+        frames = await collect_hub_sentences(make_hub(engine=engine), "hello", VOICE_ID)
+
+        assert len(engine.emitted_audio) == 1
+        assert len(frames) > 1
+        synthesized = engine.emitted_audio[0]
+        assert all(np.shares_memory(frame.audio, synthesized) for frame in frames)
 
     async def test_voice_is_routed_to_the_engine_owning_its_model(self):
         """The Hub asks the Engine Manager for the Model that owns the requested Voice."""
@@ -132,7 +149,7 @@ class TestSuccessfulSynthesis:
         frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
 
         expected_frame_samples = int(sample_rate * frame_duration_ms / 1000)
-        assert all(len(frame.audio) == expected_frame_samples * 2 for frame in frames)
+        assert [len(frame.audio) for frame in frames] == [expected_frame_samples] * len(frames)
 
     async def test_trailing_partial_frame_carries_the_remainder(self):
         """Audio too short to fill whole frames is emitted as one shorter final frame."""
@@ -143,8 +160,7 @@ class TestSuccessfulSynthesis:
 
         frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
 
-        assert len(frames) == 1
-        assert len(frames[0].audio) == 1500 * 2
+        assert [len(frame.audio) for frame in frames] == [1500]
 
     async def test_audio_spanning_several_frames_is_split_exactly(self):
         """Audio spanning several frames is split without losing or duplicating samples."""
@@ -155,8 +171,7 @@ class TestSuccessfulSynthesis:
 
         frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
 
-        frame_samples = [len(frame.audio) // 2 for frame in frames]
-        assert frame_samples == [2400, 2400, 2400, 2400, 2400, 500]
+        assert [len(frame.audio) for frame in frames] == [2400, 2400, 2400, 2400, 2400, 500]
         assert total_audio_bytes(frames) == engine.audio_size_bytes
 
 
