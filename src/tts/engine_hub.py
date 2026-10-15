@@ -13,14 +13,6 @@ from src.tts.models import (
     TtsResult,
 )
 
-BYTES_PER_SAMPLE = 2
-CHANNELS = 1
-
-
-def _declared(model: Model) -> str:
-    """The Languages a Model declares, phrased for an error message."""
-    return ", ".join(model.languages)
-
 
 class TtsEngineHub:
     def __init__(
@@ -88,6 +80,10 @@ class TtsEngineHub:
         middleware is trusted to have resolved it.
         """
         model = context.model
+
+        def _declared(model: Model) -> str:
+            """The Languages a Model declares, phrased for an error message."""
+            return ", ".join(model.languages)
 
         if context.language is None:
             if model.language_auto_detected:
@@ -240,6 +236,6 @@ class TtsEngineHub:
             yield TtsResult(
                 audio=chunk.audio[i : i + samples_per_frame],
                 sample_rate=chunk.sample_rate,
-                bytes_per_sample=BYTES_PER_SAMPLE,
-                channels=CHANNELS,
+                bytes_per_sample=chunk.bytes_per_sample,
+                channels=chunk.channels,
             )
