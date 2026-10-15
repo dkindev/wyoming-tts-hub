@@ -3,10 +3,12 @@ import hashlib
 import io
 import os
 import unittest.mock
+from typing import NamedTuple
 
 import numpy as np
 import torch
 import yaml
+from wyoming.audio import AudioChunk, AudioStart
 from wyoming.event import Event, read_event
 
 from src.tts.data_storage import DataStorage
@@ -415,3 +417,34 @@ class FakeEngineManager:
         self.requested_model_ids.append(model_id)
         engine = self._engines.get(model_id)
         return ReusableEngineContext(engine) if engine is not None else None
+
+
+class AudioFormat(NamedTuple):
+    """The rate, width and channels an audio response announces and carries."""
+
+    rate: int
+    width: int
+    channels: int
+
+
+def announced_audio_format(events: list[Event]) -> AudioFormat:
+    """The format the handler announced in `AudioStart`."""
+    start = AudioStart.from_event(next(event for event in events if AudioStart.is_type(event.type)))
+    return AudioFormat(start.rate, start.width, start.channels)
+
+
+def audio_formats(events: list[Event]) -> set[AudioFormat]:
+    """The format of every `AudioChunk` in a response."""
+    return {
+        AudioFormat(chunk.rate, chunk.width, chunk.channels)
+        for event in events
+        if AudioChunk.is_type(event.type)
+        for chunk in [AudioChunk.from_event(event)]
+    }
+
+
+def streamed_audio_bytes(events: list[Event]) -> bytes:
+    """The PCM payload of every `AudioChunk`, in the order a client read them."""
+    return b"".join(
+        AudioChunk.from_event(event).audio for event in events if AudioChunk.is_type(event.type)
+    )
