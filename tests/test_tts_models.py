@@ -6,6 +6,7 @@ import pytest
 from src.tts.models import (
     EngineType,
     Model,
+    ModelInfo,
     NormalizationType,
     PredefinedData,
     Prompt,
@@ -14,6 +15,7 @@ from src.tts.models import (
     Voice,
     VoiceNormalization,
 )
+from tests.helpers import FakeTtsEngine, make_model, make_model_info
 
 
 class TestEngineType:
@@ -96,6 +98,47 @@ class TestModel:
         model = Model(id="test_model", engine_type=EngineType.SILERO)
         with pytest.raises(FrozenInstanceError):
             model.engine_type = EngineType.QWEN
+
+
+class TestModelInfoAlias:
+    """ModelInfo is a TTS Engine's declared configuration, and Model still names it."""
+
+    def test_model_is_model_info(self):
+        """Importing either name yields the same class object."""
+        assert Model is ModelInfo
+
+    def test_engine_accessors_agree(self):
+        """A TTS Engine's model and model_info resolve to the same ModelInfo."""
+        model_info = make_model_info(id="v5_5_ru")
+
+        engine = FakeTtsEngine(model_info)
+
+        assert engine.model_info is model_info
+        assert engine.model is model_info
+
+    def test_builders_agree_on_defaults(self):
+        """make_model and make_model_info build equal values out of the box."""
+        assert make_model() == make_model_info()
+
+    def test_builders_agree_on_declared_fields(self):
+        """Both builders map a declared field onto the same value."""
+        assert make_model(
+            id="v3_en",
+            engine_type=EngineType.QWEN,
+            languages=["en"],
+            language_auto_detected=True,
+            ssml_supported=True,
+            warmup=True,
+            enabled=False,
+        ) == make_model_info(
+            id="v3_en",
+            engine_type=EngineType.QWEN,
+            languages=["en"],
+            language_auto_detected=True,
+            ssml_supported=True,
+            warmup=True,
+            enabled=False,
+        )
 
 
 class TestVoice:

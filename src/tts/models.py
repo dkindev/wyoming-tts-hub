@@ -46,7 +46,9 @@ class VoiceNormalization:
 
 
 @dataclass(frozen=True)
-class Model:
+class ModelInfo:
+    """The configuration of one named model a TTS Engine can be built for."""
+
     id: str
     engine_type: EngineType
     ssml_supported: bool = False
@@ -55,6 +57,9 @@ class Model:
     enabled: bool = True
     warmup: bool = False
     hash_prefix: str | None = None
+
+
+Model = ModelInfo
 
 
 @dataclass(frozen=True)
@@ -70,7 +75,7 @@ class Voice:
 
 @dataclass(frozen=True)
 class PredefinedData:
-    models: list[Model]
+    models: list[ModelInfo]
     voices: list[Voice]
     prompts: list[Prompt] | None = None
     voice_normalizations: list[VoiceNormalization] | None = None

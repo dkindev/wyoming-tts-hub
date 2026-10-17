@@ -6,7 +6,7 @@ import torch
 from loguru import logger
 
 from src.tts.models import (
-    Model,
+    ModelInfo,
     TextFormat,
     TtsResult,
     Voice,
@@ -14,15 +14,20 @@ from src.tts.models import (
 
 
 class TtsEngine(ABC):
-    def __init__(self, model: Model):
+    def __init__(self, model: ModelInfo):
         self._model = model
         self._loaded = False
         self._lock = asyncio.Lock()
 
     @property
-    def model(self) -> Model:
-        """The Model this engine was built for."""
+    def model_info(self) -> ModelInfo:
+        """The ModelInfo this engine was built for."""
         return self._model
+
+    @property
+    def model(self) -> ModelInfo:
+        """The ModelInfo this engine was built for, under the name callers still use."""
+        return self.model_info
 
     async def synthesize_pcm(
         self, text: str, voice: Voice, text_format: TextFormat, language: str | None = None
@@ -89,7 +94,7 @@ class TorchTtsEngine(TtsEngine):
     def device(self) -> torch.device | None:
         return self._device
 
-    def __init__(self, model: Model, device: str):
+    def __init__(self, model: ModelInfo, device: str):
         super().__init__(model)
 
         self._target_device = device

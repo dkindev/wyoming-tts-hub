@@ -18,6 +18,7 @@ from src.tts.models import (
     BackendType,
     EngineType,
     Model,
+    ModelInfo,
     Prompt,
     TextFormat,
     TtsResult,
@@ -116,7 +117,27 @@ def make_model(
     warmup=False,
     enabled=True,
 ):
-    return Model(
+    return make_model_info(
+        id=id,
+        engine_type=engine_type,
+        languages=languages,
+        language_auto_detected=language_auto_detected,
+        ssml_supported=ssml_supported,
+        warmup=warmup,
+        enabled=enabled,
+    )
+
+
+def make_model_info(
+    id="v5_5_ru",
+    engine_type=EngineType.SILERO,
+    languages=None,
+    language_auto_detected=False,
+    ssml_supported=False,
+    warmup=False,
+    enabled=True,
+):
+    return ModelInfo(
         id=id,
         engine_type=engine_type,
         languages=languages if languages is not None else [],
