@@ -88,7 +88,7 @@ class AudioRecordingTtsEngine(TtsEngine):
     """
 
     def __init__(self, engine: TtsEngine):
-        super().__init__(engine.model)
+        super().__init__(engine.model_info)
         self._engine = engine
         self.synthesized: list[TtsResult] = []
 

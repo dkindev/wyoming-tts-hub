@@ -1,15 +1,15 @@
 import numpy as np
 
 from src.tts.models import TextFormat
-from tests.helpers import FakeTtsEngine, make_model, make_voice, sample_index_audio
+from tests.helpers import FakeTtsEngine, make_model_info, make_voice, sample_index_audio
 
 MODEL_ID = "v5_5_ru"
 
 
 def make_engine(**kwargs):
-    """Return a FakeTtsEngine for one Model, with a Voice that points at it."""
+    """Return a FakeTtsEngine for one Model Info, with a Voice that points at it."""
     voice = make_voice(voice_id=f"ru_RU-{MODEL_ID}-aidar", name="aidar", model=MODEL_ID)
-    engine = FakeTtsEngine(make_model(id=MODEL_ID), **kwargs)
+    engine = FakeTtsEngine(make_model_info(id=MODEL_ID), **kwargs)
     return engine, voice
 
 

@@ -9,7 +9,7 @@ from src.tts.models import BackendType, EngineType, TextFormat
 from src.tts.silero_engine import SileroTtsEngine
 from tests.helpers import (
     make_captured_silero_model,
-    make_model,
+    make_model_info,
     make_models_dir,
     make_voice,
 )
@@ -49,7 +49,7 @@ def build_engine(tmp_path, monkeypatch, *, model=MODEL_ID, engine_type=EngineTyp
     """Return the TTS Engine the factory builds for `model` under the given settings."""
     settings = make_settings(tmp_path, monkeypatch, **config)
     return TtsEngineFactory(settings=settings).create(
-        make_model(id=model, engine_type=engine_type), BackendType.TORCH
+        make_model_info(id=model, engine_type=engine_type), BackendType.TORCH
     )
 
 
@@ -60,14 +60,14 @@ async def synthesize(engine, model_id=MODEL_ID):
 
 
 class TestEngineResolution:
-    """A Model declares its TTS Engine family; the factory resolves that to an engine."""
+    """A Model Info declares its TTS Engine family; the factory resolves it to an engine."""
 
-    def test_silero_model_on_torch_backend_yields_silero_engine(self, tmp_path, monkeypatch):
-        """A Silero Model on the torch backend is built as a Silero TTS Engine for that Model."""
+    def test_silero_model_info_on_torch_backend_yields_silero_engine(self, tmp_path, monkeypatch):
+        """A Silero Model Info on the torch backend is built as a Silero TTS Engine."""
         engine = build_engine(tmp_path, monkeypatch)
 
         assert isinstance(engine, SileroTtsEngine)
-        assert engine.model.id == MODEL_ID
+        assert engine.model_info.id == MODEL_ID
 
     @pytest.mark.parametrize("engine_type", [EngineType.QWEN, EngineType.OPENAI])
     def test_declared_but_unimplemented_family_is_rejected(
@@ -78,13 +78,15 @@ class TestEngineResolution:
         factory = TtsEngineFactory(settings=settings)
 
         with pytest.raises(ValueError) as exc_info:
-            factory.create(make_model(id="whatever", engine_type=engine_type), BackendType.TORCH)
+            factory.create(
+                make_model_info(id="whatever", engine_type=engine_type), BackendType.TORCH
+            )
 
         assert engine_type.value in str(exc_info.value)
         assert BackendType.TORCH.value in str(exc_info.value)
 
-    def test_missing_model_is_a_type_error(self, tmp_path, monkeypatch):
-        """Asking for an engine without a Model fails at the seam, not inside a family."""
+    def test_missing_model_info_is_a_type_error(self, tmp_path, monkeypatch):
+        """Asking for an engine without a Model Info fails at the seam, not inside a family."""
         settings = make_settings(tmp_path, monkeypatch)
         factory = TtsEngineFactory(settings=settings)
 
@@ -114,7 +116,7 @@ class TestEngineConfiguration:
         assert len(results[0].audio) == 16000
 
     async def test_engine_runs_on_configured_device(self, tmp_path, monkeypatch):
-        """The configured device is the one the engine asks the Model to move to."""
+        """The configured device is the one the engine asks the loaded model to move to."""
         engine = build_engine(
             tmp_path,
             monkeypatch,

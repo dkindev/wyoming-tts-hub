@@ -6,7 +6,7 @@ import unittest.mock
 import pytest
 import torch
 
-from src.tts.models import EngineType, Model, TextFormat
+from src.tts.models import EngineType, ModelInfo, TextFormat
 from src.tts.silero_engine import SileroTtsEngine
 from tests.helpers import make_captured_silero_model, make_voice
 
@@ -40,7 +40,7 @@ def make_engine(
 ):
     models_dir = make_models_dir(tmp_path, registry_yaml, model_files)
     return SileroTtsEngine(
-        model_info=Model(id=model_id, engine_type=EngineType.SILERO),
+        model_info=ModelInfo(id=model_id, engine_type=EngineType.SILERO),
         device=device,
         sample_rate=sample_rate,
         models_dir=models_dir,
@@ -77,8 +77,8 @@ async def synthesize_with(engine, model, text="hello", model_id="v5_5_ru"):
 
 
 class TestResolveModelSection:
-    def test_single_language_model_resolves_from_declared_section(self, tmp_path):
-        """A single-language Model present in its declared registry section resolves to it."""
+    def test_single_language_model_info_resolves_from_declared_section(self, tmp_path):
+        """A single-language Model Info whose id sits in its declared section resolves to it."""
         registry = """
           en:
             v3_en:
@@ -91,18 +91,20 @@ class TestResolveModelSection:
                     example: 'Hello from en_0'
         """
         engine = make_engine(tmp_path, registry, {"en": ["v3_en"]})
-        model = Model(id="v3_en", engine_type=EngineType.SILERO, languages=["en"])
+        model_info = ModelInfo(id="v3_en", engine_type=EngineType.SILERO, languages=["en"])
 
-        model_path, sample_rates, example_text, speakers = engine._resolve_model_metadata(model)
+        model_path, sample_rates, example_text, speakers = engine._resolve_model_metadata(
+            model_info
+        )
 
         assert model_path.endswith(os.path.join("en", "v3_en.pt"))
         assert sample_rates == [8000, 24000, 48000]
         assert example_text == "Hello"
         assert speakers == {"en_0": "Hello from en_0"}
 
-    def test_model_under_non_language_section_resolves_by_scan(self, tmp_path):
-        """A Model living under a non-language section (e.g. cyrillic) resolves by scanning
-        even when its declared single Language does not match."""
+    def test_model_id_under_non_language_section_resolves_by_scan(self, tmp_path):
+        """A model id listed under a non-language section (e.g. cyrillic) resolves by
+        scanning even when the Model Info's declared Language does not match."""
         registry = """
           ru:
             v5_5_ru:
@@ -116,15 +118,15 @@ class TestResolveModelSection:
                 example: 'Пример'
         """
         engine = make_engine(tmp_path, registry, {"cyrillic": ["v4_cyrillic"]})
-        model = Model(id="v4_cyrillic", engine_type=EngineType.SILERO, languages=["ru"])
+        model_info = ModelInfo(id="v4_cyrillic", engine_type=EngineType.SILERO, languages=["ru"])
 
-        model_path, sample_rates, _, _ = engine._resolve_model_metadata(model)
+        model_path, sample_rates, _, _ = engine._resolve_model_metadata(model_info)
 
         assert model_path.endswith(os.path.join("cyrillic", "v4_cyrillic.pt"))
         assert sample_rates == [8000, 24000, 48000]
 
-    def test_multi_language_model_resolves_to_matching_section(self, tmp_path):
-        """A multi-language Model resolves to the first registry section that owns it."""
+    def test_multi_language_model_info_resolves_to_matching_section(self, tmp_path):
+        """A multi-language Model Info resolves to the first registry section owning its id."""
         registry = """
           ru:
             v5_5_ru:
@@ -141,17 +143,17 @@ class TestResolveModelSection:
                     example: 'Привет'
         """
         engine = make_engine(tmp_path, registry, {"multi": ["multi_v2"]})
-        model = Model(id="multi_v2", engine_type=EngineType.SILERO, languages=["ru", "en"])
+        model_info = ModelInfo(id="multi_v2", engine_type=EngineType.SILERO, languages=["ru", "en"])
 
-        model_path, sample_rates, _, speakers = engine._resolve_model_metadata(model)
+        model_path, sample_rates, _, speakers = engine._resolve_model_metadata(model_info)
 
         assert model_path.endswith(os.path.join("multi", "multi_v2.pt"))
         assert sample_rates == [8000, 16000]
         assert speakers == {"aidar": "Привет"}
 
-    def test_model_absent_from_registry_raises_clear_error(self, tmp_path):
-        """A Model present in no registry section raises a RuntimeError naming the Model
-        and the registry file it was looked up in."""
+    def test_model_id_absent_from_registry_raises_clear_error(self, tmp_path):
+        """A Model Info whose id is in no registry section raises a RuntimeError naming
+        that id and the registry file it was looked up in."""
         registry = """
           ru:
             v5_5_ru:
@@ -159,17 +161,17 @@ class TestResolveModelSection:
                 package: 'http://example/v5_5_ru.pt'
         """
         engine = make_engine(tmp_path, registry, {"ru": ["v5_5_ru"]})
-        model = Model(id="v4_indic", engine_type=EngineType.SILERO, languages=["en"])
+        model_info = ModelInfo(id="v4_indic", engine_type=EngineType.SILERO, languages=["en"])
 
         with pytest.raises(RuntimeError) as exc_info:
-            engine._resolve_model_metadata(model)
+            engine._resolve_model_metadata(model_info)
 
         message = str(exc_info.value)
         assert "v4_indic" in message
         assert os.path.join("silero", "models.yml") in message
 
-    def test_model_without_local_file_downloads_into_resolved_section(self, tmp_path):
-        """A Model not stored locally is downloaded into the resolved section directory."""
+    def test_model_id_without_stored_file_downloads_into_resolved_section(self, tmp_path):
+        """A model id with no .pt file stored locally downloads into its section directory."""
         registry = """
           ru:
             v5_5_ru:
@@ -183,12 +185,12 @@ class TestResolveModelSection:
                 example: 'Пример'
         """
         engine = make_engine(tmp_path, registry, {})
-        model = Model(id="v4_cyrillic", engine_type=EngineType.SILERO, languages=["ru"])
+        model_info = ModelInfo(id="v4_cyrillic", engine_type=EngineType.SILERO, languages=["ru"])
 
         with unittest.mock.patch(
             "src.tts.silero_engine.torch.hub.download_url_to_file"
         ) as mock_download:
-            model_path, sample_rates, example_text, _ = engine._resolve_model_metadata(model)
+            model_path, sample_rates, example_text, _ = engine._resolve_model_metadata(model_info)
 
         mock_download.assert_called_once()
         call = mock_download.call_args
@@ -211,10 +213,10 @@ class TestResolveModelSection:
                 sample_rate: [48000]
         """
         engine = make_engine(tmp_path, registry, {"en": ["v3_en"]})
-        model = Model(id="v3_en", engine_type=EngineType.SILERO, languages=["en"])
+        model_info = ModelInfo(id="v3_en", engine_type=EngineType.SILERO, languages=["en"])
 
         assert not hasattr(engine, "_config")
-        model_path, _, _, _ = engine._resolve_model_metadata(model)
+        model_path, _, _, _ = engine._resolve_model_metadata(model_info)
 
         assert model_path.endswith(os.path.join("en", "v3_en.pt"))
 

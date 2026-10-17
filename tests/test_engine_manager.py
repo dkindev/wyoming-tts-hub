@@ -8,7 +8,7 @@ from tests.helpers import (
     FakeDataStorage,
     FakeEngineFactory,
     FakeTtsEngine,
-    make_model,
+    make_model_info,
     make_voice,
 )
 
@@ -47,7 +47,7 @@ def make_manager(
     inference_timeout=5.0,
 ):
     """Return a manager wired to fakes, plus the factory and storage behind it."""
-    models = list(models) or [make_model(id=MODEL_ID, warmup=False)]
+    models = list(models) or [make_model_info(id=MODEL_ID, warmup=False)]
     factory = FakeEngineFactory(engines=engines)
     storage = FakeDataStorage(models=models)
 
@@ -65,7 +65,7 @@ def make_manager(
 
 def make_engine(model_id=MODEL_ID, **kwargs):
     """Return a FakeTtsEngine for `model_id`, with the default Voice pointing at it."""
-    return FakeTtsEngine(make_model(id=model_id), **kwargs)
+    return FakeTtsEngine(make_model_info(id=model_id), **kwargs)
 
 
 def make_voice_for(model_id=MODEL_ID):
@@ -81,9 +81,9 @@ async def synthesize_via(manager, model_id=MODEL_ID, text="hello"):
 
 class TestWarmup:
     async def test_warmup_loads_only_models_flagged_for_warmup(self):
-        """Only Models flagged `warmup` are loaded at startup."""
-        eager = make_model(id="eager", warmup=True)
-        lazy = make_model(id="lazy", warmup=False)
+        """Only Model Infos flagged `warmup` are loaded at startup."""
+        eager = make_model_info(id="eager", warmup=True)
+        lazy = make_model_info(id="lazy", warmup=False)
         eager_engine = make_engine("eager")
         lazy_engine = make_engine("lazy")
         manager, factory, _ = make_manager(
@@ -97,10 +97,10 @@ class TestWarmup:
         assert eager_engine.warmup_count == 1
         assert lazy_engine.warmup_count == 0
 
-    async def test_model_failing_warmup_is_skipped_and_others_still_load(self):
-        """A Model that raises during warmup is skipped; the rest still load."""
-        broken = make_model(id="broken", warmup=True)
-        healthy = make_model(id="healthy", warmup=True)
+    async def test_model_info_failing_warmup_is_skipped_and_others_still_load(self):
+        """A Model Info whose engine raises during warmup is skipped; the rest still load."""
+        broken = make_model_info(id="broken", warmup=True)
+        healthy = make_model_info(id="healthy", warmup=True)
         healthy_engine = make_engine("healthy")
         manager, _, _ = make_manager(
             models=[broken, healthy],
@@ -119,7 +119,7 @@ class TestWarmup:
         """Warmup is a no-op once the manager holds engines."""
         engine = make_engine()
         manager, _, _ = make_manager(
-            models=[make_model(id=MODEL_ID, warmup=True)], engines={MODEL_ID: engine}
+            models=[make_model_info(id=MODEL_ID, warmup=True)], engines={MODEL_ID: engine}
         )
 
         await manager.warmup()
@@ -131,7 +131,7 @@ class TestWarmup:
 
 class TestOnDemandLoading:
     async def test_first_request_loads_engine_and_second_reuses_it(self):
-        """A Model is loaded once on first use, and later requests reuse that engine."""
+        """A Model Info's engine loads once on first use; later requests reuse it."""
         engine = make_engine()
         manager, factory, _ = make_manager(engines={MODEL_ID: engine})
 
@@ -145,7 +145,7 @@ class TestOnDemandLoading:
         assert len(second) > 0
 
     async def test_request_for_unknown_model_raises(self):
-        """Asking for a Model the storage does not know raises an error naming it."""
+        """Asking for a model the storage does not know raises an error naming it."""
         manager, _, _ = make_manager()
 
         with pytest.raises(RuntimeError) as exc_info:
@@ -178,12 +178,12 @@ class TestConcurrency:
 
 
 class TestEviction:
-    async def test_evicted_model_engine_is_closed_exactly_once(self):
-        """Evicting the least-recently-used Model closes its engine once."""
+    async def test_evicted_cached_engine_is_closed_exactly_once(self):
+        """Evicting the least-recently-used cached engine closes it once."""
         evicted = make_engine("evicted")
         kept = make_engine("kept")
         manager, _, _ = make_manager(
-            models=[make_model(id="evicted"), make_model(id="kept")],
+            models=[make_model_info(id="evicted"), make_model_info(id="kept")],
             engines={"evicted": evicted, "kept": kept},
             cache_capacity=1,
         )
@@ -196,13 +196,17 @@ class TestEviction:
 
         assert evicted.close_count == 1
 
-    async def test_least_recently_used_model_is_the_one_evicted(self):
-        """The recently-used Model survives eviction; the idle one is closed."""
+    async def test_least_recently_used_cached_engine_is_the_one_evicted(self):
+        """The recently-used cached engine survives eviction; the idle one is closed."""
         idle = make_engine("idle")
         recent = make_engine("recent")
         newcomer = make_engine("newcomer")
         manager, _, _ = make_manager(
-            models=[make_model(id="idle"), make_model(id="recent"), make_model(id="newcomer")],
+            models=[
+                make_model_info(id="idle"),
+                make_model_info(id="recent"),
+                make_model_info(id="newcomer"),
+            ],
             engines={"idle": idle, "recent": recent, "newcomer": newcomer},
             cache_capacity=2,
         )
@@ -215,7 +219,7 @@ class TestEviction:
 
         assert await wait_until(lambda: recent.close_count == 1)
 
-        # Before shutdown, only the least recently used Model has been torn down.
+        # Before shutdown, only the least recently used cached engine has been torn down.
         assert idle.close_count == 0
         assert recent.close_count == 1
 
@@ -223,12 +227,12 @@ class TestEviction:
 
         assert idle.close_count == 1
 
-    async def test_model_in_use_is_closed_only_after_its_request_completes(self):
-        """A Model held by an in-flight request is deferred, then closed once released."""
+    async def test_cached_engine_in_use_is_closed_only_after_its_request_completes(self):
+        """The cached engine held by an in-flight request is deferred, then closed once released."""
         release = asyncio.Event()
         held = make_engine("held", hold=release)
         manager, _, _ = make_manager(
-            models=[make_model(id="held"), make_model(id="other")],
+            models=[make_model_info(id="held"), make_model_info(id="other")],
             engines={"held": held},
             cache_capacity=1,
         )
@@ -240,7 +244,7 @@ class TestEviction:
             )
             assert await wait_until(lambda: held.active_syntheses == 1, timeout=5.0)
 
-            # Loading a second Model evicts "held", but the in-flight request still holds it.
+            # Loading a second model evicts "held", but the in-flight request still holds it.
             await synthesize_via(manager, model_id="other")
 
             # Wait past a background-cleaner poll: eviction must be deferred, not merely
@@ -258,19 +262,19 @@ class TestEviction:
 
 
 class TestQueuedAcquire:
-    """A request already queued on the per-Model limit holds the Model meanwhile.
+    """A request already queued on the per-Model limit holds the cached engine meanwhile.
 
-    Taking the reference only after the wait would let eviction tear the Model
+    Taking the reference only after the wait would let eviction tear the cached entry
     down underneath a queued waiter, stripping the engine and the very semaphore
     the waiter is blocked on.
     """
 
-    async def test_queued_acquire_defers_eviction_of_the_model(self):
-        """A request waiting for the per-Model limit keeps its Model from being closed."""
+    async def test_queued_acquire_defers_eviction_of_the_cached_engine(self):
+        """A request waiting for the per-Model limit keeps its cached engine from being closed."""
         release = asyncio.Event()
         held = make_engine("held", hold=release)
         manager, _, _ = make_manager(
-            models=[make_model(id="held"), make_model(id="other")],
+            models=[make_model_info(id="held"), make_model_info(id="other")],
             engines={"held": held},
             cache_capacity=1,
             max_concurrent_sentences_per_model=1,
@@ -311,21 +315,21 @@ class TestQueuedAcquire:
 
 
 class TestCancelledAcquire:
-    """A cancelled acquire must leave the Model as free as it was before the request.
+    """A cancelled acquire must leave the cached engine as free as it was before the request.
 
-    The Engine Context takes the Model's reference before awaiting the per-Model
+    The Engine Context takes the cached engine's reference before awaiting the per-Model
     concurrency limit, so a caller cancelled during that wait must give the
     reference back: __aexit__ never runs for a body that was never entered. The
-    Model then stays free, eviction is not deferred, and the engine is closed on
+    cached engine then stays free, eviction is not deferred, and the engine is closed on
     schedule.
     """
 
-    async def test_cancelled_acquire_leaves_the_model_evictable(self):
-        """Cancelling a request blocked on the per-Model limit does not pin the Model."""
+    async def test_cancelled_acquire_leaves_the_cached_engine_evictable(self):
+        """Cancelling a request blocked on the per-Model limit does not pin the cached engine."""
         release = asyncio.Event()
         evictable = make_engine("evictable", hold=release)
         manager, _, _ = make_manager(
-            models=[make_model(id="evictable"), make_model(id="other")],
+            models=[make_model_info(id="evictable"), make_model_info(id="other")],
             engines={"evictable": evictable},
             cache_capacity=1,
             max_concurrent_sentences_per_model=1,
@@ -338,8 +342,8 @@ class TestCancelledAcquire:
             )
             assert await wait_until(lambda: evictable.active_syntheses == 1, timeout=5.0)
 
-            # A second request for the same Model waits for the concurrency limit.
-            # The Model is cached and the limit is taken, so the only await left on
+            # A second request for the same model id waits for the concurrency limit.
+            # The engine is cached and the limit is taken, so the only await left on
             # this path is the semaphore: yielding a few times puts the task there.
             waiting = asyncio.create_task(synthesize_via(manager, model_id="evictable"))
             for _ in range(3):
@@ -354,7 +358,7 @@ class TestCancelledAcquire:
             release.set()
             await held
 
-        # Loading another Model evicts "evictable". A cancelled acquire must not be
+        # Loading another model evicts "evictable". A cancelled acquire must not be
         # holding it, so the background cleaner closes the engine as usual.
         await synthesize_via(manager, model_id="other")
         await wait_for_cleaner_cycle()
@@ -371,7 +375,7 @@ class TestShutdown:
         first = make_engine("first")
         second = make_engine("second")
         manager, _, _ = make_manager(
-            models=[make_model(id="first"), make_model(id="second")],
+            models=[make_model_info(id="first"), make_model_info(id="second")],
             engines={"first": first, "second": second},
         )
 
@@ -387,7 +391,7 @@ class TestShutdown:
         release = asyncio.Event()
         held = make_engine("held", hold=release)
         manager, _, _ = make_manager(
-            models=[make_model(id="held"), make_model(id="other")],
+            models=[make_model_info(id="held"), make_model_info(id="other")],
             engines={"held": held},
             cache_capacity=1,
         )
