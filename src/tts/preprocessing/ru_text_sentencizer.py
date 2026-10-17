@@ -2,10 +2,10 @@ from collections.abc import Iterator
 
 from razdel import sentenize
 
-from src.tts.preprocessing.text_sentenizer import PlainTextSentenizer
+from src.tts.preprocessing.text_sentencizer import PlainTextSentencizer
 
 
-class RuPlainTextSentenizer(PlainTextSentenizer):
+class RuPlainTextSentencizer(PlainTextSentencizer):
     """Represents a class for generating sentences from Russian text."""
 
     def text_to_sentences(self, text: str, max_sentence_chars: int) -> Iterator[str]:
@@ -20,7 +20,7 @@ class RuPlainTextSentenizer(PlainTextSentenizer):
             yield text
             return
 
-        pre_sentences = RuPlainTextSentenizer.sentenize_by_nlp(
+        pre_sentences = RuPlainTextSentencizer.sentencize_by_nlp(
             sentence=text, max_sentence_chars=max_sentence_chars
         )
         yield from self._assembly_small_sentences(
@@ -28,7 +28,7 @@ class RuPlainTextSentenizer(PlainTextSentenizer):
         )
 
     @staticmethod
-    def sentenize_by_nlp(sentence: str, max_sentence_chars: int) -> Iterator[str]:
+    def sentencize_by_nlp(sentence: str, max_sentence_chars: int) -> Iterator[str]:
         for sentence_obj in sentenize(sentence):
             sentence_text = sentence_obj.text.strip()
             if not sentence_text:
@@ -37,6 +37,6 @@ class RuPlainTextSentenizer(PlainTextSentenizer):
             if len(sentence_text) <= max_sentence_chars:
                 yield sentence_text
             else:
-                yield from PlainTextSentenizer.sentenize_by_minor_characters(
+                yield from PlainTextSentencizer.sentencize_by_minor_characters(
                     sentence=sentence_text, max_sentence_chars=max_sentence_chars
                 )

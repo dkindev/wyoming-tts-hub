@@ -13,7 +13,7 @@ from src.tts.models import (
     TextFormat,
     VoiceNormalization,
 )
-from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
+from src.tts.preprocessing import TextNormalizerFactory, TextSentencizerFactory
 from tests.helpers import (
     FakeDataStorage,
     FakeTtsEngine,
@@ -85,15 +85,15 @@ def build_chain(
     default_enabled=False,
     default_type=NormalizationType.SIMPLE,
     default_normalization_prompts=None,
-    sentenizer_factory=None,
+    sentencizer_factory=None,
 ):
     """Return the middleware chain as wired in main.py, with the given configuration."""
     return [
         ResolveLanguageMiddleware().invoke,
         SplitSentencesMiddleware(
             max_sentence_chars=max_sentence_chars,
-            text_sentenizer_factory=(
-                sentenizer_factory if sentenizer_factory is not None else TextSentenizerFactory()
+            text_sentencizer_factory=(
+                sentencizer_factory if sentencizer_factory is not None else TextSentencizerFactory()
             ),
         ).invoke,
         NormalizeTextMiddleware(
@@ -114,7 +114,7 @@ def build_chain(
     ]
 
 
-class MissingSentenizerFactory:
+class MissingSentencizerFactory:
     """A sentence-splitter factory with nothing registered for the request."""
 
     def create(self, text_format, language=None):
@@ -182,7 +182,9 @@ class TestSentenceSplitting:
         storage = make_storage()
         hub = make_hub(
             engine=engine,
-            middlewares=build_chain(storage=storage, sentenizer_factory=MissingSentenizerFactory()),
+            middlewares=build_chain(
+                storage=storage, sentencizer_factory=MissingSentencizerFactory()
+            ),
             storage=storage,
         )
 

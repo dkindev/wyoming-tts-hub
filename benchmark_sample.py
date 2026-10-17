@@ -45,7 +45,7 @@ from src.tts.middleware import (
     SynthesisContext,
 )
 from src.tts.models import BackendType, ModelInfo, TextFormat, TtsResult, Voice
-from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
+from src.tts.preprocessing import TextNormalizerFactory, TextSentencizerFactory
 
 # Long enough to be split into several Sentences: a single Sentence measures one
 # inference and says nothing about how the hub pipelines them. One per Language the
@@ -311,7 +311,7 @@ class BenchmarkStack:
             ResolveLanguageMiddleware().invoke,
             SplitSentencesMiddleware(
                 max_sentence_chars=settings.max_sentence_chars,
-                text_sentenizer_factory=TextSentenizerFactory(),
+                text_sentencizer_factory=TextSentencizerFactory(),
             ).invoke,
             NormalizeTextMiddleware(
                 timeout=settings.normalization.timeout,

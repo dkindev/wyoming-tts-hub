@@ -14,7 +14,7 @@ from src.config import Settings
 from src.tts.data_storage import YamlDataStorage
 from src.tts.middleware import ResolveLanguageMiddleware, SplitSentencesMiddleware
 from src.tts.models import PredefinedData
-from src.tts.preprocessing import TextSentenizerFactory
+from src.tts.preprocessing import TextSentencizerFactory
 from tests.helpers import (
     FakeEngineManager,
     FakeTtsEngine,
@@ -166,7 +166,7 @@ def make_counting_stack():
             ResolveLanguageMiddleware().invoke,
             SplitSentencesMiddleware(
                 max_sentence_chars=MAX_SENTENCE_CHARS,
-                text_sentenizer_factory=TextSentenizerFactory(),
+                text_sentencizer_factory=TextSentencizerFactory(),
             ).invoke,
             recorder,
         ],

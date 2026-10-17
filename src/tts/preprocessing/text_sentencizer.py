@@ -10,7 +10,7 @@ PUNCTUATIONS_RE = re.compile(r"(?<=[.!?\n])\s+")
 WORD_RE = re.compile(r"\S+")
 
 
-class TextSentenizer(ABC):
+class TextSentencizer(ABC):
     """Represents a class for generating sentences from source text."""
 
     @abstractmethod
@@ -18,7 +18,7 @@ class TextSentenizer(ABC):
         ...
 
 
-class PlainTextSentenizer(TextSentenizer):
+class PlainTextSentencizer(TextSentencizer):
     """Represents a class for generating sentences from plain text."""
 
     def text_to_sentences(self, text: str, max_sentence_chars: int) -> Iterator[str]:
@@ -33,7 +33,7 @@ class PlainTextSentenizer(TextSentenizer):
             yield text
             return
 
-        pre_sentences = PlainTextSentenizer.sentenize_by_punctuations(text, max_sentence_chars)
+        pre_sentences = PlainTextSentencizer.sentencize_by_punctuations(text, max_sentence_chars)
         yield from self._assembly_small_sentences(
             sentences=pre_sentences, max_sentence_chars=max_sentence_chars
         )
@@ -66,7 +66,7 @@ class PlainTextSentenizer(TextSentenizer):
             yield " ".join(current_sentence)
 
     @staticmethod
-    def sentenize_by_punctuations(sentence: str, max_sentence_chars: int) -> Iterator[str]:
+    def sentencize_by_punctuations(sentence: str, max_sentence_chars: int) -> Iterator[str]:
         last_idx = 0
 
         for match in PUNCTUATIONS_RE.finditer(sentence):
@@ -77,7 +77,7 @@ class PlainTextSentenizer(TextSentenizer):
                 if len(segment) <= max_sentence_chars:
                     yield segment
                 else:
-                    yield from PlainTextSentenizer.sentenize_by_minor_characters(
+                    yield from PlainTextSentencizer.sentencize_by_minor_characters(
                         segment, max_sentence_chars
                     )
 
@@ -86,12 +86,12 @@ class PlainTextSentenizer(TextSentenizer):
             if len(last_segment) <= max_sentence_chars:
                 yield last_segment
             else:
-                yield from PlainTextSentenizer.sentenize_by_minor_characters(
+                yield from PlainTextSentencizer.sentencize_by_minor_characters(
                     last_segment, max_sentence_chars
                 )
 
     @staticmethod
-    def sentenize_by_minor_characters(sentence: str, max_sentence_chars: int) -> Iterator[str]:
+    def sentencize_by_minor_characters(sentence: str, max_sentence_chars: int) -> Iterator[str]:
         last_idx = 0
 
         for match in MINOR_CHARACTERS_RE.finditer(sentence):
@@ -102,17 +102,19 @@ class PlainTextSentenizer(TextSentenizer):
                 if len(segment) <= max_sentence_chars:
                     yield segment
                 else:
-                    yield from PlainTextSentenizer.sentenize_by_words(segment, max_sentence_chars)
+                    yield from PlainTextSentencizer.sentencize_by_words(segment, max_sentence_chars)
 
         last_segment = sentence[last_idx:].strip()
         if last_segment:
             if len(last_segment) <= max_sentence_chars:
                 yield last_segment
             else:
-                yield from PlainTextSentenizer.sentenize_by_words(last_segment, max_sentence_chars)
+                yield from PlainTextSentencizer.sentencize_by_words(
+                    last_segment, max_sentence_chars
+                )
 
     @staticmethod
-    def sentenize_by_words(sentence: str, max_sentence_chars: int) -> Iterator[str]:
+    def sentencize_by_words(sentence: str, max_sentence_chars: int) -> Iterator[str]:
         sentence_start = -1
         sentence_end = -1
 
@@ -155,11 +157,11 @@ OPENING_TAG_RE = re.compile(r"<([a-zA-Z0-9]+)")
 TAG_TRAILING_WHITESPACE_RE = re.compile(r"(\s+)(?=<|</)")
 
 
-class SsmlSentenizer(TextSentenizer):
+class SsmlSentencizer(TextSentencizer):
     """Represents a class for generating sentences from SSML."""
 
-    def __init__(self, text_sentenizer_in_tags: TextSentenizer):
-        self._text_sentenizer_in_tags = text_sentenizer_in_tags
+    def __init__(self, text_sentencizer_in_tags: TextSentencizer):
+        self._text_sentencizer_in_tags = text_sentencizer_in_tags
 
     def text_to_sentences(self, text: str, max_sentence_chars: int) -> Iterator[str]:
         """Generate a sentences from an SSML."""
@@ -181,7 +183,7 @@ class SsmlSentenizer(TextSentenizer):
             )
 
             clean_text = TAGS_RE.sub("", ssml_text)
-            for sentence in self._text_sentenizer_in_tags.text_to_sentences(
+            for sentence in self._text_sentencizer_in_tags.text_to_sentences(
                 clean_text, max_sentence_chars
             ):
                 yield f"<speak>{sentence}</speak>"
@@ -192,9 +194,9 @@ class SsmlSentenizer(TextSentenizer):
             yield ssml_text
             return
 
-        yield from self._sentenize_ssml_into_sentences(ssml_text, max_sentence_chars)
+        yield from self._sentencize_ssml_into_sentences(ssml_text, max_sentence_chars)
 
-    def _sentenize_ssml_into_sentences(  # noqa: C901
+    def _sentencize_ssml_into_sentences(  # noqa: C901
         self, ssml_text: str, max_sentence_chars: int
     ) -> Iterator[str]:
         current_sentence = []
@@ -241,7 +243,7 @@ class SsmlSentenizer(TextSentenizer):
                         current_sentence = prefix_tokens + [token]
                         text_len = len(token)
                     else:
-                        for sub_sentence in self._text_sentenizer_in_tags.text_to_sentences(
+                        for sub_sentence in self._text_sentencizer_in_tags.text_to_sentences(
                             token, max_sentence_chars
                         ):
                             yield self._build_valid_sentence(

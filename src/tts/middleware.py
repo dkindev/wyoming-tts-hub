@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from loguru import logger
 
 from src.tts.models import ModelInfo, TextFormat, Voice
-from src.tts.preprocessing import TextNormalizer, TextNormalizerFactory, TextSentenizerFactory
+from src.tts.preprocessing import TextNormalizer, TextNormalizerFactory, TextSentencizerFactory
 
 
 class SynthesisContext:
@@ -55,27 +55,27 @@ class ResolveLanguageMiddleware:
 
 
 class SplitSentencesMiddleware:
-    def __init__(self, max_sentence_chars: int, text_sentenizer_factory: TextSentenizerFactory):
+    def __init__(self, max_sentence_chars: int, text_sentencizer_factory: TextSentencizerFactory):
         self._max_sentence_chars = max_sentence_chars
-        self._text_sentenizer_factory = text_sentenizer_factory
+        self._text_sentencizer_factory = text_sentencizer_factory
 
     async def invoke(self, ctx: SynthesisContext, next_call: Callable[[], Awaitable[None]]):
-        text_sentenizer = self._text_sentenizer_factory.create(ctx.text_format, ctx.language)
-        if text_sentenizer is None:
+        text_sentencizer = self._text_sentencizer_factory.create(ctx.text_format, ctx.language)
+        if text_sentencizer is None:
             raise RuntimeError(
-                f"Text sentenizer not found for voice '{ctx.voice.id}' and '{ctx.language if ctx.language else 'None'}' language"
+                f"Text sentencizer not found for voice '{ctx.voice.id}' and '{ctx.language if ctx.language else 'None'}' language"
             )
 
         logger.debug(
-            "Convert text into sentences using '{text_sentenizer}'",
-            text_sentenizer=text_sentenizer.__class__.__name__,
+            "Convert text into sentences using '{text_sentencizer}'",
+            text_sentencizer=text_sentencizer.__class__.__name__,
         )
 
         sentences = ctx.sentences
 
         async def make_aiter() -> AsyncIterator[str]:
             async for sentence in sentences:
-                for splitted_sentence in text_sentenizer.text_to_sentences(
+                for splitted_sentence in text_sentencizer.text_to_sentences(
                     sentence, self._max_sentence_chars
                 ):
                     yield splitted_sentence

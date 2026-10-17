@@ -19,7 +19,7 @@ from src.tts.middleware import (
     SplitSentencesMiddleware,
 )
 from src.tts.models import BackendType
-from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
+from src.tts.preprocessing import TextNormalizerFactory, TextSentencizerFactory
 
 setup_logging()
 
@@ -91,7 +91,7 @@ async def main():
         ResolveLanguageMiddleware().invoke,
         SplitSentencesMiddleware(
             max_sentence_chars=settings.max_sentence_chars,
-            text_sentenizer_factory=TextSentenizerFactory(),
+            text_sentencizer_factory=TextSentencizerFactory(),
         ).invoke,
         NormalizeTextMiddleware(
             timeout=settings.normalization.timeout,

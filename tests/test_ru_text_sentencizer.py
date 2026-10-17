@@ -1,27 +1,27 @@
-from src.tts.preprocessing import RuPlainTextSentenizer
+from src.tts.preprocessing import RuPlainTextSentencizer
 
 
-class TestRuSimpleTextSentenizer:
-    """Tests for RuSimpleTextSentenizer.text_to_sentences behavior."""
+class TestRuSimpleTextSentencizer:
+    """Tests for RuPlainTextSentencizer.text_to_sentences behavior."""
 
     def test_short_text_returns_single_sentence(self):
         text = "привет мир"
-        sentences = list(RuPlainTextSentenizer().text_to_sentences(text, 100))
+        sentences = list(RuPlainTextSentencizer().text_to_sentences(text, 100))
         assert sentences == ["привет мир"]
 
     def test_splits_on_sentence_boundary(self):
         text = "Иди сюда. Подожди минутку. Хорошо"
-        sentences = list(RuPlainTextSentenizer().text_to_sentences(text, 20))
+        sentences = list(RuPlainTextSentencizer().text_to_sentences(text, 20))
         assert sentences == ["Иди сюда.", "Подожди минутку.", "Хорошо"]
 
     def test_razdel_handles_abbreviations(self):
         text = "Он т.е. пришёл. Да"
-        sentences = list(RuPlainTextSentenizer().text_to_sentences(text, 17))
+        sentences = list(RuPlainTextSentencizer().text_to_sentences(text, 17))
         assert sentences == ["Он т.е. пришёл.", "Да"]
 
     def test_long_sentence_splits_on_comma(self):
         text = "это очень длинное предложение, разбитое запятой, и законченное"
-        sentences = list(RuPlainTextSentenizer().text_to_sentences(text, 20))
+        sentences = list(RuPlainTextSentencizer().text_to_sentences(text, 20))
         assert sentences == [
             "это очень длинное",
             "предложение,",
@@ -31,5 +31,5 @@ class TestRuSimpleTextSentenizer:
 
     def test_hard_splits_giant_word(self):
         text = "супердлинноеслово"
-        sentences = list(RuPlainTextSentenizer().text_to_sentences(text, 5))
+        sentences = list(RuPlainTextSentencizer().text_to_sentences(text, 5))
         assert sentences == ["супер", "длинн", "оесло", "во"]
