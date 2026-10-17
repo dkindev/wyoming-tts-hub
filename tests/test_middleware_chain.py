@@ -19,12 +19,12 @@ from tests.helpers import (
     FakeTtsEngine,
     collect_hub_sentences,
     make_hub,
-    make_model,
+    make_model_info,
     make_voice,
 )
 
-# The Language these tests resolve to and key overrides on. Neither the Model nor
-# Voice id contains it, so an assertion on the Language cannot be satisfied by an id.
+# The Language these tests resolve to and key overrides on. Neither the Model Info
+# nor Voice id contains it, so an assertion on the Language cannot be satisfied by an id.
 LANGUAGE = "ru"
 OTHER_LANGUAGE = "en"
 MODEL_ID = "test-model"
@@ -40,7 +40,9 @@ def make_storage(*, overrides=(), prompts=(), languages=(LANGUAGE,), auto_detect
     """Return a DataStorage holding the Voice under test plus normalization overrides."""
     return FakeDataStorage(
         models=[
-            make_model(id=MODEL_ID, languages=list(languages), language_auto_detected=auto_detected)
+            make_model_info(
+                id=MODEL_ID, languages=list(languages), language_auto_detected=auto_detected
+            )
         ],
         voices=[make_voice(voice_id=VOICE_ID, name="aidar", model=MODEL_ID)],
         voice_normalizations=list(overrides),
@@ -122,7 +124,7 @@ class MissingSentenizerFactory:
 class TestSentenceSplitting:
     async def test_text_within_the_limit_reaches_the_engine_as_one_sentence(self):
         """Text under the limit produces exactly one engine invocation."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         storage = make_storage()
         hub = make_hub(engine=engine, middlewares=build_chain(storage=storage), storage=storage)
 
@@ -132,7 +134,7 @@ class TestSentenceSplitting:
 
     async def test_text_at_the_limit_reaches_the_engine_as_one_sentence(self):
         """Text exactly at the limit is still a single Sentence."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         storage = make_storage()
         hub = make_hub(engine=engine, middlewares=build_chain(storage=storage), storage=storage)
         text = "x" * MAX_SENTENCE_CHARS
@@ -143,7 +145,7 @@ class TestSentenceSplitting:
 
     async def test_punctuated_text_over_the_limit_reaches_the_engine_per_sentence(self):
         """Text over the limit is split on punctuation, one invocation per Sentence."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         storage = make_storage()
         hub = make_hub(engine=engine, middlewares=build_chain(storage=storage), storage=storage)
 
@@ -163,7 +165,7 @@ class TestSentenceSplitting:
         This is what makes `max_sentence_chars` itself observable, rather than merely
         punctuation-driven splitting.
         """
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         storage = make_storage()
         hub = make_hub(engine=engine, middlewares=build_chain(storage=storage), storage=storage)
 
@@ -176,7 +178,7 @@ class TestSentenceSplitting:
 
     async def test_missing_sentence_splitter_is_an_error_naming_voice_and_language(self):
         """No splitter for the Voice's Language and Text Format is diagnosable."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         storage = make_storage()
         hub = make_hub(
             engine=engine,
@@ -197,7 +199,7 @@ class TestSynthesisContextModelInfo:
 
     def test_context_exposes_the_model_info_it_was_given(self):
         """The Model Info handed to the context reaches middleware under its own name."""
-        model_info = make_model(id=MODEL_ID, languages=[LANGUAGE])
+        model_info = make_model_info(id=MODEL_ID, languages=[LANGUAGE])
         voice = make_voice(voice_id=VOICE_ID, name="aidar", model=MODEL_ID)
 
         ctx = SynthesisContext("hello", model_info, voice, TextFormat.TEXT)
@@ -224,9 +226,9 @@ class TestLanguageResolution:
         )
         return hub, seen_languages
 
-    async def test_a_request_without_a_language_gets_the_models_sole_language(self):
-        """No Language against a Model declaring one Language is filled in from it."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+    async def test_a_request_without_a_language_gets_the_model_info_sole_language(self):
+        """No Language against a Model Info declaring one Language is filled in from it."""
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub, seen_languages = self.make_recording_hub(engine, languages=(LANGUAGE,))
 
         await collect_hub_sentences(hub, "hello", VOICE_ID)
@@ -235,8 +237,8 @@ class TestLanguageResolution:
         assert engine.languages == [LANGUAGE]
 
     async def test_a_language_the_client_sent_is_left_alone(self):
-        """A Model declaring several Languages does not overwrite the request's Language."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        """A Model Info declaring several Languages does not overwrite the request's Language."""
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub, seen_languages = self.make_recording_hub(engine, languages=(LANGUAGE, OTHER_LANGUAGE))
 
         await collect_hub_sentences(hub, "hello", VOICE_ID, language=OTHER_LANGUAGE)
@@ -244,9 +246,9 @@ class TestLanguageResolution:
         assert seen_languages == [OTHER_LANGUAGE]
         assert engine.languages == [OTHER_LANGUAGE]
 
-    async def test_a_model_declaring_several_languages_supplies_none(self):
+    async def test_a_model_info_declaring_several_languages_supplies_none(self):
         """Several declared Languages leave the request without one, for the Hub to judge."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub, seen_languages = self.make_recording_hub(
             engine, languages=(LANGUAGE, OTHER_LANGUAGE), auto_detected=True
         )
@@ -256,9 +258,9 @@ class TestLanguageResolution:
         assert seen_languages == [None]
         assert engine.languages == [None]
 
-    async def test_an_auto_detecting_model_is_never_guessed_at(self):
-        """A sole declared Language is not filled in when the Model auto-detects."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+    async def test_an_auto_detecting_model_info_is_never_guessed_at(self):
+        """A sole declared Language is not filled in when the Model Info auto-detects."""
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub, seen_languages = self.make_recording_hub(
             engine, languages=(LANGUAGE,), auto_detected=True
         )
@@ -268,9 +270,9 @@ class TestLanguageResolution:
         assert seen_languages == [None]
         assert engine.languages == [None]
 
-    async def test_a_model_declaring_no_language_supplies_none(self):
+    async def test_a_model_info_declaring_no_language_supplies_none(self):
         """Nothing to fill in leaves the request without one."""
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub, seen_languages = self.make_recording_hub(engine, languages=(), auto_detected=True)
 
         await collect_hub_sentences(hub, "hello", VOICE_ID)
@@ -306,7 +308,7 @@ class TestNormalizationSelection:
             overrides=[make_override(type=override_type, prompt_id="p1" if uses_openai else None)],
             prompts=[prompt_for("p1", OVERRIDE_PROMPT_TEXT)] if uses_openai else [],
         )
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub = make_hub(
             engine=engine,
             middlewares=build_chain(
@@ -332,7 +334,7 @@ class TestNormalizationSelection:
     async def test_voice_without_an_override_uses_the_server_wide_default(self, mock_openai_client):
         """A Voice with no override falls through to the server-wide default."""
         storage = make_storage()
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub = make_hub(
             engine=engine,
             middlewares=build_chain(
@@ -354,7 +356,7 @@ class TestNormalizationSelection:
         storage = make_storage(
             overrides=[make_override(type=NormalizationType.SIMPLE, enabled=False, language="fr")]
         )
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub = make_hub(
             engine=engine,
             middlewares=build_chain(
@@ -379,7 +381,7 @@ class TestNormalizationSelection:
             overrides=[make_override(type=NormalizationType.OPENAI, enabled=False, prompt_id="p1")],
             prompts=[prompt_for("p1", OVERRIDE_PROMPT_TEXT)],
         )
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub = make_hub(
             engine=engine,
             middlewares=build_chain(
@@ -405,7 +407,7 @@ class TestNormalizationSelection:
             overrides=[make_override(type=NormalizationType.OPENAI, prompt_id="missing-prompt")],
             prompts=[],
         )
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub = make_hub(
             engine=engine,
             middlewares=build_chain(storage=storage, openai_client=mock_openai_client),
@@ -430,7 +432,7 @@ class TestNormalizationSelection:
             overrides=[make_override(type=NormalizationType.OPENAI, prompt_id="missing-prompt")],
             prompts=[],
         )
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub = make_hub(
             engine=engine,
             middlewares=build_chain(
@@ -452,7 +454,7 @@ class TestNormalizationApplication:
     async def test_selected_normalizer_is_applied_to_every_sentence(self, mock_openai_client):
         """The selected normalizer runs once per Sentence, each seeing that Sentence."""
         storage = make_storage()
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub = make_hub(
             engine=engine,
             middlewares=build_chain(
@@ -475,7 +477,7 @@ class TestNormalizationApplication:
     async def test_sentences_pass_through_untouched_when_no_normalizer_is_selected(self):
         """With no normalizer selected, Sentences reach the engine exactly as split."""
         storage = make_storage()
-        engine = FakeTtsEngine(make_model(id=MODEL_ID), samples_per_sentence=1000)
+        engine = FakeTtsEngine(make_model_info(id=MODEL_ID), samples_per_sentence=1000)
         hub = make_hub(engine=engine, middlewares=build_chain(storage=storage), storage=storage)
 
         await collect_hub_sentences(

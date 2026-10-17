@@ -24,7 +24,7 @@ from tests.helpers import (
     announced_audio_format,
     audio_formats,
     make_hub,
-    make_model,
+    make_model_info,
     make_voice,
     sample_index_audio,
     streamed_audio_bytes,
@@ -47,7 +47,7 @@ FAILURE = "engine exploded"
 
 
 class ExplodingTtsEngine(FakeTtsEngine):
-    """A TTS Engine that fails on every synthesis, standing in for a broken Model."""
+    """A TTS Engine that fails on every synthesis, standing in for a broken engine."""
 
     async def _synthesize_pcm(self, text, voice, text_format, language=None):
         raise RuntimeError(FAILURE)
@@ -67,12 +67,12 @@ class NoSampleAxisTtsEngine(FakeTtsEngine):
 
 
 def make_storage(*, active_models=(MODEL_ID,), languages=(LANGUAGE,)):
-    """Return storage over two Models, serving only the Active Models' Voices."""
+    """Return storage over two Model Infos, serving only the Active Models' Voices."""
     return YamlDataStorage(
         PredefinedData(
             models=[
-                make_model(id=MODEL_ID, languages=list(languages)),
-                make_model(id=OTHER_MODEL_ID, languages=["en"]),
+                make_model_info(id=MODEL_ID, languages=list(languages)),
+                make_model_info(id=OTHER_MODEL_ID, languages=["en"]),
             ],
             voices=[
                 make_voice(voice_id=f"{MODEL_ID}-zebra", name="zebra", model=MODEL_ID),
@@ -87,7 +87,7 @@ def make_storage(*, active_models=(MODEL_ID,), languages=(LANGUAGE,)):
 def make_engine(*, sample_rate=SAMPLE_RATE, **kwargs):
     """Return a fake TTS Engine holding one second of audio at `sample_rate`."""
     return FakeTtsEngine(
-        make_model(id=MODEL_ID),
+        make_model_info(id=MODEL_ID),
         sample_rate=sample_rate,
         samples_per_sentence=sample_rate,
         **kwargs,
@@ -213,7 +213,7 @@ class TestDescribe:
         voices = Info.from_event(events[0]).tts[0].voices
         assert [voice.name for voice in voices] == [f"{MODEL_ID}-aidar", f"{MODEL_ID}-zebra"]
 
-    async def test_each_voice_reports_its_models_languages(self):
+    async def test_each_voice_reports_its_model_info_languages(self):
         client = WyomingClient()
         handler = make_handler(client, storage=make_storage(languages=("ru", "en-GB")))
 
@@ -276,7 +276,7 @@ class TestSynthesize:
         samples = 64
         client = WyomingClient()
         engine = FakeTtsEngine(
-            make_model(id=MODEL_ID),
+            make_model_info(id=MODEL_ID),
             sample_rate=SAMPLE_RATE,
             samples_per_sentence=samples,
             strided_audio=True,
@@ -362,7 +362,7 @@ class TestAudioWithNoSampleAxis:
     async def test_audio_with_no_sample_axis_is_never_streamed(self):
         """A Chunk the TTS Engine cannot frame is answered with an error, not with audio."""
         client = WyomingClient()
-        engine = NoSampleAxisTtsEngine(make_model(id=MODEL_ID))
+        engine = NoSampleAxisTtsEngine(make_model_info(id=MODEL_ID))
 
         events = await client.send(make_handler(client, engine=engine), synthesize_event())
 
@@ -376,7 +376,7 @@ class TestErrorDetail:
     async def test_production_mode_reports_a_generic_internal_error(self):
         client = WyomingClient()
         handler = make_handler(
-            client, engine=ExplodingTtsEngine(make_model(id=MODEL_ID)), development=False
+            client, engine=ExplodingTtsEngine(make_model_info(id=MODEL_ID)), development=False
         )
 
         events = await client.send(handler, synthesize_event())
@@ -389,7 +389,7 @@ class TestErrorDetail:
     async def test_development_mode_includes_the_underlying_message(self):
         client = WyomingClient()
         handler = make_handler(
-            client, engine=ExplodingTtsEngine(make_model(id=MODEL_ID)), development=True
+            client, engine=ExplodingTtsEngine(make_model_info(id=MODEL_ID)), development=True
         )
 
         events = await client.send(handler, synthesize_event())
@@ -400,7 +400,7 @@ class TestErrorDetail:
 
 
 class TestLanguageFromTheWire:
-    """A Language the client sends beside the Voice reaches the Model that serves it."""
+    """A Language the client sends beside the Voice reaches the Model Info that serves it."""
 
     async def test_language_beside_the_voice_name_reaches_the_engine(self):
         """A Language on the wire is what the engine is asked to speak.
@@ -419,8 +419,8 @@ class TestLanguageFromTheWire:
         assert events[0].type == "audio-start"
         assert engine.languages == [OTHER_LANGUAGE]
 
-    async def test_request_without_a_language_synthesizes_in_the_models_language(self):
-        """A request naming only a Voice is served in the Model's declared Language."""
+    async def test_request_without_a_language_synthesizes_in_the_model_info_language(self):
+        """A request naming only a Voice is served in the Model Info's declared Language."""
         client = WyomingClient()
         engine = make_engine()
 
@@ -429,8 +429,8 @@ class TestLanguageFromTheWire:
         assert events[0].type == "audio-start"
         assert engine.languages == [LANGUAGE]
 
-    async def test_language_the_model_does_not_declare_is_answered_with_an_error(self):
-        """A Language the Model cannot speak is refused to the client, with no audio."""
+    async def test_language_the_model_info_does_not_declare_is_answered_with_an_error(self):
+        """A Language the Model Info cannot speak is refused to the client, with no audio."""
         client = WyomingClient()
         engine = make_engine()
 

@@ -26,78 +26,82 @@ class TestEngineType:
         assert EngineType.OPENAI.value == "openai"
 
 
-class TestModel:
-    def test_model_requires_engine_type(self):
-        """Model.engine_type is required — constructing without it raises TypeError."""
+class TestModelInfo:
+    def test_model_info_requires_engine_type(self):
+        """ModelInfo.engine_type is required — constructing without it raises TypeError."""
         with pytest.raises(TypeError):
-            Model(id="test_model")
+            ModelInfo(id="test_model")
 
-    def test_model_stores_engine_type(self):
-        """Model stores the given engine_type."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO)
-        assert model.engine_type is EngineType.SILERO
+    def test_model_info_stores_engine_type(self):
+        """ModelInfo stores the given engine_type."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.engine_type is EngineType.SILERO
 
-    def test_model_accepts_any_engine_type(self):
-        """Model accepts each EngineType member."""
+    def test_model_info_accepts_any_engine_type(self):
+        """ModelInfo accepts each EngineType member."""
         for engine_type in EngineType:
-            model = Model(id="test_model", engine_type=engine_type)
-            assert model.engine_type is engine_type
+            model_info = ModelInfo(id="test_model", engine_type=engine_type)
+            assert model_info.engine_type is engine_type
 
-    def test_model_ssml_supported_defaults_to_false(self):
-        """Model.ssml_supported defaults to False."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO)
-        assert model.ssml_supported is False
+    def test_model_info_ssml_supported_defaults_to_false(self):
+        """ModelInfo.ssml_supported defaults to False."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.ssml_supported is False
 
-    def test_model_ssml_supported_can_be_set_to_true(self):
-        """Model(ssml_supported=True) sets ssml_supported to True."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO, ssml_supported=True)
-        assert model.ssml_supported is True
+    def test_model_info_ssml_supported_can_be_set_to_true(self):
+        """ModelInfo(ssml_supported=True) sets ssml_supported to True."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO, ssml_supported=True)
+        assert model_info.ssml_supported is True
 
-    def test_model_language_auto_detected_defaults_to_false(self):
-        """Model.language_auto_detected defaults to False."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO)
-        assert model.language_auto_detected is False
+    def test_model_info_language_auto_detected_defaults_to_false(self):
+        """ModelInfo.language_auto_detected defaults to False."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.language_auto_detected is False
 
-    def test_model_language_auto_detected_can_be_set_to_true(self):
-        """Model(language_auto_detected=True) sets language_auto_detected to True."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO, language_auto_detected=True)
-        assert model.language_auto_detected is True
+    def test_model_info_language_auto_detected_can_be_set_to_true(self):
+        """ModelInfo(language_auto_detected=True) sets language_auto_detected to True."""
+        model_info = ModelInfo(
+            id="test_model", engine_type=EngineType.SILERO, language_auto_detected=True
+        )
+        assert model_info.language_auto_detected is True
 
-    def test_model_languages_defaults_to_empty_list(self):
-        """Model.languages defaults to an empty list."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO)
-        assert model.languages == []
+    def test_model_info_languages_defaults_to_empty_list(self):
+        """ModelInfo.languages defaults to an empty list."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.languages == []
 
-    def test_model_languages_stores_declared_languages(self):
-        """Model stores the declared list of languages."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO, languages=["ru", "en"])
-        assert model.languages == ["ru", "en"]
+    def test_model_info_languages_stores_declared_languages(self):
+        """ModelInfo stores the declared list of languages."""
+        model_info = ModelInfo(
+            id="test_model", engine_type=EngineType.SILERO, languages=["ru", "en"]
+        )
+        assert model_info.languages == ["ru", "en"]
 
-    def test_model_warmup_defaults_to_false(self):
-        """Model.warmup defaults to False."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO)
-        assert model.warmup is False
+    def test_model_info_warmup_defaults_to_false(self):
+        """ModelInfo.warmup defaults to False."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.warmup is False
 
-    def test_model_warmup_can_be_set_to_true(self):
-        """Model(warmup=True) sets warmup to True."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO, warmup=True)
-        assert model.warmup is True
+    def test_model_info_warmup_can_be_set_to_true(self):
+        """ModelInfo(warmup=True) sets warmup to True."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO, warmup=True)
+        assert model_info.warmup is True
 
-    def test_model_hash_prefix_defaults_to_none(self):
-        """Model.hash_prefix defaults to None."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO)
-        assert model.hash_prefix is None
+    def test_model_info_hash_prefix_defaults_to_none(self):
+        """ModelInfo.hash_prefix defaults to None."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.hash_prefix is None
 
-    def test_model_hash_prefix_can_be_set(self):
-        """Model(hash_prefix=...) stores the value."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO, hash_prefix="a1b2c3")
-        assert model.hash_prefix == "a1b2c3"
+    def test_model_info_hash_prefix_can_be_set(self):
+        """ModelInfo(hash_prefix=...) stores the value."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO, hash_prefix="a1b2c3")
+        assert model_info.hash_prefix == "a1b2c3"
 
-    def test_model_is_frozen(self):
-        """Model dataclass is immutable (frozen)."""
-        model = Model(id="test_model", engine_type=EngineType.SILERO)
+    def test_model_info_is_frozen(self):
+        """ModelInfo dataclass is immutable (frozen)."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
         with pytest.raises(FrozenInstanceError):
-            model.engine_type = EngineType.QWEN
+            model_info.engine_type = EngineType.QWEN
 
 
 class TestModelInfoAlias:
@@ -255,7 +259,7 @@ class TestVoiceNormalization:
 class TestPredefinedData:
     def test_predefined_data_has_models_and_voices(self):
         """PredefinedData dataclass has models list and voices list."""
-        models = [Model(id="v3_en", engine_type=EngineType.SILERO)]
+        models = [ModelInfo(id="v3_en", engine_type=EngineType.SILERO)]
         voices = [
             Voice(
                 id="en_US-v3_en-en_0",

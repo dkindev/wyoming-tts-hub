@@ -12,7 +12,7 @@ from src.tts.models import (
     TextFormat,
     Voice,
 )
-from tests.helpers import make_model
+from tests.helpers import make_model_info
 
 
 class TestYamlDataStorageInit:
@@ -22,7 +22,7 @@ class TestYamlDataStorageInit:
         """Should accept TTSConfigModel and expose get_voice."""
 
         config_model = PredefinedData(
-            models=[make_model()],
+            models=[make_model_info()],
             voices=[
                 Voice(
                     id="v5_5_ru-aidar",
@@ -54,7 +54,7 @@ class TestGetVoices:
         """get_voices should return list of Voice objects with id field."""
 
         config_model = PredefinedData(
-            models=[make_model()],
+            models=[make_model_info()],
             voices=[
                 Voice(
                     id="v5_5_ru-aidar",
@@ -75,7 +75,7 @@ class TestGetVoices:
         """get_voices should include all voices."""
 
         config_model = PredefinedData(
-            models=[make_model()],
+            models=[make_model_info()],
             voices=[
                 Voice(
                     id="v5_5_ru-aidar",
@@ -102,7 +102,7 @@ class TestGetVoices:
         """get_voices should include voices from all models."""
 
         config_model = PredefinedData(
-            models=[make_model(), make_model(id="v3_en")],
+            models=[make_model_info(), make_model_info(id="v3_en")],
             voices=[
                 Voice(
                     id="v5_5_ru-aidar",
@@ -131,7 +131,7 @@ class TestGetVoice:
         """get_voice should return Voice for the given voice_id."""
 
         config_model = PredefinedData(
-            models=[make_model()],
+            models=[make_model_info()],
             voices=[
                 Voice(
                     id="v5_5_ru-aidar",
@@ -280,7 +280,7 @@ models:
         assert storage.get_model_info("v5_5_ru").warmup is True
 
     def test_voices_sharing_speaker_load_with_distinct_name_ids(self, tmp_path):
-        """Two voices sharing a speaker under one model load with distinct name-based IDs."""
+        """Two voices sharing a speaker under one Model Info load with distinct name-based IDs."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -306,8 +306,8 @@ models:
         assert storage.get_voice("v5_5_ru-aidar-soft").speaker == "aidar"
         assert storage.get_voice("v5_5_ru-aidar-loud").speaker == "aidar"
 
-    def test_duplicate_voice_name_in_one_model_raises_error(self, tmp_path):
-        """Two voices with the same name in one model derive the same ID and fail loudly."""
+    def test_duplicate_voice_name_in_one_model_info_raises_error(self, tmp_path):
+        """Two voices with the same name in one Model Info derive the same ID and fail loudly."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -402,8 +402,8 @@ class TestEmptyData:
 class TestYamlEnabledField:
     """Tests for parsing enabled field from YAML config."""
 
-    def test_yaml_enabled_false_disables_model(self, tmp_path):
-        """YAML with enabled: false should disable the model."""
+    def test_yaml_enabled_false_disables_model_info(self, tmp_path):
+        """YAML with enabled: false should disable the Model Info."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -425,7 +425,7 @@ models:
         assert storage.get_voices() == []
 
     def test_yaml_without_enabled_defaults_to_enabled(self, tmp_path):
-        """YAML without enabled field should keep the model enabled."""
+        """YAML without enabled field should keep the Model Info enabled."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -445,8 +445,8 @@ models:
 
         assert len(storage.get_voices()) == 1
 
-    def test_yaml_enabled_true_explicitly_enables_model(self, tmp_path):
-        """YAML with enabled: true should keep the model enabled."""
+    def test_yaml_enabled_true_explicitly_enables_model_info(self, tmp_path):
+        """YAML with enabled: true should keep the Model Info enabled."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -468,7 +468,7 @@ models:
         assert len(storage.get_voices()) == 1
 
     def test_yaml_mixed_enabled_and_disabled(self, tmp_path):
-        """YAML with mixed enabled/disabled models filters correctly."""
+        """YAML with mixed enabled/disabled Model Infos filters correctly."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -504,11 +504,11 @@ models:
 class TestGetModelInfo:
     """Tests for get_model_info() method."""
 
-    def test_get_model_info_returns_correct_model(self):
-        """get_model_info should return Model for the given model name."""
+    def test_get_model_info_returns_correct_model_info(self):
+        """get_model_info should return the Model Info for the given model id."""
 
         config_model = PredefinedData(
-            models=[make_model()],
+            models=[make_model_info()],
             voices=[],
         )
         storage = YamlDataStorage(config_model)
@@ -519,12 +519,12 @@ class TestGetModelInfo:
 
 class TestGetModelInfos:
     def test_get_model_infos_returns_all_enabled_models(self):
-        """get_model_infos() returns list of all enabled Model objects."""
+        """get_model_infos() returns the list of all enabled Model Info objects."""
 
         config_model = PredefinedData(
             models=[
-                make_model(warmup=True),
-                make_model(id="v3_en"),
+                make_model_info(warmup=True),
+                make_model_info(id="v3_en"),
             ],
             voices=[
                 Voice(
@@ -572,8 +572,8 @@ models:
 class TestYamlWarmupField:
     """Tests for parsing warmup field from YAML config."""
 
-    def test_yaml_warmup_true_sets_warmup_on_model(self, tmp_path):
-        """YAML with warmup: true should set warmup=True on Model."""
+    def test_yaml_warmup_true_sets_warmup_on_model_info(self, tmp_path):
+        """YAML with warmup: true should set warmup=True on the Model Info."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -619,8 +619,8 @@ models:
 class TestYamlHashPrefixField:
     """Tests for parsing hash_prefix field from YAML config."""
 
-    def test_yaml_hash_prefix_sets_hash_prefix_on_model(self, tmp_path):
-        """YAML with hash_prefix should set hash_prefix on Model."""
+    def test_yaml_hash_prefix_sets_hash_prefix_on_model_info(self, tmp_path):
+        """YAML with hash_prefix should set hash_prefix on the Model Info."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -685,16 +685,16 @@ models:
         assert storage.get_model_info("v5_5_ru").hash_prefix is None
 
 
-class TestDisabledModel:
-    """Tests for model disabling via enabled=False on Model."""
+class TestDisabledModelInfo:
+    """Tests for Model Info disabling via enabled=False."""
 
-    def test_disabled_model_voices_excluded_from_get_voices(self):
-        """get_voices should exclude voices that reference a disabled model."""
+    def test_disabled_model_info_voices_excluded_from_get_voices(self):
+        """get_voices should exclude voices that reference a disabled Model Info."""
 
         config_model = PredefinedData(
             models=[
-                make_model(enabled=False),
-                make_model(id="v3_en", enabled=True),
+                make_model_info(enabled=False),
+                make_model_info(id="v3_en", enabled=True),
             ],
             voices=[
                 Voice(
@@ -719,12 +719,12 @@ class TestDisabledModel:
         assert any(v.model_id == "v3_en" for v in result)
         assert any(v.name == "en_0" for v in result)
 
-    def test_disabled_model_get_model_info_returns_none(self):
-        """get_model_info should return None for a disabled model."""
+    def test_disabled_model_info_get_model_info_returns_none(self):
+        """get_model_info should return None for a disabled Model Info."""
 
         config_model = PredefinedData(
             models=[
-                make_model(enabled=False),
+                make_model_info(enabled=False),
             ],
             voices=[],
         )
@@ -993,11 +993,11 @@ models:
         assert vn.type == NormalizationType.SIMPLE
 
 
-class TestModelCapabilities:
-    """Tests for parsing and validating Model capability fields from YAML."""
+class TestModelInfoCapabilities:
+    """Tests for parsing and validating Model Info capability fields from YAML."""
 
     def test_missing_languages_raises_value_error(self, tmp_path):
-        """A model without a languages list fails fast at load."""
+        """A Model Info without a languages list fails fast at load."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -1041,7 +1041,7 @@ models:
         assert storage.get_model_info("v5_5_ru").engine_type is expected
 
     def test_missing_engine_type_raises_value_error(self, tmp_path):
-        """A model without engine_type fails fast at load."""
+        """A Model Info without engine_type fails fast at load."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -1166,8 +1166,8 @@ class TestActiveModelsAllowlist:
         """A model listed in active_models and enabled is served; unlisted models' voices are dropped."""
         config_model = PredefinedData(
             models=[
-                make_model(),
-                make_model(id="v3_en"),
+                make_model_info(),
+                make_model_info(id="v3_en"),
             ],
             voices=[
                 Voice(id="v5_5_ru-aidar", name="aidar", speaker="aidar", model_id="v5_5_ru"),
@@ -1185,8 +1185,8 @@ class TestActiveModelsAllowlist:
         """A model listed in active_models but disabled is not served and logs a warning."""
         config_model = PredefinedData(
             models=[
-                make_model(),
-                make_model(id="v3_en", enabled=False),
+                make_model_info(),
+                make_model_info(id="v3_en", enabled=False),
             ],
             voices=[
                 Voice(id="v5_5_ru-aidar", name="aidar", speaker="aidar", model_id="v5_5_ru"),

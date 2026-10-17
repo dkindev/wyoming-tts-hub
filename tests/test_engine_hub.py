@@ -9,7 +9,7 @@ from tests.helpers import (
     FakeEngineManager,
     FakeTtsEngine,
     collect_hub_sentences,
-    make_model,
+    make_model_info,
     make_voice,
 )
 from tests.helpers import (
@@ -20,7 +20,7 @@ MODEL_ID = "v5_5_ru"
 VOICE_ID = "v5_5_ru-aidar"
 FRAME_DURATION_MS = 50
 
-# The Model every request is served by declares exactly this Language, which the
+# The Model Info every request is served by declares exactly this Language, which the
 # resolving middleware fills in when a request carries none.
 SOLE_LANGUAGE = "ru"
 
@@ -33,11 +33,11 @@ LANGUAGE_VOICE_ID = f"{LANGUAGE_MODEL_ID}-aidar"
 def make_storage(
     *, model_id=MODEL_ID, voice_id=VOICE_ID, languages=(SOLE_LANGUAGE,), auto_detected=False
 ):
-    """Return storage over one Model declaring `languages`, with one Voice on it."""
+    """Return storage over one Model Info declaring `languages`, with one Voice on it."""
     return YamlDataStorage(
         PredefinedData(
             models=[
-                make_model(
+                make_model_info(
                     id=model_id,
                     languages=list(languages),
                     language_auto_detected=auto_detected,
@@ -56,7 +56,7 @@ def make_hub(
     storage=None,
     engine_manager=None,
 ):
-    """Return a TTS Engine Hub wired to a fake engine for one known Voice and Model."""
+    """Return a TTS Engine Hub wired to a fake engine for one known Voice and Model Info."""
     return make_tts_hub(
         engine=engine,
         frame_duration=frame_duration,
@@ -78,7 +78,7 @@ def make_engine(
 ):
     """Return a FakeTtsEngine holding one second of audio unless told otherwise."""
     return FakeTtsEngine(
-        make_model(id=model_id),
+        make_model_info(id=model_id),
         sample_rate=sample_rate,
         samples_per_sentence=(
             samples_per_sentence if samples_per_sentence is not None else sample_rate
@@ -120,8 +120,8 @@ class TestSuccessfulSynthesis:
         synthesized = engine.emitted_audio[0]
         assert all(np.shares_memory(frame.audio, synthesized) for frame in frames)
 
-    async def test_voice_is_routed_to_the_engine_owning_its_model(self):
-        """The Hub asks the Engine Manager for the Model that owns the requested Voice."""
+    async def test_voice_is_routed_to_the_engine_owning_its_model_id(self):
+        """The Hub asks the Engine Manager for the model id that owns the requested Voice."""
         engine = make_engine()
 
         await collect_hub_sentences(make_hub(engine=engine), "hello", VOICE_ID)
@@ -217,8 +217,8 @@ class TestRequestValidation:
         assert "no_such_voice" in str(exc_info.value)
         assert engine.synthesized_texts == []
 
-    async def test_voice_with_unresolvable_model_is_rejected_by_id(self):
-        """A Voice whose Model is absent from storage is rejected naming that Model."""
+    async def test_voice_with_unresolvable_model_id_is_rejected_by_id(self):
+        """A Voice whose model id is absent from storage is rejected naming that id."""
         orphan_voice = make_voice(voice_id="ghost-voice", name="ghost", model="ghost_model")
 
         with pytest.raises(ValueError) as exc_info:
@@ -232,14 +232,14 @@ class TestRequestValidation:
 
 
 class TestLanguageValidation:
-    """The Hub checks the request's Language against the Model's declared Languages.
+    """The Hub checks the request's Language against the Model Info's declared Languages.
 
     The Language is inspected as it stands after the middleware chain, so a
     middleware is trusted to have resolved it.
     """
 
     def make_language_hub(self, *, engine, languages, auto_detected=False):
-        """Return a Hub serving a Model whose id carries no Language code."""
+        """Return a Hub serving a Model Info whose id carries no Language code."""
         return make_hub(
             engine=engine,
             storage=make_storage(
@@ -250,11 +250,11 @@ class TestLanguageValidation:
             ),
         )
 
-    async def test_language_the_model_does_not_declare_is_rejected(self):
-        """A Language outside the Model's declared Languages is rejected by name.
+    async def test_language_the_model_info_does_not_declare_is_rejected(self):
+        """A Language outside the Model Info's declared Languages is rejected by name.
 
-        The Model id carries no Language code, so "ru" can only reach the error
-        message as one of the Model's declared Languages.
+        The model id carries no Language code, so "ru" can only reach the error
+        message as one of the Model Info's declared Languages.
         """
         engine = make_engine(model_id=LANGUAGE_MODEL_ID)
         hub = self.make_language_hub(engine=engine, languages=["ru"])
@@ -264,11 +264,11 @@ class TestLanguageValidation:
 
         message = str(exc_info.value)
         assert "en" in message, "the error must name the requested Language"
-        assert "ru" in message, "the error must name the Model's declared Languages"
+        assert "ru" in message, "the error must name the Model Info's declared Languages"
         assert engine.synthesized_texts == [], "a rejected request must not be synthesized"
 
     async def test_declared_language_reaches_the_engine(self):
-        """A Language the Model declares is accepted and passed through untouched."""
+        """A Language the Model Info declares is accepted and passed through untouched."""
         engine = make_engine()
         hub = make_hub(engine=engine, storage=make_storage(languages=["ru", "en"]))
 
@@ -276,8 +276,8 @@ class TestLanguageValidation:
 
         assert engine.languages == ["en"]
 
-    async def test_absent_language_is_filled_in_from_the_models_sole_language(self):
-        """No Language against a Model declaring one Language synthesizes in that Language."""
+    async def test_absent_language_is_filled_in_from_the_model_info_sole_language(self):
+        """No Language against a Model Info declaring one Language synthesizes in it."""
         engine = make_engine(model_id=LANGUAGE_MODEL_ID)
         hub = self.make_language_hub(engine=engine, languages=["ru"])
 
@@ -285,8 +285,8 @@ class TestLanguageValidation:
 
         assert engine.languages == ["ru"]
 
-    async def test_absent_language_reaches_no_engine_for_an_auto_detecting_model(self):
-        """A Model that auto-detects is asked to synthesize without a Language."""
+    async def test_absent_language_reaches_no_engine_for_an_auto_detecting_model_info(self):
+        """A Model Info that auto-detects is asked to synthesize without a Language."""
         engine = make_engine(model_id=LANGUAGE_MODEL_ID)
         hub = self.make_language_hub(engine=engine, languages=["ru"], auto_detected=True)
 
@@ -306,7 +306,7 @@ class TestLanguageValidation:
     ):
         """Several declared Languages leave nothing to resolve from, unless auto-detected.
 
-        The Model declares `ru` and `en`, and its id carries no Language code, so both
+        The Model Info declares `ru` and `en`, and its id carries no Language code, so both
         can only reach the error message as declared Languages.
         """
         engine = make_engine(model_id=LANGUAGE_MODEL_ID)
@@ -327,7 +327,7 @@ class TestLanguageValidation:
 
             assert engine.languages == [None]
 
-    async def test_absent_language_against_a_model_declaring_none_is_rejected(self):
+    async def test_absent_language_against_a_model_info_declaring_none_is_rejected(self):
         """Nothing to validate against and nothing to resolve from is still an error."""
         engine = make_engine(model_id=LANGUAGE_MODEL_ID)
         hub = self.make_language_hub(engine=engine, languages=[])
@@ -337,8 +337,8 @@ class TestLanguageValidation:
 
         assert engine.synthesized_texts == []
 
-    async def test_language_against_a_model_declaring_none_is_rejected_as_uncheckable(self):
-        """With nothing to validate against, the error blames the Model, not the request.
+    async def test_language_against_a_model_info_declaring_none_is_rejected_as_uncheckable(self):
+        """With nothing to validate against, the error blames the Model Info, not the request.
 
         A Language was supplied here, so saying none was given would send whoever is
         debugging it looking in the wrong place.
@@ -354,8 +354,8 @@ class TestLanguageValidation:
         assert "declares no Languages" in message
         assert engine.synthesized_texts == []
 
-    async def test_language_against_an_auto_detecting_model_declaring_none_is_accepted(self):
-        """Nothing to validate against, and the Model decides for itself, so it proceeds."""
+    async def test_language_against_an_auto_detecting_model_info_declaring_none_is_accepted(self):
+        """Nothing to validate against, and the Model Info decides, so it proceeds."""
         engine = make_engine(model_id=LANGUAGE_MODEL_ID)
         hub = self.make_language_hub(engine=engine, languages=[], auto_detected=True)
 
@@ -384,7 +384,8 @@ class TestLanguageValidation:
         assert engine.languages == ["en"]
 
     async def test_rejected_request_never_acquires_an_engine_context(self):
-        """Validation runs before the engine context is acquired, so the Model is not loaded."""
+        """Validation runs before the engine context is acquired, so no engine is built
+        for the Model Info."""
         engine = make_engine(model_id=LANGUAGE_MODEL_ID)
         engine_manager = FakeEngineManager({LANGUAGE_MODEL_ID: engine})
         hub = make_hub(
