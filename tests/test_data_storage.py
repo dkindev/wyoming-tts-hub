@@ -270,7 +270,7 @@ models:
         assert not hasattr(storage.get_voice("v5_5_ru-aidar"), "locale")
         assert storage.get_voice("v3_en-henry").speaker == "en_2"
         assert storage.get_voice("v3_en-henry").name == "henry"
-        assert storage.get_model("v5_5_ru").warmup is True
+        assert storage.get_model_info("v5_5_ru").warmup is True
 
     def test_voices_sharing_speaker_load_with_distinct_name_ids(self, tmp_path):
         """Two voices sharing a speaker under one model load with distinct name-based IDs."""
@@ -494,11 +494,11 @@ models:
         assert any(v.name == "en_0" for v in voices)
 
 
-class TestGetModel:
-    """Tests for get_model() method."""
+class TestGetModelInfo:
+    """Tests for get_model_info() method."""
 
-    def test_get_model_returns_correct_model(self):
-        """get_model should return Model for the given model name."""
+    def test_get_model_info_returns_correct_model(self):
+        """get_model_info should return Model for the given model name."""
 
         config_model = PredefinedData(
             models=[make_model()],
@@ -506,13 +506,13 @@ class TestGetModel:
         )
         storage = YamlDataStorage(config_model)
 
-        m = storage.get_model("v5_5_ru")
+        m = storage.get_model_info("v5_5_ru")
         assert m.id == "v5_5_ru"
 
 
-class TestGetModels:
-    def test_get_models_returns_all_enabled_models(self):
-        """get_models() returns list of all enabled Model objects."""
+class TestGetModelInfos:
+    def test_get_model_infos_returns_all_enabled_models(self):
+        """get_model_infos() returns list of all enabled Model objects."""
 
         config_model = PredefinedData(
             models=[
@@ -530,7 +530,7 @@ class TestGetModels:
         )
 
         storage = YamlDataStorage(config_model)
-        result = storage.get_models()
+        result = storage.get_model_infos()
 
         model1 = [model for model in result if model.id == "v5_5_ru"]
         model2 = [model for model in result if model.id == "v3_en"]
@@ -564,7 +564,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model("v5_5_ru").warmup is True
+        assert storage.get_model_info("v5_5_ru").warmup is True
 
     def test_yaml_without_warmup_defaults_to_false(self, tmp_path):
         """YAML without warmup field should default to False."""
@@ -585,7 +585,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model("v5_5_ru").warmup is False
+        assert storage.get_model_info("v5_5_ru").warmup is False
 
 
 class TestYamlHashPrefixField:
@@ -611,7 +611,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model("v5_5_ru").hash_prefix == "a1b2c3d4"
+        assert storage.get_model_info("v5_5_ru").hash_prefix == "a1b2c3d4"
 
     def test_yaml_without_hash_prefix_defaults_to_none(self, tmp_path):
         """YAML without hash_prefix should default to None."""
@@ -632,7 +632,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model("v5_5_ru").hash_prefix is None
+        assert storage.get_model_info("v5_5_ru").hash_prefix is None
 
     def test_yaml_empty_hash_prefix_defaults_to_none(self, tmp_path):
         """YAML with empty hash_prefix should default to None."""
@@ -654,7 +654,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model("v5_5_ru").hash_prefix is None
+        assert storage.get_model_info("v5_5_ru").hash_prefix is None
 
 
 class TestDisabledModel:
@@ -691,8 +691,8 @@ class TestDisabledModel:
         assert any(v.model_id == "v3_en" for v in result)
         assert any(v.name == "en_0" for v in result)
 
-    def test_disabled_model_get_model_returns_none(self):
-        """get_model should return None for a disabled model."""
+    def test_disabled_model_get_model_info_returns_none(self):
+        """get_model_info should return None for a disabled model."""
 
         config_model = PredefinedData(
             models=[
@@ -703,7 +703,7 @@ class TestDisabledModel:
 
         storage = YamlDataStorage(config_model)
 
-        assert storage.get_model("v5_5_ru") is None
+        assert storage.get_model_info("v5_5_ru") is None
 
 
 class TestGetPrompt:
@@ -1010,7 +1010,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model("v5_5_ru").engine_type is expected
+        assert storage.get_model_info("v5_5_ru").engine_type is expected
 
     def test_missing_engine_type_raises_value_error(self, tmp_path):
         """A model without engine_type fails fast at load."""
@@ -1066,7 +1066,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model("v5_5_ru").languages == ["ru", "en"]
+        assert storage.get_model_info("v5_5_ru").languages == ["ru", "en"]
 
     def test_empty_languages_raises_value_error(self, tmp_path):
         """An explicitly empty languages list fails fast at load."""
@@ -1102,7 +1102,7 @@ models:
         )
 
         storage = YamlDataStorage(str(config_yml))
-        model = storage.get_model("v5_5_ru")
+        model = storage.get_model_info("v5_5_ru")
 
         assert model.ssml_supported is False
         assert model.language_auto_detected is False
@@ -1125,7 +1125,7 @@ models:
         )
 
         storage = YamlDataStorage(str(config_yml))
-        model = storage.get_model("v5_5_ru")
+        model = storage.get_model_info("v5_5_ru")
 
         assert model.ssml_supported is True
         assert model.language_auto_detected is True
@@ -1149,8 +1149,8 @@ class TestActiveModelsAllowlist:
 
         storage = YamlDataStorage(config_model, active_models=["v5_5_ru"])
 
-        assert storage.get_model("v5_5_ru") is not None
-        assert storage.get_model("v3_en") is None
+        assert storage.get_model_info("v5_5_ru") is not None
+        assert storage.get_model_info("v3_en") is None
         assert not any(v.model_id == "v3_en" for v in storage.get_voices())
 
     def test_listed_but_disabled_model_is_not_served_and_warns(self):
@@ -1173,6 +1173,6 @@ class TestActiveModelsAllowlist:
         finally:
             logger.remove(handler)
 
-        assert storage.get_model("v3_en") is None
+        assert storage.get_model_info("v3_en") is None
         assert not any(v.model_id == "v3_en" for v in storage.get_voices())
         assert "v3_en" in sink.getvalue()

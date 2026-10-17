@@ -22,7 +22,7 @@ from src.tts.models import TextFormat
 def _create_wyoming_info(data_storage: DataStorage, service_name: str, streaming: bool) -> Info:
     voices = []
     for voice in data_storage.get_voices():
-        model = data_storage.get_model(voice.model_id)
+        model = data_storage.get_model_info(voice.model_id)
 
         voices.append(
             TtsVoice(

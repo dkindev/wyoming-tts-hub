@@ -27,11 +27,11 @@ class DataStorage(ABC):
         ...
 
     @abstractmethod
-    def get_model(self, model_id: str) -> Model | None:
+    def get_model_info(self, model_id: str) -> Model | None:
         ...
 
     @abstractmethod
-    def get_models(self) -> list[Model]:
+    def get_model_infos(self) -> list[Model]:
         ...
 
     @abstractmethod
@@ -248,10 +248,10 @@ class YamlDataStorage(DataStorage):
     def get_voice(self, voice_id: str) -> Voice | None:
         return self._voices_by_id.get(voice_id)
 
-    def get_model(self, model_id: str) -> Model | None:
+    def get_model_info(self, model_id: str) -> Model | None:
         return self._models.get(model_id)
 
-    def get_models(self) -> list[Model]:
+    def get_model_infos(self) -> list[Model]:
         return list(self._models.values())
 
     def get_prompt(self, prompt_id: str) -> Prompt | None:

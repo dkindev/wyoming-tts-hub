@@ -42,7 +42,7 @@ class TtsEngineHub:
         if voice is None:
             raise ValueError(f"Unsupported voice: {voice_id}")
 
-        model = self._data_storage.get_model(voice.model_id)
+        model = self._data_storage.get_model_info(voice.model_id)
         if model is None:
             raise ValueError(f"Unsupported model: {voice.model_id}")
 

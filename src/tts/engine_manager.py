@@ -181,7 +181,7 @@ class TtsEngineManager:
 
             logger.info("Warming up...")
 
-            models = self._data_storage.get_models()
+            models = self._data_storage.get_model_infos()
             to_warm = [model for model in models if model.warmup][: self._cache_capacity]
 
             logger.debug("Models to warm up: {count}", count=len(to_warm))
@@ -234,7 +234,7 @@ class TtsEngineManager:
 
                 logger.debug("Model '{name}' not found in cache. Warming up...", name=model_id)
 
-                model = self._data_storage.get_model(model_id)
+                model = self._data_storage.get_model_info(model_id)
                 if not model:
                     raise RuntimeError(f"Model '{model_id}' not found")
 
