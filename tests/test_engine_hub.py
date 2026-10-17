@@ -3,7 +3,7 @@ import pytest
 
 from src.tts.data_storage import YamlDataStorage
 from src.tts.middleware import ResolveLanguageMiddleware
-from src.tts.models import PredefinedData, TtsResult
+from src.tts.models import PredefinedData, TextFormat, TtsResult
 from tests.helpers import (
     FakeDataStorage,
     FakeEngineManager,
@@ -24,14 +24,21 @@ FRAME_DURATION_MS = 50
 # resolving middleware fills in when a request carries none.
 SOLE_LANGUAGE = "ru"
 
-# A Model id with no Language code in it, so an assertion about a declared Language
-# cannot be satisfied by the Model id itself.
+# A Model id naming no Language and no Text Format, so an assertion about either a
+# declared Language or a declared Text Format cannot be satisfied by the Model id.
 LANGUAGE_MODEL_ID = "tts_model"
 LANGUAGE_VOICE_ID = f"{LANGUAGE_MODEL_ID}-aidar"
+TEXT_FORMAT_MODEL_ID = LANGUAGE_MODEL_ID
+TEXT_FORMAT_VOICE_ID = LANGUAGE_VOICE_ID
 
 
 def make_storage(
-    *, model_id=MODEL_ID, voice_id=VOICE_ID, languages=(SOLE_LANGUAGE,), auto_detected=False
+    *,
+    model_id=MODEL_ID,
+    voice_id=VOICE_ID,
+    languages=(SOLE_LANGUAGE,),
+    auto_detected=False,
+    ssml_supported=False,
 ):
     """Return storage over one Model Info declaring `languages`, with one Voice on it."""
     return YamlDataStorage(
@@ -41,6 +48,7 @@ def make_storage(
                     id=model_id,
                     languages=list(languages),
                     language_auto_detected=auto_detected,
+                    ssml_supported=ssml_supported,
                 )
             ],
             voices=[make_voice(voice_id=voice_id, name="aidar", model=model_id)],
@@ -398,6 +406,71 @@ class TestLanguageValidation:
 
         with pytest.raises(ValueError):
             await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID, language="en")
+
+        assert engine_manager.requested_model_ids == []
+        assert engine.warmup_count == 0
+
+
+class TestTextFormatValidation:
+    def make_text_format_hub(self, *, engine, ssml_supported=False, engine_manager=None):
+        return make_hub(
+            engine=engine,
+            storage=make_storage(
+                model_id=TEXT_FORMAT_MODEL_ID,
+                voice_id=TEXT_FORMAT_VOICE_ID,
+                languages=["ru"],
+                ssml_supported=ssml_supported,
+            ),
+            engine_manager=engine_manager,
+        )
+
+    async def test_ssml_against_a_model_info_declaring_no_support_is_rejected(self):
+        """SSML from a Model Info that does not declare it is refused, naming both.
+
+        The Model id carries neither "ssml" nor "ru", so both can only reach the error
+        message as the declared Text Format and the Model Info's own id.
+        """
+        engine = make_engine(model_id=TEXT_FORMAT_MODEL_ID)
+        hub = self.make_text_format_hub(engine=engine, ssml_supported=False)
+
+        with pytest.raises(ValueError) as exc_info:
+            await collect_hub_sentences(
+                hub, "hello", TEXT_FORMAT_VOICE_ID, input_type=TextFormat.SSML
+            )
+
+        message = str(exc_info.value)
+        assert "ssml" in message.lower(), "the error must name the requested Text Format"
+        assert TEXT_FORMAT_MODEL_ID in message, "the error must name the Model Info"
+        assert engine.synthesized_texts == [], "a rejected request must not be synthesized"
+
+    async def test_ssml_against_a_model_info_declaring_support_reaches_the_engine(self):
+        """SSML a Model Info declares support for is passed to the engine untouched."""
+        engine = make_engine(model_id=TEXT_FORMAT_MODEL_ID)
+        hub = self.make_text_format_hub(engine=engine, ssml_supported=True)
+
+        await collect_hub_sentences(hub, "hello", TEXT_FORMAT_VOICE_ID, input_type=TextFormat.SSML)
+
+        assert engine.text_formats == [TextFormat.SSML]
+
+    async def test_plain_text_is_accepted_without_a_declaration(self):
+        """Plain text needs no declaration: nothing gates it but a non-empty request."""
+        engine = make_engine(model_id=TEXT_FORMAT_MODEL_ID)
+        hub = self.make_text_format_hub(engine=engine, ssml_supported=False)
+
+        await collect_hub_sentences(hub, "hello", TEXT_FORMAT_VOICE_ID)
+
+        assert engine.text_formats == [TextFormat.TEXT]
+
+    async def test_rejected_text_format_never_acquires_an_engine_context(self):
+        """Validation runs before the engine context is acquired, so no engine is built."""
+        engine = make_engine(model_id=TEXT_FORMAT_MODEL_ID)
+        engine_manager = FakeEngineManager({TEXT_FORMAT_MODEL_ID: engine})
+        hub = self.make_text_format_hub(engine=engine, engine_manager=engine_manager)
+
+        with pytest.raises(ValueError):
+            await collect_hub_sentences(
+                hub, "hello", TEXT_FORMAT_VOICE_ID, input_type=TextFormat.SSML
+            )
 
         assert engine_manager.requested_model_ids == []
         assert engine.warmup_count == 0

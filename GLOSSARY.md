@@ -121,7 +121,12 @@ _Avoid_: Packet, block, window
 - A **Model Info** is loaded on the first synthesis request for it, unless it sets
   `warmup` to be pre-warmed at startup
 - Only the **Voices** of **Active Model Infos** are advertised over the Wyoming
-  protocol, plus their per-**Model Info** **Languages** and **Text Formats**
+  protocol, plus their per-**Model Info** **Languages**
+- A **Text Format** is chosen per request rather than advertised: the Wyoming
+  protocol announces a **Voice**, its **Languages** and its speakers, and says
+  nothing about **Text Formats**
+- A **Model Info** that does not declare SSML support (`ssml_supported`) refuses
+  an SSML request; plain text is always accepted
 - A **Language** sent by a client is validated against the selected **Model
   Info**'s declared **Languages**, and the request is refused on a mismatch
 - An omitted **Language** is filled in from the **Model Info**'s sole declared

@@ -222,6 +222,11 @@ class FakeTtsEngine(TtsEngine):
         return [language for _, _, _, language in self.requests]
 
     @property
+    def text_formats(self) -> list[TextFormat]:
+        """The Text Format of every request this engine was asked to synthesize."""
+        return [text_format for _, _, text_format, _ in self.requests]
+
+    @property
     def audio_size_bytes(self) -> int:
         """Total audio bytes this engine emits per sentence, at the format it declares."""
         return self.samples_per_sentence * self.bytes_per_sample * self.channels

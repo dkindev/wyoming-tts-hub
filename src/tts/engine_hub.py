@@ -56,6 +56,7 @@ class TtsEngineHub:
             await run_middleware(0)
 
         self._validate_language(ctx)
+        self._validate_text_format(ctx)
 
         engine_context = await self._engine_manager.get_context(model_info.id)
         if engine_context is None:
@@ -110,6 +111,25 @@ class TtsEngineHub:
                 f"Language '{context.language}' is not declared by model '{model_info.id}', "
                 f"which declares: {_declared(model_info)}"
             )
+
+    @staticmethod
+    def _validate_text_format(context: SynthesisContext) -> None:
+        """Reject a Text Format the Model Info has not declared support for.
+
+        Runs alongside the Language check, on the Text Format as it stands after the
+        middleware chain, so a middleware is trusted to have resolved it. Only SSML is
+        gated: a Model Info declares whether it accepts SSML, and plain text needs no
+        declaration.
+        """
+        model_info = context.model_info
+
+        if context.text_format != TextFormat.SSML or model_info.ssml_supported:
+            return
+
+        raise ValueError(
+            f"Text Format '{context.text_format.value}' is not declared by model "
+            f"'{model_info.id}', which does not accept SSML"
+        )
 
     async def _synthesize_pcm_chunks(  # noqa: C901
         self,

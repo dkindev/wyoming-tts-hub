@@ -66,12 +66,14 @@ class NoSampleAxisTtsEngine(FakeTtsEngine):
         )
 
 
-def make_storage(*, active_models=(MODEL_ID,), languages=(LANGUAGE,)):
+def make_storage(*, active_models=(MODEL_ID,), languages=(LANGUAGE,), ssml_supported=False):
     """Return storage over two Model Infos, serving only the Active Models' Voices."""
     return YamlDataStorage(
         PredefinedData(
             models=[
-                make_model_info(id=MODEL_ID, languages=list(languages)),
+                make_model_info(
+                    id=MODEL_ID, languages=list(languages), ssml_supported=ssml_supported
+                ),
                 make_model_info(id=OTHER_MODEL_ID, languages=["en"]),
             ],
             voices=[
@@ -341,19 +343,40 @@ class TestRejections:
         assert expected_text in Error.from_event(events[0]).text
 
     @pytest.mark.parametrize(
-        "text_format",
+        ("text_format", "ssml_supported"),
         [
-            pytest.param(SynthesizeTextFormat.TEXT, id="text"),
-            pytest.param(SynthesizeTextFormat.SSML, id="ssml"),
+            pytest.param(SynthesizeTextFormat.TEXT, False, id="text"),
+            pytest.param(SynthesizeTextFormat.SSML, True, id="ssml"),
         ],
     )
-    async def test_accepted_request_answers_with_audio(self, text_format):
-        """The guard rejects only what it should: a request in a known Text Format gets audio."""
+    async def test_accepted_request_answers_with_audio(self, text_format, ssml_supported):
+        """The guard rejects only what it should: a request in a known Text Format gets audio.
+
+        SSML reaches a Model Info that declares support for it; plain text needs no
+        declaration, so it is asked of a Model Info that declares none.
+        """
         client = WyomingClient()
 
-        events = await client.send(make_handler(client), synthesize_event(text_format=text_format))
+        events = await client.send(
+            make_handler(client, storage=make_storage(ssml_supported=ssml_supported)),
+            synthesize_event(text_format=text_format),
+        )
 
         assert events[0].type == "audio-start"
+
+    async def test_ssml_a_model_info_does_not_declare_is_answered_with_an_error(self):
+        """SSML asked of a Model Info that does not declare it never becomes audio."""
+        client = WyomingClient()
+
+        events = await client.send(
+            make_handler(client, storage=make_storage(ssml_supported=False)),
+            synthesize_event(text_format=SynthesizeTextFormat.SSML),
+        )
+
+        assert [event.type for event in events] == ["error"]
+        message = Error.from_event(events[0]).text
+        assert "ssml" in message.lower(), "the error must name the Text Format"
+        assert MODEL_ID in message, "the error must name the Model Info"
 
 
 class TestAudioWithNoSampleAxis:
@@ -487,6 +510,12 @@ class TestStreaming:
                 "hello",
                 "Unsupported text format",
                 id="unknown-text-format",
+            ),
+            pytest.param(
+                start_event(text_format=SynthesizeTextFormat.SSML),
+                "hello",
+                "does not accept SSML",
+                id="ssml-not-declared",
             ),
         ],
     )
