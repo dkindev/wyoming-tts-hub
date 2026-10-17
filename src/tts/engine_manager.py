@@ -60,7 +60,7 @@ class TtsEngineContext:
 
     async def __aenter__(self):
         # The reference is taken before the wait so that eviction is deferred for a
-        # request already queued on the limit: tearing the Model down underneath a
+        # request already queued on the limit: tearing the cached engine down under a
         # queued waiter would strip the engine and the semaphore it is blocked on.
         # A cancelled wait therefore has to give the reference back, since __aexit__
         # never runs for a body that was never entered.
