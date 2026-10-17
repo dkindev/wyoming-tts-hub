@@ -56,9 +56,7 @@ def load_example(tmp_path: Path, example: str, index: int) -> YamlDataStorage:
     path = tmp_path / f"readme-example-{index}.yml"
     path.write_text(example)
 
-    # The storage accepts a Path in its type hint but calls strip() on what it is given,
-    # so the example is handed over as the string the hint also allows.
-    return YamlDataStorage(config_path_or_model=str(path), active_models=model_ids)
+    return YamlDataStorage(config_path_or_model=path, active_models=model_ids)
 
 
 class TestEveryExampleLoads:

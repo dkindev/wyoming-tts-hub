@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 
 import pytest
 from loguru import logger
@@ -13,6 +14,24 @@ from src.tts.models import (
     Voice,
 )
 from tests.helpers import make_model_info
+
+
+def write_data_file(tmp_path: Path, contents: str, name: str = "data.yml") -> Path:
+    """Write a data file and hand back its path, ready to be read as written."""
+    path = tmp_path / name
+    path.write_text(contents)
+
+    return path
+
+
+MODEL_WITH_VOICE = """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
 
 
 class TestYamlDataStorageInit:
@@ -1204,3 +1223,246 @@ class TestActiveModelsAllowlist:
         assert storage.get_model_info("v3_en") is None
         assert not any(v.model_id == "v3_en" for v in storage.get_voices())
         assert "v3_en" in sink.getvalue()
+
+
+class TestInputsTheShapesAllow:
+    """Inputs a Model Info or a Voice can carry, which were rejected on the way in."""
+
+    def test_a_path_is_read_as_written(self, tmp_path):
+        """The storage invites a Path in its signature, and used to raise on one.
+
+        Passing a string worked, which is why nothing caught it: every other test hands
+        over a string too.
+        """
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(path)
+
+        assert storage.get_voice("v5_5_ru-aidar").name == "aidar"
+
+    def test_a_null_speaker_falls_back_to_the_voice_name(self, tmp_path):
+        """An explicit null means the same as leaving the speaker out.
+
+        The fallback exists for an absent speaker; written as null it used to raise
+        instead, because the fallback reached strip() on None.
+        """
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        speaker: null
+""",
+        )
+
+        storage = YamlDataStorage(path)
+
+        assert storage.get_voice("v5_5_ru-aidar").speaker == "aidar"
+
+    @pytest.mark.parametrize("section", ["models", "prompts"])
+    def test_an_empty_section_is_read_as_absent(self, tmp_path, section):
+        """A section written as null is a section with nothing in it, not a crash."""
+        contents = (
+            MODEL_WITH_VOICE if section == "models" else f"{MODEL_WITH_VOICE}\n{section}: null\n"
+        )
+        path = write_data_file(tmp_path, contents)
+
+        storage = YamlDataStorage(path)
+
+        assert storage.get_model_infos() if section == "models" else storage.get_voices()
+
+    def test_null_voices_are_no_voices(self, tmp_path):
+        """A Model Info may carry no voices at all, and saying so explicitly is allowed."""
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru]
+    voices: null
+""",
+        )
+
+        storage = YamlDataStorage(path)
+
+        assert storage.get_voice("v5_5_ru-aidar") is None
+        assert storage.get_model_info("v5_5_ru") is not None
+
+    def test_a_voice_without_a_name_is_refused_by_name(self, tmp_path):
+        """A name is required, so it is refused — but by something a reader can act on."""
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - speaker: aidar
+""",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(path)
+
+        assert "v5_5_ru" in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        ("contents", "expected"),
+        [
+            pytest.param("models:\n  v5_5_ru:\n", "v5_5_ru", id="model-with-no-body"),
+            pytest.param(
+                "models:\n  v5_5_ru:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - null\n",
+                "v5_5_ru",
+                id="voice-entry-that-is-null",
+            ),
+            pytest.param(
+                "models:\n  v5_5_ru:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - aidar\n",
+                "v5_5_ru",
+                id="voice-entry-that-is-not-a-mapping",
+            ),
+        ],
+    )
+    def test_a_wrong_shape_inside_a_model_is_refused_by_name(self, tmp_path, contents, expected):
+        """A mistyped entry is refused with something a reader can act on.
+
+        All three used to raise a bare AttributeError or TypeError from inside the
+        parser, naming nothing about the file that was wrong.
+        """
+        path = write_data_file(tmp_path, contents)
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(path)
+
+        assert expected in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        "contents",
+        [
+            pytest.param("- one\n- two\n", id="a-list"),
+            pytest.param("models: v5_5_ru\n", id="models-is-not-a-mapping"),
+            pytest.param("prompts:\n  id: ru_text\n", id="prompts-is-not-a-list"),
+        ],
+    )
+    def test_a_data_file_of_the_wrong_shape_is_refused_by_name(self, tmp_path, contents):
+        """The document itself has to be a mapping of the sections the parser reads."""
+        path = write_data_file(tmp_path, contents)
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(path)
+
+        assert "data.yml" in str(exc_info.value), "the error must name the file that was wrong"
+
+    @pytest.mark.parametrize(
+        ("contents", "expected"),
+        [
+            pytest.param("prompts:\n  - text: hi\n    model: m\n", "id", id="prompt-without-an-id"),
+            pytest.param("prompts:\n  - null\n", "prompts", id="prompt-that-is-null"),
+            pytest.param("prompts:\n  - a string\n", "prompts", id="prompt-that-is-a-string"),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - name: aidar\n        normalization: ru\n",
+                "normalization",
+                id="normalization-that-is-not-a-mapping",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - name: aidar\n        normalization:\n"
+                "          ru:\n            text: simple\n",
+                "normalization",
+                id="normalization-without-a-mapping-per-language",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: ru\n",
+                "languages",
+                id="languages-written-as-a-string",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [1]\n",
+                "languages",
+                id="language-that-is-not-a-string",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - name: null\n",
+                "name",
+                id="voice-name-that-is-null",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      aidar: {}\n",
+                "voices",
+                id="voices-that-are-not-a-list",
+            ),
+        ],
+    )
+    def test_a_shape_the_data_file_does_not_allow_is_refused_by_name(
+        self, tmp_path, contents, expected
+    ):
+        """A value written in the wrong shape is refused, not read into nothing.
+
+        Each of these used to raise a bare KeyError, TypeError or AttributeError from
+        inside the parser, or to be silently dropped: a mistyped data file should say
+        what is wrong with it, in terms the reader wrote it in.
+        """
+        path = write_data_file(tmp_path, contents)
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(path)
+
+        assert expected in str(exc_info.value)
+
+    def test_a_language_list_of_strings_is_read_as_written(self, tmp_path):
+        """The shape the parser accepts is the shape it reads, unchanged."""
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru, en]
+""",
+        )
+
+        storage = YamlDataStorage(path)
+
+        assert storage.get_model_info("v5_5_ru").languages == ["ru", "en"]
+
+    def test_a_normalization_block_written_as_documented_is_read(self, tmp_path):
+        """A correctly shaped override survives; only the malformed ones are refused."""
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: ru_text
+prompts:
+  - id: ru_text
+    text: "Normalize Russian text"
+    model: qwen3.5:4b
+""",
+        )
+
+        storage = YamlDataStorage(path)
+
+        override = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
+
+        assert override.type.value == "openai"
+        assert override.enabled is True
+        assert storage.get_prompt("ru_text").model == "qwen3.5:4b"

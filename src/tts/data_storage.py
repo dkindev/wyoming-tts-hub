@@ -77,7 +77,7 @@ class YamlDataStorage(DataStorage):
         )
 
     def _load_config_model(self, config_path: str | Path) -> PredefinedData:
-        config_path = config_path.strip()
+        config_path = str(config_path).strip()
         if not config_path:
             raise ValueError("Path to the model configuration file is empty or whitespace")
 
@@ -89,65 +89,35 @@ class YamlDataStorage(DataStorage):
         with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
 
+        self._validate_sections(data, config_path)
+
         models_list: list[ModelInfo] = []
         voices_list: list[Voice] = []
         voice_normalizations_list: list[VoiceNormalization] = []
         seen_voice_ids: dict[str, str] = {}
 
-        for model_id, model_data in data.get("models", {}).items():
-            engine_type_value = model_data.get("engine_type")
-            if engine_type_value is None:
+        for model_id, model_data in (data.get("models") or {}).items():
+            if not isinstance(model_data, dict):
                 raise ValueError(
-                    f"Model '{model_id}' is missing required 'engine_type' "
-                    "(one of: silero, qwen, openai)"
+                    f"Model '{model_id}' must be a mapping of its fields, but it is a "
+                    f"{type(model_data).__name__}"
                 )
-            try:
-                engine_type = EngineType(engine_type_value)
-            except ValueError:
+
+            models_list.append(self._parse_model_info(model_id, model_data))
+
+            voices = model_data.get("voices")
+            if voices is not None and not isinstance(voices, list):
                 raise ValueError(
-                    f"Model '{model_id}' has unknown 'engine_type' '{engine_type_value}' "
-                    "(expected one of: silero, qwen, openai)"
-                ) from None
-
-            languages_raw = model_data.get("languages")
-            if not languages_raw:
-                raise ValueError(f"Model '{model_id}' must declare a non-empty 'languages' list")
-
-            models_list.append(
-                ModelInfo(
-                    id=model_id,
-                    engine_type=engine_type,
-                    ssml_supported=model_data.get("ssml_supported", False),
-                    language_auto_detected=model_data.get("language_auto_detected", False),
-                    languages=[lang.strip() for lang in languages_raw],
-                    enabled=model_data.get("enabled", True),
-                    warmup=model_data.get("warmup", False),
-                    hash_prefix=model_data.get("hash_prefix") or None,
+                    f"Model '{model_id}' must declare 'voices' as a list of voices, "
+                    f"but it holds a {type(voices).__name__}"
                 )
-            )
 
-            for voice_entry in model_data.get("voices", []):
-                voice_name = voice_entry["name"]
-                speaker = voice_entry.get("speaker", "").strip() or voice_name
-                voice_id = f"{model_id}-{voice_name}"
-                if voice_id in seen_voice_ids:
-                    raise ValueError(
-                        f"Duplicate voice ID '{voice_id}': multiple voices in model "
-                        f"'{model_id}' share the name '{voice_name}'"
-                    )
-                seen_voice_ids[voice_id] = model_id
+            for voice_entry in voices or []:
                 voices_list.append(
-                    Voice(
-                        id=voice_id,
-                        name=voice_name,
-                        speaker=speaker,
-                        model_id=model_id,
-                        ref_audio=voice_entry.get("ref_audio") or None,
-                        ref_text=voice_entry.get("ref_text") or None,
-                        instruct=voice_entry.get("instruct") or None,
+                    self._parse_voice(
+                        model_id, voice_entry, seen_voice_ids, voice_normalizations_list
                     )
                 )
-                self._parse_voice_normalization(voice_entry, voice_id, voice_normalizations_list)
 
         prompts_list = self._parse_prompts(data)
 
@@ -160,18 +130,148 @@ class YamlDataStorage(DataStorage):
         )
 
     @staticmethod
+    def _parse_model_info(model_id: str, model_data: dict) -> ModelInfo:
+        """Read one model entry, refusing one that declares nothing speakable."""
+        engine_type_value = model_data.get("engine_type")
+        if engine_type_value is None:
+            raise ValueError(
+                f"Model '{model_id}' is missing required 'engine_type' "
+                "(one of: silero, qwen, openai)"
+            )
+        try:
+            engine_type = EngineType(engine_type_value)
+        except ValueError:
+            raise ValueError(
+                f"Model '{model_id}' has unknown 'engine_type' '{engine_type_value}' "
+                "(expected one of: silero, qwen, openai)"
+            ) from None
+
+        languages_raw = model_data.get("languages")
+        if not languages_raw:
+            raise ValueError(f"Model '{model_id}' must declare a non-empty 'languages' list")
+
+        # A bare string would otherwise be read one character at a time.
+        if not isinstance(languages_raw, list) or not all(
+            isinstance(language, str) for language in languages_raw
+        ):
+            raise ValueError(
+                f"Model '{model_id}' must declare 'languages' as a list of language codes, "
+                "such as [ru]"
+            )
+
+        return ModelInfo(
+            id=model_id,
+            engine_type=engine_type,
+            ssml_supported=model_data.get("ssml_supported", False),
+            language_auto_detected=model_data.get("language_auto_detected", False),
+            languages=[lang.strip() for lang in languages_raw],
+            enabled=model_data.get("enabled", True),
+            warmup=model_data.get("warmup", False),
+            hash_prefix=model_data.get("hash_prefix") or None,
+        )
+
+    @staticmethod
+    def _parse_voice(
+        model_id: str,
+        voice_entry: object,
+        seen_voice_ids: dict[str, str],
+        voice_normalizations_list: list[VoiceNormalization],
+    ) -> Voice:
+        """Read one voice of a model, refusing an entry that names no voice."""
+        if not isinstance(voice_entry, dict):
+            raise ValueError(
+                f"A voice of model '{model_id}' must be a mapping of its fields, but it "
+                f"is a {type(voice_entry).__name__}"
+            )
+
+        voice_name = voice_entry.get("name")
+        if not isinstance(voice_name, str) or not voice_name.strip():
+            raise ValueError(
+                f"A voice of model '{model_id}' must declare a non-empty 'name', "
+                f"but it holds {voice_entry.get('name')!r}"
+            )
+
+        voice_id = f"{model_id}-{voice_name}"
+        if voice_id in seen_voice_ids:
+            raise ValueError(
+                f"Duplicate voice ID '{voice_id}': multiple voices in model "
+                f"'{model_id}' share the name '{voice_name}'"
+            )
+
+        seen_voice_ids[voice_id] = model_id
+
+        voice = Voice(
+            id=voice_id,
+            name=voice_name,
+            # An absent speaker and an explicitly null one mean the same thing.
+            speaker=(voice_entry.get("speaker") or "").strip() or voice_name,
+            model_id=model_id,
+            ref_audio=voice_entry.get("ref_audio") or None,
+            ref_text=voice_entry.get("ref_text") or None,
+            instruct=voice_entry.get("instruct") or None,
+        )
+        YamlDataStorage._parse_voice_normalization(voice_entry, voice_id, voice_normalizations_list)
+
+        return voice
+
+    @staticmethod
+    def _validate_sections(data: object, config_path: str) -> None:
+        """Refuse a document whose sections are not the shapes the parser reads.
+
+        Without this, a mistyped file raises from inside the parse loop, naming nothing
+        about the file that was wrong.
+        """
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"The model configuration file '{config_path}' must be a mapping of sections, "
+                f"but it holds a {type(data).__name__}"
+            )
+
+        models_section = data.get("models")
+        if models_section is not None and not isinstance(models_section, dict):
+            raise ValueError(
+                f"The 'models' section of '{config_path}' must be a mapping of model ids, "
+                f"but it holds a {type(models_section).__name__}"
+            )
+
+        prompts_section = data.get("prompts")
+        if prompts_section is not None and not isinstance(prompts_section, list):
+            raise ValueError(
+                f"The 'prompts' section of '{config_path}' must be a list of prompts, but it "
+                f"holds a {type(prompts_section).__name__}"
+            )
+
+    @staticmethod
     def _parse_voice_normalization(
         voice_entry: dict,
         voice_id: str,
         voice_normalizations_list: list[VoiceNormalization],
     ) -> None:
         normalization = voice_entry.get("normalization")
-        if not normalization or not isinstance(normalization, dict):
+        if not normalization:
             return
+
+        if not isinstance(normalization, dict):
+            raise ValueError(
+                f"Voice '{voice_id}' must declare 'normalization' as a mapping of language to "
+                f"text format, but it holds a {type(normalization).__name__}"
+            )
+
         for language, formats in normalization.items():
             if not isinstance(formats, dict):
-                continue
+                raise ValueError(
+                    f"Voice '{voice_id}' must declare 'normalization' per language, but "
+                    f"'{language}' holds a {type(formats).__name__}"
+                )
+
             for text_format_str, norm_data in formats.items():
+                if not isinstance(norm_data, dict):
+                    raise ValueError(
+                        f"Voice '{voice_id}' must declare 'normalization.{language}."
+                        f"{text_format_str}' as a mapping of its fields, but it holds a "
+                        f"{type(norm_data).__name__}"
+                    )
+
                 try:
                     text_format = TextFormat(text_format_str)
                 except ValueError:
@@ -196,7 +296,20 @@ class YamlDataStorage(DataStorage):
     @staticmethod
     def _parse_prompts(data: dict) -> list[Prompt]:
         prompts_list: list[Prompt] = []
-        for prompt_entry in data.get("prompts", []):
+        for index, prompt_entry in enumerate(data.get("prompts") or []):
+            if not isinstance(prompt_entry, dict):
+                raise ValueError(
+                    f"A prompt in the 'prompts' section must be a mapping of its fields, but "
+                    f"entry {index} is a {type(prompt_entry).__name__}"
+                )
+
+            for required in ("id", "text", "model"):
+                if required not in prompt_entry:
+                    raise ValueError(
+                        f"A prompt in the 'prompts' section is missing its required "
+                        f"'{required}' (entry {index})"
+                    )
+
             prompt = Prompt(
                 id=prompt_entry["id"],
                 text=prompt_entry["text"],
