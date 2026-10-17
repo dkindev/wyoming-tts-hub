@@ -8,7 +8,7 @@ from src.tts.data_storage import DataStorage
 from src.tts.engine_manager import TtsEngineContext, TtsEngineManager
 from src.tts.middleware import MiddlewareType, SynthesisContext
 from src.tts.models import (
-    Model,
+    ModelInfo,
     TextFormat,
     TtsResult,
 )
@@ -42,11 +42,11 @@ class TtsEngineHub:
         if voice is None:
             raise ValueError(f"Unsupported voice: {voice_id}")
 
-        model = self._data_storage.get_model_info(voice.model_id)
-        if model is None:
+        model_info = self._data_storage.get_model_info(voice.model_id)
+        if model_info is None:
             raise ValueError(f"Unsupported model: {voice.model_id}")
 
-        ctx = SynthesisContext(text, model, voice, text_format, language)
+        ctx = SynthesisContext(text, model_info, voice, text_format, language)
 
         async def run_middleware(index: int):
             if index < len(self._middlewares):
@@ -57,16 +57,16 @@ class TtsEngineHub:
 
         self._validate_language(ctx)
 
-        engine_context = await self._engine_manager.get_context(model.id)
+        engine_context = await self._engine_manager.get_context(model_info.id)
         if engine_context is None:
-            raise ValueError(f"No engine found for synthesis with model '{model.id}'")
+            raise ValueError(f"No engine found for synthesis with model '{model_info.id}'")
 
         logger.info(
             "Synthesizing TTS. Text length: {text_length}. Voice: {voice_id}. Text format: {text_format}. Model: {model_id}",
             text_length=len(text),
             voice_id=voice_id,
             text_format=text_format.value,
-            model_id=model.id,
+            model_id=model_info.id,
         )
 
         async for chunk in self._synthesize_pcm_chunks(ctx, engine_context):
@@ -74,41 +74,41 @@ class TtsEngineHub:
 
     @staticmethod
     def _validate_language(context: SynthesisContext) -> None:
-        """Reject a request whose Language the Model cannot be asked to speak.
+        """Reject a request whose Language the Model Info cannot be asked to speak.
 
         Runs on the Language as it stands after the middleware chain, so a
         middleware is trusted to have resolved it.
         """
-        model = context.model
+        model_info = context.model_info
 
-        def _declared(model: Model) -> str:
-            """The Languages a Model declares, phrased for an error message."""
-            return ", ".join(model.languages)
+        def _declared(info: ModelInfo) -> str:
+            """The Languages a Model Info declares, phrased for an error message."""
+            return ", ".join(info.languages)
 
         if context.language is None:
-            if model.language_auto_detected:
+            if model_info.language_auto_detected:
                 return
 
             raise ValueError(
-                f"No Language given for model '{model.id}', which declares: {_declared(model)} "
-                f"and does not auto-detect its Language"
+                f"No Language given for model '{model_info.id}', which declares: "
+                f"{_declared(model_info)} and does not auto-detect its Language"
             )
 
-        if not model.languages:
+        if not model_info.languages:
             # Nothing to validate against, so the Language can only be honoured on
-            # the Model's own say-so.
-            if model.language_auto_detected:
+            # the Model Info's own say-so.
+            if model_info.language_auto_detected:
                 return
 
             raise ValueError(
-                f"Language '{context.language}' cannot be checked: model '{model.id}' "
+                f"Language '{context.language}' cannot be checked: model '{model_info.id}' "
                 f"declares no Languages and does not auto-detect its Language"
             )
 
-        if context.language not in model.languages:
+        if context.language not in model_info.languages:
             raise ValueError(
-                f"Language '{context.language}' is not declared by model '{model.id}', "
-                f"which declares: {_declared(model)}"
+                f"Language '{context.language}' is not declared by model '{model_info.id}', "
+                f"which declares: {_declared(model_info)}"
             )
 
     async def _synthesize_pcm_chunks(  # noqa: C901

@@ -5,6 +5,7 @@ from src.tts.middleware import (
     NormalizeTextMiddleware,
     ResolveLanguageMiddleware,
     SplitSentencesMiddleware,
+    SynthesisContext,
 )
 from src.tts.models import (
     NormalizationType,
@@ -189,6 +190,19 @@ class TestSentenceSplitting:
         message = str(exc_info.value)
         assert VOICE_ID in message
         assert LANGUAGE in message
+
+
+class TestSynthesisContextModelInfo:
+    """A synthesis request carries one Model Info, and the context exposes it as model_info."""
+
+    def test_context_exposes_the_model_info_it_was_given(self):
+        """The Model Info handed to the context reaches middleware under its own name."""
+        model_info = make_model(id=MODEL_ID, languages=[LANGUAGE])
+        voice = make_voice(voice_id=VOICE_ID, name="aidar", model=MODEL_ID)
+
+        ctx = SynthesisContext("hello", model_info, voice, TextFormat.TEXT)
+
+        assert ctx.model_info is model_info
 
 
 class TestLanguageResolution:

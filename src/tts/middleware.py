@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 
 from loguru import logger
 
-from src.tts.models import Model, TextFormat, Voice
+from src.tts.models import ModelInfo, TextFormat, Voice
 from src.tts.preprocessing import TextNormalizer, TextNormalizerFactory, TextSentenizerFactory
 
 
@@ -11,13 +11,13 @@ class SynthesisContext:
     def __init__(
         self,
         text: str,
-        model: Model,
+        model_info: ModelInfo,
         voice: Voice,
         text_format: TextFormat,
         language: str | None = None,
     ):
         self.raw_text = text
-        self.model = model
+        self.model_info = model_info
         self.voice = voice
         self.text_format = text_format
         self.language = language
@@ -31,24 +31,24 @@ MiddlewareType = Callable[[SynthesisContext, Callable[[], Awaitable[None]]], Awa
 
 
 class ResolveLanguageMiddleware:
-    """Fills in the request's Language from the Model when the client sent none.
+    """Fills in the request's Language from the Model Info when the client sent none.
 
-    Only a Model declaring exactly one Language and not auto-detecting can supply
+    Only a Model Info declaring exactly one Language and not auto-detecting can supply
     one. Anything else is left alone for the Hub to reject, since guessing a
-    Language the Model does not declare would synthesize speech in the wrong one.
+    Language the Model Info does not declare would synthesize speech in the wrong one.
     """
 
     async def invoke(self, ctx: SynthesisContext, next_call: Callable[[], Awaitable[None]]):
         if (
             ctx.language is None
-            and len(ctx.model.languages) == 1
-            and not ctx.model.language_auto_detected
+            and len(ctx.model_info.languages) == 1
+            and not ctx.model_info.language_auto_detected
         ):
-            ctx.language = ctx.model.languages[0]
+            ctx.language = ctx.model_info.languages[0]
             logger.debug(
                 "Resolved Language '{language}' from the sole declared Language of model '{model_id}'",
                 language=ctx.language,
-                model_id=ctx.model.id,
+                model_id=ctx.model_info.id,
             )
 
         await next_call()
