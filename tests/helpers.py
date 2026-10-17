@@ -17,7 +17,6 @@ from src.tts.engine_hub import TtsEngineHub
 from src.tts.models import (
     BackendType,
     EngineType,
-    Model,
     ModelInfo,
     Prompt,
     TextFormat,
@@ -207,7 +206,7 @@ class FakeTtsEngine(TtsEngine):
 
     def __init__(
         self,
-        model: Model,
+        model_info: ModelInfo,
         *,
         sample_rate: int = 48000,
         samples_per_sentence: int = 48000,
@@ -217,7 +216,7 @@ class FakeTtsEngine(TtsEngine):
         bytes_per_sample: int = 2,
         channels: int = 1,
     ):
-        super().__init__(model)
+        super().__init__(model_info)
         self.sample_rate = sample_rate
         self.samples_per_sentence = samples_per_sentence
         self.warmup_error = warmup_error
@@ -309,7 +308,7 @@ class FakeTtsEngine(TtsEngine):
 class FakeEngineFactory:
     """An Engine Factory that builds FakeTtsEngines and records what it was asked for.
 
-    `engines` maps a Model id to the engine to hand back, so a test can watch one
+    `engines` maps a model id to the engine to hand back, so a test can watch one
     engine through its lifecycle. Model ids absent from it get a fresh FakeTtsEngine.
     """
 
@@ -317,11 +316,11 @@ class FakeEngineFactory:
         self._engines = dict(engines or {})
         self.requested_model_ids: list[str] = []
 
-    def create(self, model: Model, backend_type: BackendType) -> TtsEngine:
-        self.requested_model_ids.append(model.id)
-        if model.id not in self._engines:
-            self._engines[model.id] = FakeTtsEngine(model)
-        return self._engines[model.id]
+    def create(self, model_info: ModelInfo, backend_type: BackendType) -> TtsEngine:
+        self.requested_model_ids.append(model_info.id)
+        if model_info.id not in self._engines:
+            self._engines[model_info.id] = FakeTtsEngine(model_info)
+        return self._engines[model_info.id]
 
 
 class _MemoryTransport(asyncio.WriteTransport):
@@ -379,14 +378,14 @@ class WyomingClient:
 
 
 class FakeDataStorage(DataStorage):
-    """A DataStorage that returns exactly the Models and Voices it is given.
+    """A DataStorage that returns exactly the Model Infos and Voices it is given.
 
-    Unlike YamlDataStorage it does not filter a Voice away when its Model is
+    Unlike YamlDataStorage it does not filter a Voice away when its Model Info is
     absent, so Hub-side guards for that case can be exercised.
     """
 
     def __init__(self, models=None, voices=None, voice_normalizations=None, prompts=None):
-        self._models = {model.id: model for model in models or []}
+        self._models = {model_info.id: model_info for model_info in models or []}
         self._voices = {voice.id: voice for voice in voices or []}
         self._prompts = {prompt.id: prompt for prompt in prompts or []}
         self._voice_normalizations = {
@@ -423,7 +422,7 @@ def make_hub(*, engine, middlewares, storage, frame_duration=50, engine_manager=
         engine_manager=(
             engine_manager
             if engine_manager is not None
-            else FakeEngineManager({engine.model.id: engine})
+            else FakeEngineManager({engine.model_info.id: engine})
         ),
         data_storage=storage,
     )
@@ -448,7 +447,7 @@ class ReusableEngineContext:
 
 
 class FakeEngineManager:
-    """An Engine Manager that hands out pre-built engines keyed by Model id."""
+    """An Engine Manager that hands out pre-built engines keyed by model id."""
 
     def __init__(self, engines: dict[str, TtsEngine] | None = None):
         self._engines = engines or {}
