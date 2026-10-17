@@ -513,8 +513,8 @@ class TestGetModelInfo:
         )
         storage = YamlDataStorage(config_model)
 
-        m = storage.get_model_info("v5_5_ru")
-        assert m.id == "v5_5_ru"
+        model_info = storage.get_model_info("v5_5_ru")
+        assert model_info.id == "v5_5_ru"
 
 
 class TestGetModelInfos:
@@ -539,13 +539,13 @@ class TestGetModelInfos:
         storage = YamlDataStorage(config_model)
         result = storage.get_model_infos()
 
-        model1 = [model for model in result if model.id == "v5_5_ru"]
-        model2 = [model for model in result if model.id == "v3_en"]
+        model_info1 = [model_info for model_info in result if model_info.id == "v5_5_ru"]
+        model_info2 = [model_info for model_info in result if model_info.id == "v3_en"]
 
         assert isinstance(result, list)
         assert len(result) == 2
-        assert model1 is not None
-        assert model2 is not None
+        assert model_info1 is not None
+        assert model_info2 is not None
 
 
 class TestModelInfoFromYaml:
@@ -1130,10 +1130,10 @@ models:
         )
 
         storage = YamlDataStorage(str(config_yml))
-        model = storage.get_model_info("v5_5_ru")
+        model_info = storage.get_model_info("v5_5_ru")
 
-        assert model.ssml_supported is False
-        assert model.language_auto_detected is False
+        assert model_info.ssml_supported is False
+        assert model_info.language_auto_detected is False
 
     def test_ssml_supported_and_language_auto_detected_parse_true(self, tmp_path):
         """Declared true ssml_supported and language_auto_detected parse as true."""
@@ -1153,10 +1153,10 @@ models:
         )
 
         storage = YamlDataStorage(str(config_yml))
-        model = storage.get_model_info("v5_5_ru")
+        model_info = storage.get_model_info("v5_5_ru")
 
-        assert model.ssml_supported is True
-        assert model.language_auto_detected is True
+        assert model_info.ssml_supported is True
+        assert model_info.language_auto_detected is True
 
 
 class TestActiveModelsAllowlist:

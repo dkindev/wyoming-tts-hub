@@ -24,11 +24,6 @@ class TtsEngine(ABC):
         """The ModelInfo this engine was built for."""
         return self._model_info
 
-    @property
-    def model(self) -> ModelInfo:
-        """The ModelInfo this engine was built for, under the name callers still use."""
-        return self.model_info
-
     async def synthesize_pcm(
         self, text: str, voice: Voice, text_format: TextFormat, language: str | None = None
     ) -> AsyncIterator[TtsResult]:

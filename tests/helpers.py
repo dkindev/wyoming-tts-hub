@@ -107,26 +107,6 @@ def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru"):
     )
 
 
-def make_model(
-    id="v5_5_ru",
-    engine_type=EngineType.SILERO,
-    languages=None,
-    language_auto_detected=False,
-    ssml_supported=False,
-    warmup=False,
-    enabled=True,
-):
-    return make_model_info(
-        id=id,
-        engine_type=engine_type,
-        languages=languages,
-        language_auto_detected=language_auto_detected,
-        ssml_supported=ssml_supported,
-        warmup=warmup,
-        enabled=enabled,
-    )
-
-
 def make_model_info(
     id="v5_5_ru",
     engine_type=EngineType.SILERO,

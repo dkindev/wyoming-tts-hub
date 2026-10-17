@@ -5,7 +5,6 @@ import pytest
 
 from src.tts.models import (
     EngineType,
-    Model,
     ModelInfo,
     NormalizationType,
     PredefinedData,
@@ -15,7 +14,7 @@ from src.tts.models import (
     Voice,
     VoiceNormalization,
 )
-from tests.helpers import FakeTtsEngine, make_model, make_model_info
+from tests import helpers
 
 
 class TestEngineType:
@@ -104,40 +103,41 @@ class TestModelInfo:
             model_info.engine_type = EngineType.QWEN
 
 
-class TestModelInfoAlias:
-    """ModelInfo is a TTS Engine's declared configuration, and Model still names it."""
+class TestOldModelNamesAreGone:
+    """The old names for the entity are not importable, reachable, or callable."""
 
-    def test_model_is_model_info(self):
-        """Importing either name yields the same class object."""
-        assert Model is ModelInfo
+    def test_the_model_alias_is_no_longer_importable(self):
+        """Importing the old class name fails."""
+        with pytest.raises(ImportError):
+            from src.tts.models import Model  # noqa: F401
 
-    def test_engine_accessors_agree(self):
-        """A TTS Engine's model and model_info resolve to the same ModelInfo."""
-        model_info = make_model_info(id="v5_5_ru")
+    def test_the_engine_no_longer_answers_to_model(self):
+        """A TTS Engine answers to model_info only."""
+        engine = helpers.FakeTtsEngine(helpers.make_model_info(id="v5_5_ru"))
 
-        engine = FakeTtsEngine(model_info)
+        assert engine.model_info.id == "v5_5_ru"
+        assert not hasattr(engine, "model")
 
-        assert engine.model_info is model_info
-        assert engine.model is model_info
+    def test_the_old_builder_name_is_gone(self):
+        """The helpers expose make_model_info only."""
+        assert not hasattr(helpers, "make_model")
 
-    def test_builders_agree_on_defaults(self):
-        """make_model and make_model_info build equal values out of the box."""
-        assert make_model() == make_model_info()
-
-    def test_builders_agree_on_declared_fields(self):
-        """Both builders map a declared field onto the same value."""
-        assert make_model(
+    def test_the_builder_maps_every_declared_field(self):
+        """make_model_info carries each declared field onto the value it is given."""
+        model_info = helpers.make_model_info(
             id="v3_en",
             engine_type=EngineType.QWEN,
-            languages=["en"],
+            languages=["en", "ru"],
             language_auto_detected=True,
             ssml_supported=True,
             warmup=True,
             enabled=False,
-        ) == make_model_info(
+        )
+
+        assert model_info == ModelInfo(
             id="v3_en",
             engine_type=EngineType.QWEN,
-            languages=["en"],
+            languages=["en", "ru"],
             language_auto_detected=True,
             ssml_supported=True,
             warmup=True,

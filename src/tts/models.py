@@ -59,9 +59,6 @@ class ModelInfo:
     hash_prefix: str | None = None
 
 
-Model = ModelInfo
-
-
 @dataclass(frozen=True)
 class Voice:
     id: str
