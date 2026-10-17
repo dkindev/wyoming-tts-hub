@@ -40,7 +40,7 @@ def make_engine(
 ):
     models_dir = make_models_dir(tmp_path, registry_yaml, model_files)
     return SileroTtsEngine(
-        model=Model(id=model_id, engine_type=EngineType.SILERO),
+        model_info=Model(id=model_id, engine_type=EngineType.SILERO),
         device=device,
         sample_rate=sample_rate,
         models_dir=models_dir,

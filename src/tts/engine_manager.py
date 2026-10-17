@@ -9,7 +9,7 @@ from src.tts.cache import ExponentialDecayCache
 from src.tts.data_storage import DataStorage
 from src.tts.engine import TorchTtsEngine, TtsEngine
 from src.tts.engine_factory import TtsEngineFactory
-from src.tts.models import BackendType, Model, TextFormat, TtsResult, Voice
+from src.tts.models import BackendType, ModelInfo, TextFormat, TtsResult, Voice
 
 # Torch device namespaces whose accelerator cache is released after teardown.
 CACHE_CLEARABLE_DEVICES = frozenset({"cuda", "mps", "xpu"})
@@ -92,7 +92,7 @@ class ImmutableSharedTtsEngine(TtsEngine):
         inference_timeout: float,
         engine: TtsEngine,
     ):
-        super().__init__(engine.model)
+        super().__init__(engine.model_info)
 
         self._inference_timeout = inference_timeout
         self._engine = engine
@@ -182,20 +182,22 @@ class TtsEngineManager:
             logger.info("Warming up...")
 
             models = self._data_storage.get_model_infos()
-            to_warm = [model for model in models if model.warmup][: self._cache_capacity]
+            to_warm = [model_info for model_info in models if model_info.warmup][
+                : self._cache_capacity
+            ]
 
             logger.debug("Models to warm up: {count}", count=len(to_warm))
 
-            for model in to_warm:
+            for model_info in to_warm:
                 try:
-                    cached_engine = await self._warmup_engine(model)
+                    cached_engine = await self._warmup_engine(model_info)
                 except Exception:
                     logger.exception(
-                        "Failed to warm up model '{model_id}'. Skipping.", model_id=model.id
+                        "Failed to warm up model '{model_id}'. Skipping.", model_id=model_info.id
                     )
                     continue
 
-                self._cache.put(model.id, cached_engine)
+                self._cache.put(model_info.id, cached_engine)
 
             logger.info(f"Warmup completed. Loaded {len(self._cache)} models.")
 
@@ -234,18 +236,18 @@ class TtsEngineManager:
 
                 logger.debug("Model '{name}' not found in cache. Warming up...", name=model_id)
 
-                model = self._data_storage.get_model_info(model_id)
-                if not model:
+                model_info = self._data_storage.get_model_info(model_id)
+                if not model_info:
                     raise RuntimeError(f"Model '{model_id}' not found")
 
-                cached = await self._warmup_engine(model)
+                cached = await self._warmup_engine(model_info)
 
                 async with self._global_lock:
                     if self._closed:
                         self._dead_pool.append((model_id, cached))
                         raise RuntimeError("ModelManager was closed during model warmup")
 
-                    self._cache.put(model.id, cached)
+                    self._cache.put(model_info.id, cached)
 
                 return create_context(cached)
 
@@ -254,8 +256,8 @@ class TtsEngineManager:
                 if model_id in self._model_locks and not model_lock.locked():
                     del self._model_locks[model_id]
 
-    async def _warmup_engine(self, model: Model) -> CachedTtsEngine:
-        engine = self._engine_factory.create(model, self._backendType)
+    async def _warmup_engine(self, model_info: ModelInfo) -> CachedTtsEngine:
+        engine = self._engine_factory.create(model_info, self._backendType)
         await engine.warmup()
 
         return CachedTtsEngine(

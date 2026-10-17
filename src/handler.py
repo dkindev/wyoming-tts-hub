@@ -22,7 +22,7 @@ from src.tts.models import TextFormat
 def _create_wyoming_info(data_storage: DataStorage, service_name: str, streaming: bool) -> Info:
     voices = []
     for voice in data_storage.get_voices():
-        model = data_storage.get_model_info(voice.model_id)
+        model_info = data_storage.get_model_info(voice.model_id)
 
         voices.append(
             TtsVoice(
@@ -33,7 +33,7 @@ def _create_wyoming_info(data_storage: DataStorage, service_name: str, streaming
                     url="https://github.com/snakers4/silero-models",
                 ),
                 installed=True,
-                languages=model.languages,
+                languages=model_info.languages,
                 version=None,
             )
         )

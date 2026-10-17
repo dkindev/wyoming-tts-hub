@@ -14,15 +14,15 @@ from src.tts.models import (
 
 
 class TtsEngine(ABC):
-    def __init__(self, model: ModelInfo):
-        self._model = model
+    def __init__(self, model_info: ModelInfo):
+        self._model_info = model_info
         self._loaded = False
         self._lock = asyncio.Lock()
 
     @property
     def model_info(self) -> ModelInfo:
         """The ModelInfo this engine was built for."""
-        return self._model
+        return self._model_info
 
     @property
     def model(self) -> ModelInfo:
@@ -39,7 +39,7 @@ class TtsEngine(ABC):
         if not voice:
             raise ValueError("Voice cannot be none")
 
-        if voice.model_id != self._model.id:
+        if voice.model_id != self._model_info.id:
             raise ValueError(f"Unsupported voice: {voice.id}")
 
         if not self._loaded:
@@ -58,14 +58,14 @@ class TtsEngine(ABC):
 
             logger.debug(
                 "Warming up model '{model_id}'",
-                model_id=self._model.id,
+                model_id=self._model_info.id,
             )
 
             try:
                 self._loaded = await self._warmup()
-                logger.debug("Model '{model}' has been warmed up.", model=self._model.id)
+                logger.debug("Model '{model}' has been warmed up.", model=self._model_info.id)
             except Exception as e:
-                raise RuntimeError(f"Failed to warm up the model '{self._model.id}'") from e
+                raise RuntimeError(f"Failed to warm up the model '{self._model_info.id}'") from e
 
     async def close(self) -> None:
         async with self._lock:
@@ -94,8 +94,8 @@ class TorchTtsEngine(TtsEngine):
     def device(self) -> torch.device | None:
         return self._device
 
-    def __init__(self, model: ModelInfo, device: str):
-        super().__init__(model)
+    def __init__(self, model_info: ModelInfo, device: str):
+        super().__init__(model_info)
 
         self._target_device = device
         self._device: torch.device | None = None
@@ -105,7 +105,7 @@ class TorchTtsEngine(TtsEngine):
 
         logger.debug(
             "Warming up model '{model_id}' on '{device}'",
-            model_id=self._model.id,
+            model_id=self._model_info.id,
             device=device.type,
         )
 

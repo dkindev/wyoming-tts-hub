@@ -45,7 +45,7 @@ from src.tts.middleware import (
     ResolveLanguageMiddleware,
     SplitSentencesMiddleware,
 )
-from src.tts.models import BackendType, Model, TextFormat, TtsResult, Voice
+from src.tts.models import BackendType, ModelInfo, TextFormat, TtsResult, Voice
 from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
 from tests.helpers import (
     AudioFormat,
@@ -115,8 +115,8 @@ class RecordingTtsEngineFactory(TtsEngineFactory):
         super().__init__(settings)
         self.recordings: list[AudioRecordingTtsEngine] = []
 
-    def create(self, model: Model, backendType: BackendType) -> TtsEngine:
-        engine = AudioRecordingTtsEngine(super().create(model, backendType))
+    def create(self, model_info: ModelInfo, backendType: BackendType) -> TtsEngine:
+        engine = AudioRecordingTtsEngine(super().create(model_info, backendType))
         self.recordings.append(engine)
         return engine
 

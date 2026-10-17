@@ -10,20 +10,20 @@ import yaml
 from loguru import logger
 
 from src.tts.engine import TorchTtsEngine
-from src.tts.models import Model, TextFormat, TtsResult, Voice
+from src.tts.models import ModelInfo, TextFormat, TtsResult, Voice
 
 
 class SileroTtsEngine(TorchTtsEngine):
     def __init__(
         self,
-        model: Model,
+        model_info: ModelInfo,
         device: str,
         sample_rate: int,
         models_dir: str,
         models_yml_url: str,
         models_yml_hash: str | None,
     ):
-        super().__init__(model, device)
+        super().__init__(model_info, device)
 
         self._sample_rate: int | None = None
         self._target_sample_rate = sample_rate
@@ -69,18 +69,18 @@ class SileroTtsEngine(TorchTtsEngine):
 
     async def _warmup_on_device(self, device: torch.device) -> bool:
         self._loaded_model = await asyncio.to_thread(
-            self._warmup_on_device_sync, self._model, device
+            self._warmup_on_device_sync, self._model_info, device
         )
         return True
 
-    def _warmup_on_device_sync(self, model: Model, device: torch.device) -> Any:
-        loaded_model, sample_rate, example_text, speakers = self._load_model(model, device)
+    def _warmup_on_device_sync(self, model_info: ModelInfo, device: torch.device) -> Any:
+        loaded_model, sample_rate, example_text, speakers = self._load_model(model_info, device)
 
         speaker, text = self._determine_warmup_params(loaded_model, example_text, speakers)
 
         logger.debug(
             "Silero model '{model_id}' is warming up. Speaker: '{speaker}' Text: '{text}'",
-            model_id=model.id,
+            model_id=model_info.id,
             speaker=speaker,
             text=text,
         )
@@ -121,11 +121,11 @@ class SileroTtsEngine(TorchTtsEngine):
             return audio
 
     def _load_model(
-        self, model: Model, device: torch.device
+        self, model_info: ModelInfo, device: torch.device
     ) -> tuple[Any, int, str, dict[str, str]]:
         """Loads and returns the Silero model, sample_rate, sample text, and speaker samples."""
 
-        local_path, sample_rates, example_text, speakers = self._resolve_model_metadata(model)
+        local_path, sample_rates, example_text, speakers = self._resolve_model_metadata(model_info)
         sample_rate = self._select_sample_rate(self._target_sample_rate, sample_rates)
 
         try:
@@ -137,11 +137,13 @@ class SileroTtsEngine(TorchTtsEngine):
             return pt_model, sample_rate, example_text, speakers
         except Exception as e:
             raise RuntimeError(
-                f"Failed to load model '{model.id}' with path: {local_path}. "
+                f"Failed to load model '{model_info.id}' with path: {local_path}. "
                 f"Try to delete model to force a fresh download"
             ) from e
 
-    def _resolve_model_metadata(self, model: Model) -> tuple[str, list[int], str, dict[str, str]]:
+    def _resolve_model_metadata(
+        self, model_info: ModelInfo
+    ) -> tuple[str, list[int], str, dict[str, str]]:
         """Return the local path, sample rates, example text and speaker examples.
 
         Downloads the Silero models.yml file and the model itself if they are not available locally.
@@ -152,72 +154,78 @@ class SileroTtsEngine(TorchTtsEngine):
         registry = self._get_models_data(yml_path, self._models_yml_url, self._models_yml_hash)
 
         tts_models = registry.get("tts_models", {})
-        language = self._resolve_internal_model_language(tts_models, model, yml_path)
+        language = self._resolve_internal_model_language(tts_models, model_info, yml_path)
 
         lang_dir = os.path.join(models_dir, "silero", language)
         os.makedirs(lang_dir, exist_ok=True)
 
-        model_entry = tts_models[language][model.id]
+        model_entry = tts_models[language][model_info.id]
         latest = model_entry.get("latest", {})
         sample_rates = latest.get("sample_rate", [])
         example_text = latest.get("example", "")
         raw_speakers = latest.get("speakers", {})
         speakers = {name: s.get("example", "") for name, s in raw_speakers.items()}
 
-        model_path = os.path.join(lang_dir, f"{model.id}.pt")
+        model_path = os.path.join(lang_dir, f"{model_info.id}.pt")
         if os.path.isfile(model_path):
-            logger.debug("Model '{model}' found at path '{path}'", model=model.id, path=model_path)
+            logger.debug(
+                "Model '{model}' found at path '{path}'", model=model_info.id, path=model_path
+            )
             return model_path, sample_rates, example_text, speakers
 
         package_url = latest.get("package")
         if not package_url:
             raise RuntimeError(
-                f"Model '{model.id}' for language '{language}' not found in configuration file. "
+                f"Model '{model_info.id}' for language '{language}' not found in configuration file. "
                 f"Delete '{yml_path}' to force a fresh download"
             )
 
         logger.debug(
             "Model '{model}' not found. Attempting to load from '{url}'",
-            model=model.id,
+            model=model_info.id,
             url=package_url,
         )
 
         try:
-            torch.hub.download_url_to_file(package_url, model_path, hash_prefix=model.hash_prefix)
+            torch.hub.download_url_to_file(
+                package_url, model_path, hash_prefix=model_info.hash_prefix
+            )
         except Exception as e:
             if os.path.isfile(model_path):
                 os.remove(model_path)
             raise RuntimeError(
-                f"Failed to download model '{model.id}' for language '{language}'"
+                f"Failed to download model '{model_info.id}' for language '{language}'"
             ) from e
 
         logger.debug(
-            "Model '{model}' is saved in the file '{path}'", model=model.id, path=model_path
+            "Model '{model}' is saved in the file '{path}'", model=model_info.id, path=model_path
         )
 
         return model_path, sample_rates, example_text, speakers
 
     @staticmethod
-    def _resolve_internal_model_language(tts_models: dict, model: Model, yml_path: str) -> str:
+    def _resolve_internal_model_language(
+        tts_models: dict, model_info: ModelInfo, yml_path: str
+    ) -> str:
         """Return the registry section (keyed by language) that owns the model.
 
         Prefers the model's sole declared Language when it owns the model, then
         falls back to scanning every section. Raises RuntimeError when no
         section owns the model.
         """
-        declared_languages = model.languages
+        declared_languages = model_info.languages
 
         if len(declared_languages) == 1:
             declared = declared_languages[0]
-            if model.id in tts_models.get(declared, {}):
+            if model_info.id in tts_models.get(declared, {}):
                 return declared
 
         for section, section_models in tts_models.items():
-            if model.id in section_models:
+            if model_info.id in section_models:
                 return section
 
         raise RuntimeError(
-            f"Model '{model.id}' not found in the Silero models registry '{yml_path}'. "
+            f"Model '{model_info.id}' not found in the Silero models registry '{yml_path}'. "
             f"Delete '{yml_path}' to force a fresh download"
         )
 
