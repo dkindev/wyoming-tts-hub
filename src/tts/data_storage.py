@@ -60,7 +60,9 @@ class YamlDataStorage(DataStorage):
 
         config_model = self._filter_served(config_model, active_models)
 
-        self._models: dict[str, ModelInfo] = {m.id: m for m in config_model.models}
+        self._models: dict[str, ModelInfo] = {
+            model_info.id: model_info for model_info in config_model.models
+        }
         self._voices_by_id: dict[str, Voice] = {v.id: v for v in config_model.voices}
         self._prompts: dict[str, Prompt] = (
             {p.id: p for p in config_model.prompts} if config_model.prompts else {}
@@ -96,22 +98,20 @@ class YamlDataStorage(DataStorage):
             engine_type_value = model_data.get("engine_type")
             if engine_type_value is None:
                 raise ValueError(
-                    f"Model Info '{model_id}' is missing required 'engine_type' "
+                    f"Model '{model_id}' is missing required 'engine_type' "
                     "(one of: silero, qwen, openai)"
                 )
             try:
                 engine_type = EngineType(engine_type_value)
             except ValueError:
                 raise ValueError(
-                    f"Model Info '{model_id}' has unknown 'engine_type' '{engine_type_value}' "
+                    f"Model '{model_id}' has unknown 'engine_type' '{engine_type_value}' "
                     "(expected one of: silero, qwen, openai)"
                 ) from None
 
             languages_raw = model_data.get("languages")
             if not languages_raw:
-                raise ValueError(
-                    f"Model Info '{model_id}' must declare a non-empty 'languages' list"
-                )
+                raise ValueError(f"Model '{model_id}' must declare a non-empty 'languages' list")
 
             models_list.append(
                 ModelInfo(
@@ -209,7 +209,7 @@ class YamlDataStorage(DataStorage):
     def _check_active_models(config: PredefinedData, active_models: list[str] | None) -> None:
         if active_models is None:
             return
-        declared_ids = {m.id for m in config.models}
+        declared_ids = {model_info.id for model_info in config.models}
         unknown_ids = sorted(set(active_models) - declared_ids)
         if unknown_ids:
             raise ValueError(
@@ -227,14 +227,14 @@ class YamlDataStorage(DataStorage):
             if not model_info.enabled:
                 if allowed_ids is not None and model_info.id in allowed_ids:
                     logger.warning(
-                        "Model Info '{model_id}' is listed in active_models but disabled "
+                        "Model '{model_id}' is listed in active_models but disabled "
                         "in the model config; it will not be served",
                         model_id=model_info.id,
                     )
                 continue
             served_models.append(model_info)
 
-        served_model_ids = {m.id for m in served_models}
+        served_model_ids = {model_info.id for model_info in served_models}
         filtered_voices = [v for v in config.voices if v.model_id in served_model_ids]
 
         return PredefinedData(
