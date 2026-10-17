@@ -4,7 +4,14 @@ import pytest
 from loguru import logger
 
 from src.tts.data_storage import YamlDataStorage
-from src.tts.models import EngineType, NormalizationType, PredefinedData, TextFormat, Voice
+from src.tts.models import (
+    EngineType,
+    ModelInfo,
+    NormalizationType,
+    PredefinedData,
+    TextFormat,
+    Voice,
+)
 from tests.helpers import make_model
 
 
@@ -539,6 +546,27 @@ class TestGetModelInfos:
         assert len(result) == 2
         assert model1 is not None
         assert model2 is not None
+
+
+class TestModelInfoFromYaml:
+    """The data file is read into Model Info, the configuration a TTS Engine is built for."""
+
+    def test_yaml_entry_becomes_model_info(self, tmp_path):
+        """A YAML entry is handed back as a ModelInfo."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_5_ru:
+    engine_type: silero
+    languages: [ru]
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert type(storage.get_model_info("v5_5_ru")) is ModelInfo
 
 
 class TestYamlWarmupField:

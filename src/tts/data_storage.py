@@ -7,7 +7,7 @@ from loguru import logger
 
 from src.tts.models import (
     EngineType,
-    Model,
+    ModelInfo,
     NormalizationType,
     PredefinedData,
     Prompt,
@@ -27,11 +27,11 @@ class DataStorage(ABC):
         ...
 
     @abstractmethod
-    def get_model_info(self, model_id: str) -> Model | None:
+    def get_model_info(self, model_id: str) -> ModelInfo | None:
         ...
 
     @abstractmethod
-    def get_model_infos(self) -> list[Model]:
+    def get_model_infos(self) -> list[ModelInfo]:
         ...
 
     @abstractmethod
@@ -60,7 +60,7 @@ class YamlDataStorage(DataStorage):
 
         config_model = self._filter_served(config_model, active_models)
 
-        self._models: dict[str, Model] = {m.id: m for m in config_model.models}
+        self._models: dict[str, ModelInfo] = {m.id: m for m in config_model.models}
         self._voices_by_id: dict[str, Voice] = {v.id: v for v in config_model.voices}
         self._prompts: dict[str, Prompt] = (
             {p.id: p for p in config_model.prompts} if config_model.prompts else {}
@@ -87,7 +87,7 @@ class YamlDataStorage(DataStorage):
         with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
 
-        models_list: list[Model] = []
+        models_list: list[ModelInfo] = []
         voices_list: list[Voice] = []
         voice_normalizations_list: list[VoiceNormalization] = []
         seen_voice_ids: dict[str, str] = {}
@@ -96,23 +96,25 @@ class YamlDataStorage(DataStorage):
             engine_type_value = model_data.get("engine_type")
             if engine_type_value is None:
                 raise ValueError(
-                    f"Model '{model_id}' is missing required 'engine_type' "
+                    f"Model Info '{model_id}' is missing required 'engine_type' "
                     "(one of: silero, qwen, openai)"
                 )
             try:
                 engine_type = EngineType(engine_type_value)
             except ValueError:
                 raise ValueError(
-                    f"Model '{model_id}' has unknown 'engine_type' '{engine_type_value}' "
+                    f"Model Info '{model_id}' has unknown 'engine_type' '{engine_type_value}' "
                     "(expected one of: silero, qwen, openai)"
                 ) from None
 
             languages_raw = model_data.get("languages")
             if not languages_raw:
-                raise ValueError(f"Model '{model_id}' must declare a non-empty 'languages' list")
+                raise ValueError(
+                    f"Model Info '{model_id}' must declare a non-empty 'languages' list"
+                )
 
             models_list.append(
-                Model(
+                ModelInfo(
                     id=model_id,
                     engine_type=engine_type,
                     ssml_supported=model_data.get("ssml_supported", False),
@@ -218,19 +220,19 @@ class YamlDataStorage(DataStorage):
     def _filter_served(config: PredefinedData, active_models: list[str] | None) -> PredefinedData:
         allowed_ids = set(active_models) if active_models is not None else None
 
-        served_models: list[Model] = []
-        for model in config.models:
-            if allowed_ids is not None and model.id not in allowed_ids:
+        served_models: list[ModelInfo] = []
+        for model_info in config.models:
+            if allowed_ids is not None and model_info.id not in allowed_ids:
                 continue
-            if not model.enabled:
-                if allowed_ids is not None and model.id in allowed_ids:
+            if not model_info.enabled:
+                if allowed_ids is not None and model_info.id in allowed_ids:
                     logger.warning(
-                        "Model '{model_id}' is listed in active_models but disabled "
+                        "Model Info '{model_id}' is listed in active_models but disabled "
                         "in the model config; it will not be served",
-                        model_id=model.id,
+                        model_id=model_info.id,
                     )
                 continue
-            served_models.append(model)
+            served_models.append(model_info)
 
         served_model_ids = {m.id for m in served_models}
         filtered_voices = [v for v in config.voices if v.model_id in served_model_ids]
@@ -248,10 +250,10 @@ class YamlDataStorage(DataStorage):
     def get_voice(self, voice_id: str) -> Voice | None:
         return self._voices_by_id.get(voice_id)
 
-    def get_model_info(self, model_id: str) -> Model | None:
+    def get_model_info(self, model_id: str) -> ModelInfo | None:
         return self._models.get(model_id)
 
-    def get_model_infos(self) -> list[Model]:
+    def get_model_infos(self) -> list[ModelInfo]:
         return list(self._models.values())
 
     def get_prompt(self, prompt_id: str) -> Prompt | None:
