@@ -14,13 +14,13 @@ unchanged: the client still hears `model 'v5_5_ru'`.
 
 ## Acceptance criteria
 
-- [ ] The synthesis context takes a `ModelInfo` and exposes it as `model_info`
-- [ ] The Hub's Language validation resolves the **Model Info** off the context and phrases its
+- [x] The synthesis context takes a `ModelInfo` and exposes it as `model_info`
+- [x] The Hub's Language validation resolves the **Model Info** off the context and phrases its
       declared **Languages** from it
-- [ ] Language-resolving middleware reads the **Model Info** off the context
-- [ ] No local name in this path calls the entity `model`
-- [ ] Every error message and log line in this path keeps its current wording
-- [ ] `ruff check`, `mypy` and `pytest` are no worse than before the change
+- [x] Language-resolving middleware reads the **Model Info** off the context
+- [x] No local name in this path calls the entity `model`
+- [x] Every error message and log line in this path keeps its current wording
+- [x] `ruff check`, `mypy` and `pytest` are no worse than before the change
 
 ## Blocked by
 

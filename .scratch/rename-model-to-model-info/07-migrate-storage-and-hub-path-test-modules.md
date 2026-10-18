@@ -15,13 +15,13 @@ as it is.
 
 ## Acceptance criteria
 
-- [ ] Every call to the shared **Model Info** builder in these modules uses its new name
-- [ ] Every direct construction of the entity spells the class `ModelInfo`
-- [ ] The tests for the entity's own dataclass name it `ModelInfo` throughout
-- [ ] Test names, docstrings and comments in these modules say **Model Info** where they mean the
+- [x] Every call to the shared **Model Info** builder in these modules uses its new name
+- [x] Every direct construction of the entity spells the class `ModelInfo`
+- [x] The tests for the entity's own dataclass name it `ModelInfo` throughout
+- [x] Test names, docstrings and comments in these modules say **Model Info** where they mean the
       entity, and still say "model" where they mean a model id
-- [ ] Assertions on client-facing messages are unchanged
-- [ ] `ruff check`, `mypy` and `pytest` are no worse than before the change
+- [x] Assertions on client-facing messages are unchanged
+- [x] `ruff check`, `mypy` and `pytest` are no worse than before the change
 
 ## Blocked by
 

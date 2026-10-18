@@ -18,14 +18,14 @@ model id a voice belongs to, and every operator-facing message, which still says
 
 ## Acceptance criteria
 
-- [ ] The `Model` alias is gone: importing it fails, and the entity is spelled `ModelInfo`
-- [ ] The engine's `model` accessor is gone: only `model_info` answers
-- [ ] The shared builder's old name is gone: only `make_model_info` remains
-- [ ] No remaining identifier in the source or the tests names the entity `model` or `Model`
-- [ ] Model ids, the allowlist, the predefined data's `models` field, the prompt's LLM field, the
+- [x] The `Model` alias is gone: importing it fails, and the entity is spelled `ModelInfo`
+- [x] The engine's `model` accessor is gone: only `model_info` answers
+- [x] The shared builder's old name is gone: only `make_model_info` remains
+- [x] No remaining identifier in the source or the tests names the entity `model` or `Model`
+- [x] Model ids, the allowlist, the predefined data's `models` field, the prompt's LLM field, the
       voice's model id and every operator-facing message are unchanged
-- [ ] No test references a removed name
-- [ ] `ruff check`, `mypy` and `pytest` are no worse than before the change
+- [x] No test references a removed name
+- [x] `ruff check`, `mypy` and `pytest` are no worse than before the change
 
 ## Blocked by
 

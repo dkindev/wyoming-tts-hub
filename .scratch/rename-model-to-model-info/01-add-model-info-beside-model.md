@@ -19,16 +19,16 @@ form still works.
 
 ## Acceptance criteria
 
-- [ ] `ModelInfo` is the canonical dataclass; `Model` is an alias to it, and importing either name
+- [x] `ModelInfo` is the canonical dataclass; `Model` is an alias to it, and importing either name
       yields the same class object
-- [ ] `PredefinedData.models` is annotated as a list of `ModelInfo`
-- [ ] `TtsEngine` exposes the entity through a `model_info` accessor; `model` remains and resolves
+- [x] `PredefinedData.models` is annotated as a list of `ModelInfo`
+- [x] `TtsEngine` exposes the entity through a `model_info` accessor; `model` remains and resolves
       to the same value
-- [ ] The test helpers expose `make_model_info` as the builder, with `make_model` still working
+- [x] The test helpers expose `make_model_info` as the builder, with `make_model` still working
       and producing an equal value
-- [ ] A test pins that `Model is ModelInfo`, that both engine accessors agree, and that the two
+- [x] A test pins that `Model is ModelInfo`, that both engine accessors agree, and that the two
       builders agree
-- [ ] No module outside the entity definition and the test helpers changes behaviour
+- [x] No module outside the entity definition and the test helpers changes behaviour
 
 ## Blocked by
 

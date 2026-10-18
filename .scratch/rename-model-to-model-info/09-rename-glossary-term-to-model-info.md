@@ -19,14 +19,14 @@ The term's "avoid" list stays, and is now enforced by the name.
 
 ## Acceptance criteria
 
-- [ ] The glossary's term is **Model Info**, with **Active Model Info** for the allowlisted subset
-- [ ] Every reference to the term in the definitions, relationships and example dialogue uses the
+- [x] The glossary's term is **Model Info**, with **Active Model Info** for the allowlisted subset
+- [x] Every reference to the term in the definitions, relationships and example dialogue uses the
       new name
-- [ ] The flagged ambiguity about "model" records that the qualified name is carried by the entity
+- [x] The flagged ambiguity about "model" records that the qualified name is carried by the entity
       itself
-- [ ] The term list in the agent domain docs names **Model Info** and **Active Model Info**
-- [ ] Terms unrelated to this rename are untouched
-- [ ] Lower-case prose that means the underlying model, and any operator-facing wording the glossary
+- [x] The term list in the agent domain docs names **Model Info** and **Active Model Info**
+- [x] Terms unrelated to this rename are untouched
+- [x] Lower-case prose that means the underlying model, and any operator-facing wording the glossary
       quotes, is unchanged
 
 ## Blocked by

@@ -14,14 +14,14 @@ ids they are keyed by do not change - only the entity's name does.
 
 ## Acceptance criteria
 
-- [ ] The Data Storage constructs `ModelInfo` from each YAML entry and no longer names the entity
+- [x] The Data Storage constructs `ModelInfo` from each YAML entry and no longer names the entity
       `Model` in code
-- [ ] The storage interface and implementation annotate the single-model and all-models accessors
+- [x] The storage interface and implementation annotate the single-model and all-models accessors
       as returning `ModelInfo`
-- [ ] Local names that hold one **Model Info** are `model_info`; ids (`model_id`), plural
+- [x] Local names that hold one **Model Info** are `model_info`; ids (`model_id`), plural
       collections (`models`, `served_models`) and the `active_models` allowlist keep their names
-- [ ] Docstrings and comments in this path say **Model Info**, not **Model**
-- [ ] `ruff check`, `mypy` and `pytest` are no worse than before the change
+- [x] Docstrings and comments in this path say **Model Info**, not **Model**
+- [x] `ruff check`, `mypy` and `pytest` are no worse than before the change
 
 ## Blocked by
 

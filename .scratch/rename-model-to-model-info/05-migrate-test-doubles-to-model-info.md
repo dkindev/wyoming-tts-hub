@@ -13,13 +13,13 @@ fake storage take and annotate `ModelInfo` and `model_info`.
 
 ## Acceptance criteria
 
-- [ ] The fake engine takes the entity as `model_info` and passes it to its base
-- [ ] The fake engine factory takes `model_info` and records the id off it
-- [ ] The fake storage annotates its single-model and all-models accessors with `ModelInfo`
-- [ ] Every helper that reads the entity off an engine reads `model_info`
-- [ ] Docstrings in the helpers say **Model Info**, not **Model**
-- [ ] No test module outside the helpers changes in this ticket
-- [ ] `ruff check`, `mypy` and `pytest` are no worse than before the change
+- [x] The fake engine takes the entity as `model_info` and passes it to its base
+- [x] The fake engine factory takes `model_info` and records the id off it
+- [x] The fake storage annotates its single-model and all-models accessors with `ModelInfo`
+- [x] Every helper that reads the entity off an engine reads `model_info`
+- [x] Docstrings in the helpers say **Model Info**, not **Model**
+- [x] No test module outside the helpers changes in this ticket
+- [x] `ruff check`, `mypy` and `pytest` are no worse than before the change
 
 ## Blocked by
 

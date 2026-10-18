@@ -21,16 +21,16 @@ ticket so the suite stays green.
 
 ## Acceptance criteria
 
-- [ ] `TtsEngine` stores the entity as `model_info` and hands it back through `model_info`
-- [ ] The engine factory and the Silero engine accept and pass `model_info`
-- [ ] The Silero engine's warmup and metadata helpers take `model_info`, while the loaded weights
+- [x] `TtsEngine` stores the entity as `model_info` and hands it back through `model_info`
+- [x] The engine factory and the Silero engine accept and pass `model_info`
+- [x] The Silero engine's warmup and metadata helpers take `model_info`, while the loaded weights
       keep their existing names (`_loaded_model`, `loaded_model`, the loaded package)
-- [ ] The Engine Manager's warmup and engine-context lookups name their **Model Info** locals
+- [x] The Engine Manager's warmup and engine-context lookups name their **Model Info** locals
       `model_info`; the shared-engine wrapper reads the entity through `model_info`
-- [ ] The Wyoming handler's local for the resolved entity is `model_info`
-- [ ] The two keyword call sites that construct a Silero engine or override the factory's build
+- [x] The Wyoming handler's local for the resolved entity is `model_info`
+- [x] The two keyword call sites that construct a Silero engine or override the factory's build
       method are updated
-- [ ] `ruff check`, `mypy` and `pytest` are no worse than before the change
+- [x] `ruff check`, `mypy` and `pytest` are no worse than before the change
 
 ## Blocked by
 

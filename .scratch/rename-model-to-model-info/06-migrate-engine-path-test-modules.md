@@ -14,13 +14,13 @@ spell the class out, read the entity off an engine through `model_info`, and des
 
 ## Acceptance criteria
 
-- [ ] Every call to the shared **Model Info** builder in these modules uses its new name
-- [ ] Every direct construction of the entity spells the class `ModelInfo`
-- [ ] Every read of the entity off an engine goes through `model_info`
-- [ ] Test names, docstrings and comments in these modules say **Model Info** where they mean the
+- [x] Every call to the shared **Model Info** builder in these modules uses its new name
+- [x] Every direct construction of the entity spells the class `ModelInfo`
+- [x] Every read of the entity off an engine goes through `model_info`
+- [x] Test names, docstrings and comments in these modules say **Model Info** where they mean the
       entity, and still say "model" where they mean a model id or the Silero weights
-- [ ] Assertions on client-facing messages are unchanged
-- [ ] `ruff check`, `mypy` and `pytest` are no worse than before the change
+- [x] Assertions on client-facing messages are unchanged
+- [x] `ruff check`, `mypy` and `pytest` are no worse than before the change
 
 ## Blocked by
 
