@@ -18,8 +18,9 @@ from src import PROJECT_NAME, __metadata__
 from src.handler import TtsEngineHubEventHandler
 from src.tts.data_storage import YamlDataStorage
 from src.tts.middleware import ResolveLanguageMiddleware
-from src.tts.models import PredefinedData, TtsResult
+from src.tts.models import ENGINE_REPO_URLS, EngineType, PredefinedData, TtsResult
 from tests.helpers import (
+    FakeDataStorage,
     FakeTtsEngine,
     WyomingClient,
     announced_audio_format,
@@ -252,6 +253,80 @@ class TestDescribe:
         assert attribution.name == PROJECT_NAME
         assert attribution.name != SERVICE_NAME
         assert attribution.name != __metadata__["name"]
+
+    @pytest.mark.parametrize("engine_type", list(EngineType))
+    async def test_a_voice_is_credited_to_the_engine_family_that_built_it(self, engine_type):
+        """Both halves of the credit: which family, and where to find it.
+
+        Parametrised over every family rather than checked once for Silero, because a
+        hardcoded pair naming one engine satisfies any test that only asks about that
+        engine — which is exactly what was advertised before.
+        """
+        client = WyomingClient()
+        storage = YamlDataStorage(
+            PredefinedData(
+                models=[make_model_info(id=MODEL_ID, engine_type=engine_type, languages=["ru"])],
+                voices=[make_voice(voice_id=f"{MODEL_ID}-aidar", name="aidar", model=MODEL_ID)],
+            ),
+            active_models=[MODEL_ID],
+        )
+
+        events = await client.send(make_handler(client, storage=storage), Describe().event())
+
+        attribution = Info.from_event(events[0]).tts[0].voices[0].attribution
+        assert attribution.name == engine_type.value
+        assert attribution.url == ENGINE_REPO_URLS[engine_type]
+
+    async def test_two_engine_families_are_credited_differently(self):
+        """The credit follows the Model Info the Voice belongs to, not the server's."""
+        client = WyomingClient()
+        storage = YamlDataStorage(
+            PredefinedData(
+                models=[
+                    make_model_info(id=MODEL_ID, engine_type=EngineType.SILERO, languages=["ru"]),
+                    make_model_info(
+                        id=OTHER_MODEL_ID, engine_type=EngineType.QWEN, languages=["en"]
+                    ),
+                ],
+                voices=[
+                    make_voice(voice_id=f"{MODEL_ID}-aidar", name="aidar", model=MODEL_ID),
+                    make_voice(
+                        voice_id=f"{OTHER_MODEL_ID}-vivian", name="vivian", model=OTHER_MODEL_ID
+                    ),
+                ],
+            ),
+            active_models=[MODEL_ID, OTHER_MODEL_ID],
+        )
+
+        events = await client.send(make_handler(client, storage=storage), Describe().event())
+
+        credits = {
+            voice.name: (voice.attribution.name, voice.attribution.url)
+            for voice in Info.from_event(events[0]).tts[0].voices
+        }
+        assert credits == {
+            f"{MODEL_ID}-aidar": ("silero", ENGINE_REPO_URLS[EngineType.SILERO]),
+            f"{OTHER_MODEL_ID}-vivian": ("qwen", ENGINE_REPO_URLS[EngineType.QWEN]),
+        }
+
+    async def test_a_voice_whose_model_info_is_gone_is_refused_by_name(self):
+        """A Voice cannot be advertised without the Model Info that gives it meaning.
+
+        Its Languages and its TTS Engine both come from that Model Info, so there is no
+        Voice to describe — and describing it as one engine's would be the guess this
+        attribution just stopped making.
+        """
+        client = WyomingClient()
+        storage = FakeDataStorage(
+            models=[make_model_info(id=MODEL_ID)],
+            voices=[
+                make_voice(voice_id=f"{OTHER_MODEL_ID}-en_0", name="en_0", model=OTHER_MODEL_ID)
+            ],
+        )
+
+        events = await client.send(make_handler(client, storage=storage), Describe().event())
+
+        assert f"{OTHER_MODEL_ID}-en_0" in Error.from_event(events[0]).text
 
     async def test_naming_the_service_does_not_change_the_credit(self):
         """The two names are decided apart, so neither can become the other."""

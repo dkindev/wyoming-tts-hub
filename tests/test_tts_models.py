@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from src.tts.models import (
+    ENGINE_REPO_URLS,
     EngineType,
     ModelInfo,
     NormalizationType,
@@ -333,3 +334,28 @@ class TestSampleAxis:
         )
 
         assert result.audio.shape == (0,)
+
+
+class TestEngineTypeRepoUrls:
+    """Every TTS Engine family says where it comes from."""
+
+    def test_every_family_carries_the_url_of_its_project(self):
+        """A family declared without a URL could only ever be advertised uncredited."""
+        assert set(ENGINE_REPO_URLS) == set(EngineType)
+
+    @pytest.mark.parametrize(
+        ("engine_type", "expected_url"),
+        [
+            (EngineType.SILERO, "https://github.com/snakers4/silero-models"),
+            (EngineType.QWEN, "https://github.com/QwenLM/Qwen3-TTS"),
+            (EngineType.OPENAI, "https://openai.com"),
+        ],
+    )
+    def test_a_family_points_at_its_own_project(self, engine_type, expected_url):
+        """Pins what each URL *is*, not merely that one was written down.
+
+        Without this the tests comparing a credit against `ENGINE_REPO_URLS` prove only
+        that the handler reads the mapping: swapping one family's URL for another's
+        would leave them green, and every client would follow the wrong link.
+        """
+        assert ENGINE_REPO_URLS[engine_type] == expected_url

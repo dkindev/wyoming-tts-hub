@@ -35,6 +35,24 @@ class EngineType(Enum):
     OPENAI = "openai"
 
 
+ENGINE_REPO_URLS: dict[EngineType, str] = {
+    EngineType.SILERO: "https://github.com/snakers4/silero-models",
+    EngineType.QWEN: "https://github.com/QwenLM/Qwen3-TTS",
+    EngineType.OPENAI: "https://openai.com",
+}
+"""Where each TTS Engine family comes from, keyed by the family itself.
+
+Declared beside the families rather than where they are advertised, so a client reading
+a Voice's attribution is told which TTS Engine produced it, and adding an engine does
+not mean editing the protocol handler. The family values stay the bare names a data file
+writes and the Engine Factory keys its builders on, so carrying a URL here cannot change
+what `engine_type: silero` parses as.
+
+The OpenAI-compatible family points at the vendor's site: it speaks an API rather than
+shipping a project, so there is no upstream repository to point a client at.
+"""
+
+
 @dataclass(frozen=True)
 class VoiceNormalization:
     voice_id: str

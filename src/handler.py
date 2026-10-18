@@ -16,21 +16,25 @@ from wyoming.tts import (
 from src import PROJECT_NAME, __metadata__, __project_urls__
 from src.tts.data_storage import DataStorage
 from src.tts.engine_hub import TtsEngineHub
-from src.tts.models import TextFormat
+from src.tts.models import ENGINE_REPO_URLS, TextFormat
 
 
 def _create_wyoming_info(data_storage: DataStorage, service_name: str, streaming: bool) -> Info:
     voices = []
     for voice in data_storage.get_voices():
         model_info = data_storage.get_model_info(voice.model_id)
+        if model_info is None:
+            raise ValueError(f"Voice '{voice.id}' has no Model Info '{voice.model_id}'")
+
+        engine_type = model_info.engine_type
 
         voices.append(
             TtsVoice(
                 name=voice.id,
                 description=voice.name,
                 attribution=Attribution(
-                    name="silero",
-                    url="https://github.com/snakers4/silero-models",
+                    name=engine_type.value,
+                    url=ENGINE_REPO_URLS[engine_type],
                 ),
                 installed=True,
                 languages=model_info.languages,
