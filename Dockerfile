@@ -22,8 +22,8 @@ ARG UID=1000
 ARG GID=1000
 
 RUN set -eux; \
-    groupadd -r --gid $GID silero; \
-    useradd -r --gid silero --uid $UID --home-dir /app --shell /bin/bash silero
+    groupadd -r --gid $GID wthub; \
+    useradd -r --gid wthub --uid $UID --home-dir /app --shell /bin/bash wthub
 
 RUN set -eux; \
     apt-get update; \
@@ -40,7 +40,7 @@ COPY data/ ./data
 COPY config.yml .
 COPY src/ ./src
 
-RUN chown -R silero:silero .
+RUN chown -R wthub:wthub .
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1

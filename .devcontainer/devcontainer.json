@@ -1,6 +1,6 @@
 {
 	// For quick reference: https://containers.dev/implementors/json_reference/
-	"name": "Silero server",
+	"name": "Wyoming TTS Hub",
 	// "image": "python:3.14-bookworm",
 	"build": {
 		"context": "..",
