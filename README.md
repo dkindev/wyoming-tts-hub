@@ -1,6 +1,11 @@
-# Wyoming Silero TTS
+# Wyoming TTS Hub
 
-[Wyoming protocol](https://github.com/OHF-Voice/wyoming) server wrapping [Silero TTS models](https://github.com/snakers4/silero-models). Supports Home Assistant integration, streaming audio, and optional per-voice LLM normalization.
+A [Wyoming protocol](https://github.com/OHF-Voice/wyoming) server built around a
+TTS Engine Hub: it aggregates TTS Engines and routes each synthesis request to
+the engine that owns the requested Model Info. Supports Home Assistant
+integration, streaming audio, and optional per-voice LLM normalization.
+
+The Silero TTS Engine is the one implemented today.
 
 ## Quick Start
 
@@ -30,16 +35,11 @@
 
    The server listens on `tcp://127.0.0.1:10200` by default.
 
-5. **Test with HTTP server**
-    ```bash
-    uv run --with "wyoming[http]" python -m wyoming.http.tts_server --uri tcp://127.0.0.1:10200
-    ```
-
 ### Docker
 
 1. **Build the image**
    ```bash
-   docker build -t silero-server:latest .
+   docker build -t wyoming-tts-hub:latest .
    ```
 
 2. **Run the container**
@@ -48,10 +48,33 @@
      -e TTS_ENV_TYPE=production \
      -v ./data:/app/data \
      -v ./models:/app/models \
-     silero-server:latest
+     wyoming-tts-hub:latest
    ```
 
    The server exposes port `10200` for Wyoming TCP connections.
+
+### Connecting a client
+
+Point any Wyoming client at the server's URI. To try one out, run a test HTTP
+server in front of it:
+
+```bash
+uv run --with "wyoming[http]" python -m wyoming.http.tts_server --uri tcp://127.0.0.1:10200
+```
+
+What a client sees when it connects:
+
+- **Voices** are named `<model id>-<voice name>`, so the Model Info `v5_5_ru`
+  speaking as `aidar` is offered as `v5_5_ru-aidar`.
+- **Languages** come from the Model Info, not the Voice. Every Voice of a Model
+  Info is advertised with that Model Info's declared Languages.
+- **Only Active Model Infos are offered** — a Model Info that is disabled, or
+  that is not listed in `active_models`, contributes no Voices at all.
+- **Discovery** is advertised over zeroconf as `wyoming-tts-hub`. Set `zeroconf`
+  to an empty string to turn it off.
+- **Errors** reach the client in full when `env_type` is `development`, and as a
+  bare "Internal Server Error" when it is `production`. Run in `development` while
+  you are setting things up.
 
 ## Configuration
 
@@ -111,6 +134,16 @@ Each key under `models:` (e.g. `v5_5_ru`) is the model's id, and names a **Model
 
 A model is served only when it is both `enabled` **and** listed in `active_models` in
 `config.yml`. Neither switch implies the other.
+
+#### Engine families
+
+`engine_type` names the TTS Engine family that builds the model. Those families
+are declared up front, but only one is implemented behind them: a `silero` model
+on the `torch` backend is the only combination that builds an engine. A model
+written as `qwen` or `openai` is read and served like any other, and then fails
+when its engine would be built — at startup for a model marked `warmup`,
+otherwise on the first request for it — with an error naming the family and the
+backend.
 
 #### Adding a new model
 
@@ -200,7 +233,9 @@ Reusable LLM prompt definitions referenced by `prompt_id` in voice normalization
 ### Audio Output
 
 - Format: raw PCM (WAV-compatible)
-- Sample rate: configurable (8000, 16000, 24000, 48000 Hz)
+- Sample rate: announced per model, not configured per client. `silero.sample_rate`
+  is the rate you ask for; the server emits the nearest rate that model supports
+  (8000, 16000, 24000 or 48000 Hz) and tells the client that rate
 - Bit depth: 16-bit signed integer
 - Channels: mono (1 channel)
 
