@@ -134,9 +134,10 @@ normalization:
     # Env: TTS_NORMALIZATION__TEXT__TYPE
     type: simple
 
-    # Per-locale LLM prompts for text normalization (config.yml only).
+    # Per-Language LLM prompts for text normalization (config.yml only).
+    # Keyed by the Language a Model Info declares, e.g. ru — not by a locale such as ru_RU.
     prompts:
-      ru_RU:
+      ru:
         text: |
           Ты — инструмент подготовки текста для русского TTS.
           Твоя единственная задача — заменить цифры словами, раскрыть сокращения (т.е., т.д.) и перевести латиницу в кириллическое звучание (Apple -> Эппл).
@@ -157,9 +158,9 @@ normalization:
     # Env: TTS_NORMALIZATION__SSML__TYPE
     type: simple
 
-    # Per-locale LLM prompts for SSML normalization.
+    # Per-Language LLM prompts for SSML normalization.
     # prompts:
-    #   en_US:
+    #   en:
     #     text: Normalize english text for TTS...
     #     model: qwen3.5:4b
 

@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 from pydantic_settings import YamlConfigSettingsSource
 
@@ -314,3 +315,68 @@ class TestHermeticConstruction:
         """The unprefixed OpenAI variables Settings falls back to are cleared too."""
         assert os.environ.get("OPENAI_API_KEY") is None
         assert Settings().normalization.openai.api_key == ""
+
+
+class TestShippedNormalizationPrompts:
+    """The prompts the project ships are keyed the way the server looks them up."""
+
+    @staticmethod
+    def shipped():
+        """The settings and the data file, as the server ships them."""
+        root = Path(__file__).resolve().parent.parent
+        config = yaml.safe_load((root / "config.yml").read_text())
+        data = yaml.safe_load((root / "data" / "data.yml").read_text())
+        return config, data
+
+    @staticmethod
+    def prompt_keys(config) -> set[str]:
+        """Every Language a server-wide prompt is keyed by, across both Text Formats."""
+        return {
+            language
+            for text_format in ("text", "ssml")
+            for language in (config["normalization"][text_format].get("prompts") or {})
+        }
+
+    def test_the_shipped_file_prompts_something(self):
+        """Guard against the checks below passing because no prompt is written."""
+        config, _ = self.shipped()
+
+        assert self.prompt_keys(config)
+
+    def test_every_prompt_is_keyed_by_a_declared_language(self):
+        """A prompt keyed by a locale is unreachable and fails silently.
+
+        The Language a request resolves to is one a Model Info declares, and a locale
+        form is refused as a request Language, so a prompt stored under one can never
+        be selected.
+        """
+        config, data = self.shipped()
+        declared = {
+            language for model in data["models"].values() for language in model["languages"]
+        }
+
+        unreachable = self.prompt_keys(config) - declared
+
+        assert not unreachable, f"keyed by a Language no Model Info declares: {sorted(unreachable)}"
+
+    def test_a_prompt_names_a_language_and_a_model(self):
+        config, _ = self.shipped()
+
+        for text_format in ("text", "ssml"):
+            for language, prompt in (
+                config["normalization"][text_format].get("prompts") or {}
+            ).items():
+                assert prompt["text"], f"{language}/{text_format} has no prompt text"
+                assert prompt["model"], f"{language}/{text_format} names no LLM model"
+
+
+def test_env_example_carries_no_prompt_keys():
+    """Server-wide prompts live only in the config file, so the template omits them.
+
+    The two files are both read at runtime and are held to each other by
+    `test_env_example.py`; a prompt key added to the template would claim an
+    environment variable that nothing reads.
+    """
+    template = (Path(__file__).resolve().parent.parent / ".env.example").read_text()
+
+    assert "PROMPTS" not in template.upper()

@@ -68,9 +68,10 @@ class TextFormatNormalizationSettings(BaseModel):
     """Normalizer type (simple, openai)."""
 
     prompts: dict[str, NormalizationPrompt] | None = Field(
-        default_factory=dict, description="A dictionary of prompts indexed by locale."
+        default_factory=dict,
+        description="A dictionary of prompts indexed by the Language a Model Info declares.",
     )
-    """A dictionary of prompts indexed by locale."""
+    """A dictionary of prompts indexed by the Language a Model Info declares."""
 
 
 class OpenAiSettings(BaseModel):
