@@ -129,9 +129,13 @@ class TestSileroSettings:
         assert settings.models_dir == "models"
 
     def test_models_dir_falls_back_to_the_python_default(self):
-        """With no config file setting it, models_dir is the Python default."""
+        """With no config file setting it, models_dir is the Python default.
+
+        Asserted as a literal rather than read from the shipped config.yml, so the
+        default cannot be "fixed" by changing the file and left contradicting it.
+        """
         settings = Settings()
-        assert settings.models_dir == "models/silero"
+        assert settings.models_dir == "models"
 
 
 class TestActiveModels:
@@ -286,8 +290,21 @@ class TestHermeticConstruction:
 
         settings = Settings()
 
-        assert settings.models_dir == "models/silero"
+        assert settings.models_dir == "models"
         assert settings.active_models == ["test_model"]
+
+    def test_the_shipped_config_agrees_with_the_default(self):
+        """The file and the default name one directory, so neither can drift alone.
+
+        The documented Docker run command mounts this directory, so an operator who
+        deletes the line from their own configuration lands on the layout the docs
+        describe rather than a second, undocumented one.
+        """
+        shipped = yaml.safe_load(
+            (Path(__file__).resolve().parent.parent / "config.yml").read_text()
+        )
+
+        assert shipped["models_dir"] == Settings.model_fields["models_dir"].default
 
     def test_config_path_environment_variable_selects_the_config_file(self, monkeypatch, tmp_path):
         """TTS_CONFIG_PATH decides which YAML file the source reads."""

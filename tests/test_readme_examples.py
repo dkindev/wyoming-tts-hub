@@ -9,6 +9,13 @@ from src.tts.models import ModelInfo, NormalizationType, TextFormat, Voice
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = REPO_ROOT / "README.md"
+DOCKERFILE = REPO_ROOT / "Dockerfile"
+
+MODELS_DIR = "models"
+"""The directory the server caches models under, as the documentation names it."""
+
+IMAGE_WORKDIR = "/app"
+"""The directory the image runs in, which relative paths resolve against."""
 
 # The form a Voice's id takes: the Model Info's id, then the Voice's name.
 VOICE_ID_FORM = "<model id>-<voice name>"
@@ -203,3 +210,31 @@ class TestDocumentedTablesMatchTheShapes:
             assert any(
                 text_format in field for text_format in text_formats
             ), f"{field} names no Text Format, so nothing would read it"
+
+
+class TestDocumentedLayoutMatchesTheServer:
+    """The Docker run command the README documents, against how the server lays out."""
+
+    def test_the_image_declares_no_volume_of_its_own(self):
+        """A cached model survives a restart only through a mount the run command makes.
+
+        The image bakes nothing: the directory the TTS Engine caches models into is
+        created at runtime, so a run command that does not mount it loses them.
+        """
+        assert "VOLUME" not in DOCKERFILE.read_text()
+
+    def test_the_documented_run_command_mounts_the_models_directory(self):
+        """The mount covers the directory the server defaults to, on both sides.
+
+        `./models` is what the server resolves relative to its working directory, and
+        `/app` is that working directory in the image — so this is the one pair of
+        paths that puts the host's cached models where the server looks.
+        """
+        assert f"WORKDIR {IMAGE_WORKDIR}" in DOCKERFILE.read_text()
+        assert f"./{MODELS_DIR}:{IMAGE_WORKDIR}/{MODELS_DIR}" in README.read_text()
+
+    def test_the_models_directory_is_the_default(self):
+        """The mounted directory is the one the server uses when nothing says otherwise."""
+        from src.config import Settings
+
+        assert Settings.model_fields["models_dir"].default == MODELS_DIR

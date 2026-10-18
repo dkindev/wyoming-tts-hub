@@ -285,10 +285,15 @@ class Settings(BaseSettings):
     """Local path to the voice/model mapping configuration file data.yml"""
 
     models_dir: str = Field(
-        default="models/silero",
-        description="Directory for cached model files",
+        default="models",
+        description="Directory holding cached model files, parent of each engine's own layout",
     )
-    """Directory for cached model files"""
+    """Directory holding cached model files, parent of each engine's own layout.
+
+    A TTS Engine lays its models out under a directory of its own inside this one —
+    Silero keeps its registry and weights under `silero/` — so this is the parent of
+    that directory, not the directory itself.
+    """
 
     silero: SileroSettings = Field(default_factory=SileroSettings)
     normalization: NormalizationSettings = Field(

@@ -6,7 +6,9 @@ import unittest.mock
 import pytest
 import torch
 
-from src.tts.models import EngineType, ModelInfo, TextFormat
+from src.config import Settings
+from src.tts.engine_factory import TtsEngineFactory
+from src.tts.models import BackendType, EngineType, ModelInfo, TextFormat
 from src.tts.silero_engine import SileroTtsEngine
 from tests.helpers import make_captured_silero_model, make_voice
 
@@ -37,13 +39,21 @@ def make_engine(
     sample_rate=48000,
     device="cpu",
     model_id="unused",
+    languages=None,
+    models_dir=None,
 ):
-    models_dir = make_models_dir(tmp_path, registry_yaml, model_files)
+    """Build a Silero TTS Engine over a models directory of the given shape.
+
+    `models_dir` defaults to the directory `make_models_dir` just populated. Pass one
+    to hold the engine to a directory other than the one the fixture wrote to — which
+    is how a test puts the engine on the configured default.
+    """
+    built_dir = make_models_dir(tmp_path, registry_yaml, model_files)
     return SileroTtsEngine(
-        model_info=ModelInfo(id=model_id, engine_type=EngineType.SILERO),
+        model_info=ModelInfo(id=model_id, engine_type=EngineType.SILERO, languages=languages or []),
         device=device,
         sample_rate=sample_rate,
-        models_dir=models_dir,
+        models_dir=built_dir if models_dir is None else models_dir,
         models_yml_url="https://example.com/models.yml",
         models_yml_hash=None,
     )
@@ -293,3 +303,73 @@ class TestDeviceFallback:
         assert results[0].sample_rate == 48000
         assert results[0].bytes_per_sample == 2
         assert results[0].channels == 1
+
+
+class TestDefaultModelsDirectory:
+    """The default directory is the one the TTS Engine lays its models out under."""
+
+    REGISTRY = """
+          ru:
+            v5_5_ru:
+              latest:
+                package: 'http://example/v5_5_ru.pt'
+                sample_rate: [48000]
+        """
+
+    def test_the_default_directory_holds_the_engine_layout(self, tmp_path, monkeypatch):
+        """With nothing configured, a stored model is found where the layout says.
+
+        The engine puts its registry and weights under `silero/` inside models_dir, so
+        models_dir is the parent of that directory rather than the directory itself — a
+        default naming `silero` as well would have the engine look one level too deep,
+        find nothing, and re-download on every start.
+        """
+        monkeypatch.chdir(tmp_path)
+        engine = make_engine(
+            tmp_path,
+            self.REGISTRY,
+            {"ru": ["v5_5_ru"]},
+            model_id="v5_5_ru",
+            languages=["ru"],
+            models_dir=Settings().models_dir,
+        )
+
+        model_path, _, _, _ = engine._resolve_model_metadata(engine.model_info)
+
+        assert model_path == os.path.join("models", "silero", "ru", "v5_5_ru.pt")
+
+    def test_a_model_missing_from_the_default_directory_downloads_there(
+        self, tmp_path, monkeypatch
+    ):
+        """An uncached model lands under the default directory, not one level deeper."""
+        monkeypatch.chdir(tmp_path)
+        engine = make_engine(
+            tmp_path,
+            self.REGISTRY,
+            {},
+            model_id="v5_5_ru",
+            languages=["ru"],
+            models_dir=Settings().models_dir,
+        )
+
+        with unittest.mock.patch(
+            "src.tts.silero_engine.torch.hub.download_url_to_file"
+        ) as download:
+            model_path, _, _, _ = engine._resolve_model_metadata(engine.model_info)
+
+        download.assert_called_once()
+        assert download.call_args.args[1] == os.path.join("models", "silero", "ru", "v5_5_ru.pt")
+        assert model_path == os.path.join("models", "silero", "ru", "v5_5_ru.pt")
+
+    def test_the_engine_factory_hands_the_engine_that_directory(self):
+        """The default reaches the engine through the wiring that builds it.
+
+        Resolving against a default read straight from Settings would still pass if the
+        Engine Factory routed some other directory to the TTS Engine.
+        """
+        settings = Settings()
+        engine = TtsEngineFactory(settings=settings).create(
+            ModelInfo(id="v5_5_ru", engine_type=EngineType.SILERO), BackendType.TORCH
+        )
+
+        assert engine._models_dir == settings.models_dir == "models"
