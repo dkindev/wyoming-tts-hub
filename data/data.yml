@@ -3,7 +3,6 @@ models:
     engine_type: silero
     languages: [ru]
     ssml_supported: true
-    language_auto_detected: false
     warmup: true
     voices:
       - name: aidar
@@ -15,7 +14,6 @@ models:
     engine_type: silero
     languages: [en]
     ssml_supported: true
-    language_auto_detected: false
     voices:
       - name: henry
         speaker: en_2
