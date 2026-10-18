@@ -6,7 +6,7 @@ from loguru import logger
 from openai import AsyncOpenAI
 from wyoming.server import AsyncServer, AsyncTcpServer
 
-from src.config import OpenAiSettings, Settings, get_settings
+from src.config import NormalizationSettings, OpenAiSettings, Settings, get_settings
 from src.handler import TtsEngineHubEventHandler
 from src.logger import setup_logging
 from src.tts.data_storage import YamlDataStorage
@@ -19,7 +19,11 @@ from src.tts.middleware import (
     SplitSentencesMiddleware,
 )
 from src.tts.models import BackendType
-from src.tts.preprocessing import TextNormalizerFactory, TextSentencizerFactory
+from src.tts.preprocessing import (
+    TextNormalizerFactory,
+    TextSentencizerFactory,
+    unreachable_normalization_prompts,
+)
 
 setup_logging()
 
@@ -65,6 +69,26 @@ async def register_zeroconf_server(name: str, for_server: AsyncServer):
     logger.debug("Zeroconf discovery enabled")
 
 
+def warn_unreachable_prompts(settings: NormalizationSettings, data_storage: YamlDataStorage):
+    """Say which configured normalization prompts can never be selected.
+
+    Reported rather than refused: an unreachable prompt is inert, so the server still
+    synthesizes, and a prompt for a Language no served Model Info declares yet is a
+    staged configuration rather than a mistake. What it must not be is silent — the
+    symptom otherwise is text that quietly comes back unnormalized.
+    """
+    unreachable = unreachable_normalization_prompts(settings, data_storage)
+    for text_format, languages in unreachable.items():
+        logger.warning(
+            "Normalization prompts for {languages} under '{text_format}' are keyed by a "
+            "Language no Model Info this instance serves declares, so they are never "
+            "selected. Prompts are keyed by the Language itself, not by a locale with a "
+            "region suffix.",
+            languages=", ".join(sorted(languages)),
+            text_format=text_format,
+        )
+
+
 async def main():
     settings = get_settings()
     logger.debug(settings)
@@ -77,6 +101,7 @@ async def main():
     data_storage = YamlDataStorage(
         config_path_or_model=settings.data_yml_path, active_models=settings.active_models
     )
+    warn_unreachable_prompts(settings.normalization, data_storage)
     engine_manager = TtsEngineManager(
         backendType=settings.backend_type,
         cache_half_life_seconds=settings.cache_half_life,

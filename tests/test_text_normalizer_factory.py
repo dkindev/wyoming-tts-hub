@@ -9,14 +9,16 @@ from src.config import (
     NormalizationSettings,
     TextFormatNormalizationSettings,
 )
+from src.tts.data_storage import YamlDataStorage
 from src.tts.models import NormalizationType, Prompt, TextFormat, VoiceNormalization
 from src.tts.preprocessing import (
     OpenAiTextNormalizer,
     PlainTextNormalizer,
     SsmlNormalizer,
     TextNormalizerFactory,
+    unreachable_normalization_prompts,
 )
-from tests.helpers import make_voice
+from tests.helpers import FakeDataStorage, make_merged_yaml, make_model_info, make_voice
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 """The checkout the shipped configuration files live in."""
@@ -467,97 +469,85 @@ class TestServerWidePromptByLanguage:
         assert result._model
 
 
-class TestNormalizerReuse:
-    """A normalizer is built once per Voice, Text Format and Language."""
+class TestUnreachableNormalizationPrompts:
+    """A prompt no served Model Info declares is reported rather than sitting unused."""
 
-    def factory(self, mock_storage, settings=None):
-        return TextNormalizerFactory(
-            openai_client=unittest.mock.MagicMock(),
-            settings=settings
-            or NormalizationSettings(
-                text=TextFormatNormalizationSettings(enabled=True),
-            ),
-            storage=mock_storage,
-        )
-
-    def test_the_same_request_reuses_one_normalizer(self, mock_storage):
-        factory = self.factory(mock_storage)
-        voice = make_voice(voice_id="v1", name="Test")
-
-        first = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
-        second = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
-
-        assert first is second
-
-    def test_another_language_builds_its_own(self, mock_storage):
-        factory = self.factory(mock_storage)
-        voice = make_voice(voice_id="v1", name="Test")
-
-        russian = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
-        english = factory.create(voice=voice, text_format=TextFormat.TEXT, language="en")
-
-        assert russian is not english
-
-    def test_another_text_format_builds_its_own(self, mock_storage):
-        factory = self.factory(
-            mock_storage,
-            settings=NormalizationSettings(
-                text=TextFormatNormalizationSettings(enabled=True),
-                ssml=TextFormatNormalizationSettings(enabled=True),
-            ),
-        )
-        voice = make_voice(voice_id="v1", name="Test")
-
-        text = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
-        ssml = factory.create(voice=voice, text_format=TextFormat.SSML, language="ru")
-
-        assert text is not ssml
-
-    def test_one_voice_does_not_inherit_another_voices_prompt(self, mock_openai_client):
-        """Two voices normalize by their own Prompt, not whichever was seen first."""
-        storage = unittest.mock.MagicMock()
-        storage.get_voice_normalization.side_effect = lambda voice_id, text_format, language: (
-            VoiceNormalization(
-                voice_id=voice_id,
-                text_format=text_format,
-                language=language,
-                type=NormalizationType.OPENAI,
-                enabled=True,
-                prompt_id=f"prompt-{voice_id}",
+    def test_a_prompt_for_a_served_language_is_not_reported(self):
+        storage = FakeDataStorage(models=[make_model_info(languages=["ru"])])
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(
+                prompts={"ru": NormalizationPrompt(text="t", model="m")}
             )
         )
-        storage.get_prompt.side_effect = lambda prompt_id: Prompt(
-            id=prompt_id, text=f"text of {prompt_id}", model="model"
-        )
-        factory = TextNormalizerFactory(
-            openai_client=mock_openai_client,
-            settings=NormalizationSettings(),
-            storage=storage,
+
+        assert unreachable_normalization_prompts(settings, storage) == {}
+
+    def test_a_prompt_keyed_by_a_locale_is_reported(self):
+        storage = FakeDataStorage(models=[make_model_info(languages=["ru"])])
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(
+                prompts={"ru_RU": NormalizationPrompt(text="t", model="m")}
+            )
         )
 
-        first = factory.create(
-            voice=make_voice(voice_id="v1", name="Test"), text_format=TextFormat.TEXT, language="ru"
-        )
-        second = factory.create(
-            voice=make_voice(voice_id="v2", name="Test"), text_format=TextFormat.TEXT, language="ru"
+        assert unreachable_normalization_prompts(settings, storage) == {"text": {"ru_RU"}}
+
+    def test_it_is_reported_per_text_format(self):
+        storage = FakeDataStorage(models=[make_model_info(languages=["ru"])])
+        prompt = NormalizationPrompt(text="t", model="m")
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(prompts={"ru": prompt}),
+            ssml=TextFormatNormalizationSettings(prompts={"en_US": prompt}),
         )
 
-        assert first._promt == "text of prompt-v1"
-        assert second._promt == "text of prompt-v2"
+        assert unreachable_normalization_prompts(settings, storage) == {"ssml": {"en_US"}}
 
-    def test_a_disabled_normalizer_is_remembered_too(self):
-        """A Voice switched off stays off, rather than being re-decided per request."""
-        storage = unittest.mock.MagicMock()
-        storage.get_voice_normalization.return_value = VoiceNormalization(
-            voice_id="v1",
-            text_format=TextFormat.TEXT,
-            language="ru",
-            type=NormalizationType.SIMPLE,
-            enabled=False,
+    def test_no_prompts_reports_nothing(self):
+        storage = FakeDataStorage(models=[make_model_info(languages=["ru"])])
+
+        assert unreachable_normalization_prompts(NormalizationSettings(), storage) == {}
+
+    def test_a_prompt_for_a_model_this_instance_does_not_serve_is_reported(self, tmp_path):
+        """The report is about what is served, so a staged prompt is still reported.
+
+        A Language can be declared by a Model Info the instance does not serve, which
+        leaves the prompt written but unselected until that Model Info is activated.
+        """
+
+        path = make_merged_yaml(
+            tmp_path,
+            {
+                "v5_5_ru": {"engine_type": "silero", "languages": ["ru"], "voices": []},
+                "v3_en": {"engine_type": "silero", "languages": ["en"], "voices": []},
+            },
         )
-        factory = self.factory(storage)
-        voice = make_voice(voice_id="v1", name="Test")
+        storage = YamlDataStorage(config_path_or_model=path, active_models=["v5_5_ru"])
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(
+                prompts={
+                    "ru": NormalizationPrompt(text="t", model="m"),
+                    "en": NormalizationPrompt(text="t", model="m"),
+                }
+            )
+        )
 
-        assert factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru") is None
-        assert factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru") is None
-        assert storage.get_voice_normalization.call_count == 1
+        assert unreachable_normalization_prompts(settings, storage) == {"text": {"en"}}
+
+    def test_the_shipped_configuration_has_no_unreachable_prompt(self):
+        """The configuration the project ships would start without a warning."""
+        storage = YamlDataStorage(
+            config_path_or_model=str(REPO_ROOT / "data" / "data.yml"),
+            active_models=shipped_config()["active_models"],
+        )
+        normalization = shipped_config()["normalization"]
+
+        assert (
+            unreachable_normalization_prompts(
+                NormalizationSettings(
+                    text=TextFormatNormalizationSettings(**normalization["text"]),
+                    ssml=TextFormatNormalizationSettings(**normalization["ssml"]),
+                ),
+                storage,
+            )
+            == {}
+        )

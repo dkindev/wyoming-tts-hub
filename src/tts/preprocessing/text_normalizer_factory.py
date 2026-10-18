@@ -23,15 +23,38 @@ from src.tts.preprocessing import (
 )
 
 
-class TextNormalizerFactory:
-    """Builds the Text Normalizer a request needs, once per Voice and Language.
+def unreachable_normalization_prompts(
+    settings: NormalizationSettings, storage: DataStorage
+) -> dict[str, set[str]]:
+    """Return the server-wide prompts no Model Info this instance serves declares.
 
-    Normalizers are held onto because what they normalize with is fixed by
-    configuration: the Voice's override, or the server-wide settings for its Text
-    Format. Nothing is re-read between requests, so a second request for the same
-    Voice, Text Format and Language can be handed the normalizer already built.
+    Maps a Text Format to the Languages its prompts are keyed by that no served Model
+    Info declares. A prompt keyed any other way is written but never selected, because
+    a request's Language is always one a Model Info declared — so this is where a
+    spelling mistake surfaces, at startup, rather than as text that silently came
+    back unnormalized.
+
+    Only Model Infos the instance serves are consulted: a Language declared by one it
+    does not serve leaves its prompt unused until that Model Info is activated, which
+    is a staged configuration rather than a mistake.
     """
+    declared = {
+        language for model_info in storage.get_model_infos() for language in model_info.languages
+    }
 
+    unreachable: dict[str, set[str]] = {}
+    for text_format, format_settings in (("text", settings.text), ("ssml", settings.ssml)):
+        if not format_settings.prompts:
+            continue
+
+        unreachable_languages = set(format_settings.prompts) - declared
+        if unreachable_languages:
+            unreachable[text_format] = unreachable_languages
+
+    return unreachable
+
+
+class TextNormalizerFactory:
     def __init__(
         self,
         openai_client: AsyncOpenAI,
@@ -41,7 +64,6 @@ class TextNormalizerFactory:
         self._settings = settings
         self._storage = storage
         self._openai_client = openai_client
-        self._normalizers: dict[tuple[str, str, str], TextNormalizer | None] = {}
 
         def _create_openai_normalizer(
             voice: Voice,
@@ -85,25 +107,14 @@ class TextNormalizerFactory:
         """Return the server-wide Prompt written for a Language, if there is one.
 
         Prompts are keyed by the Language a Model Info declares, which is the only
-        Language a request can resolve to. A prompt written under any other spelling
-        is unreachable, so a miss is reported rather than left to look like a Voice
-        that needs no normalization.
+        Language a request can resolve to — so this is an exact match on that
+        Language, and nothing else finds the Prompt. A key written any other way is
+        unreachable, which `unreachable_normalization_prompts` reports at startup.
         """
         if not settings.prompts:
             return None
 
-        prompt = settings.prompts.get(language)
-        if prompt is None:
-            logger.warning(
-                "No normalization prompt for Language '{language}'. Prompts are keyed by a "
-                "Language a Model Info declares, so one written with a region suffix — "
-                "'ru_RU' rather than 'ru' — is never selected. Configured Languages: "
-                "{configured}",
-                language=language,
-                configured=sorted(settings.prompts),
-            )
-
-        return prompt
+        return settings.prompts.get(language)
 
     def create(self, voice: Voice, text_format: TextFormat, language: str) -> TextNormalizer | None:
         if voice is None:
@@ -112,22 +123,6 @@ class TextNormalizerFactory:
         if language is None:
             raise TypeError("language cannot be None")
 
-        # The Voice is part of the key because an LLM-backed normalizer is built from
-        # that Voice's Prompt, so a cache without it would hand one Voice's Prompt to
-        # another. A Language is part of it because the server-wide prompts are keyed
-        # by Language. The key is a tuple rather than joined text, so that a Voice id
-        # or Language carrying the separator cannot collide with another.
-        cache_key = (voice.id, text_format.value, language)
-        if cache_key not in self._normalizers:
-            self._normalizers[cache_key] = self._create(
-                voice=voice, text_format=text_format, language=language
-            )
-
-        return self._normalizers[cache_key]
-
-    def _create(
-        self, voice: Voice, text_format: TextFormat, language: str
-    ) -> TextNormalizer | None:
         settings = self._settings.text if text_format is TextFormat.TEXT else self._settings.ssml
 
         voice_normalization = self._storage.get_voice_normalization(

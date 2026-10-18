@@ -3,8 +3,15 @@ import unittest.mock
 import pytest
 from openai import AsyncOpenAI
 
-from src.config import OpenAiSettings, Settings
-from src.main import create_openai_client, setup_backend
+from src.config import (
+    NormalizationPrompt,
+    NormalizationSettings,
+    OpenAiSettings,
+    Settings,
+    TextFormatNormalizationSettings,
+)
+from src.main import create_openai_client, setup_backend, warn_unreachable_prompts
+from tests.helpers import FakeDataStorage, make_model_info
 
 
 @pytest.fixture
@@ -70,3 +77,45 @@ class TestCreateOpenAiClient:
 
         assert isinstance(client, AsyncOpenAI)
         assert client.base_url == f"{usable_settings.base_url}/"
+
+
+class TestWarnUnreachablePrompts:
+    """An unreachable prompt is reported at startup, and never blocks the server."""
+
+    def storage(self, *languages):
+        return FakeDataStorage(models=[make_model_info(languages=list(languages))])
+
+    def test_an_unreachable_prompt_is_reported(self):
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(
+                prompts={"ru_RU": NormalizationPrompt(text="t", model="m")}
+            )
+        )
+
+        with unittest.mock.patch("src.main.logger.warning") as warning:
+            warn_unreachable_prompts(settings, self.storage("ru"))
+
+        warning.assert_called_once()
+        assert "ru_RU" in warning.call_args.kwargs["languages"]
+
+    def test_a_reachable_prompt_is_not_reported(self):
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(
+                prompts={"ru": NormalizationPrompt(text="t", model="m")}
+            )
+        )
+
+        with unittest.mock.patch("src.main.logger.warning") as warning:
+            warn_unreachable_prompts(settings, self.storage("ru"))
+
+        warning.assert_not_called()
+
+    def test_reporting_does_not_raise(self):
+        """The server starts either way: an inert prompt is not a startup failure."""
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(
+                prompts={"ru_RU": NormalizationPrompt(text="t", model="m")}
+            )
+        )
+
+        assert warn_unreachable_prompts(settings, self.storage("ru")) is None
