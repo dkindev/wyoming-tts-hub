@@ -138,7 +138,7 @@ class TestWarnUnreachablePrompts:
         assert warn_unreachable_prompts(settings, self.storage("ru")) is None
 
 
-COMMAND = "silero-server"
+COMMAND = "wyoming-tts-hub"
 """The command the distribution installs, named for the distribution."""
 
 FREE_PORT_WAIT = 30.0
@@ -387,6 +387,26 @@ class TestPackageMetadata:
     @staticmethod
     def project() -> dict:
         return pyproject()["project"]
+
+    def test_the_package_asks_for_the_name_it_declares(self):
+        """The name `src` asks importlib for is part of the package's own identity.
+
+        It is a string in a call rather than a reference to the packaging, so renaming
+        the distribution without updating it fails at import — before anything has had
+        a chance to say what went wrong.
+        """
+        assert __metadata__["Name"] == pyproject()["project"]["name"]
+
+    def test_the_distribution_is_not_named_after_an_engine_family(self):
+        """The distribution is named for the hub, which is the thing being distributed.
+
+        Asserted as a property rather than a literal, so the next rename does not have
+        to remember this test — but a name taken from an engine family still fails.
+        """
+        name = pyproject()["project"]["name"]
+
+        assert not name.startswith("silero"), f"{name} is an engine family's name"
+        assert not name.startswith("qwen"), f"{name} is an engine family's name"
 
     def test_the_installed_distribution_is_the_one_written(self):
         """The served description is the *installed* summary, not this file's.

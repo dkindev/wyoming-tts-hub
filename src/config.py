@@ -201,7 +201,7 @@ class Settings(BaseSettings):
 
     zeroconf: str = Field(
         default="wyoming-tts-hub",
-        description="Zeroconf discovery name. Empty string means disabled. Set to a name (e.g. 'silero-tts') to enable.",
+        description="Zeroconf discovery name. Empty string means disabled. Set to a name (e.g. 'kitchen-tts') to enable.",
     )
     """Zeroconf discovery name. Empty string means disabled. Set to a name (e.g. 'silero-tts') to enable."""
 

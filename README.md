@@ -13,8 +13,8 @@ The Silero TTS Engine is the one implemented today.
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/dkindev/silero-server.git
-   cd silero-server
+   git clone https://github.com/dkindev/wyoming-tts-hub.git
+   cd wyoming-tts-hub
    ```
 
 2. **Create a virtual environment**
@@ -30,7 +30,7 @@ The Silero TTS Engine is the one implemented today.
 
 4. **Run the application**
    ```bash
-   silero-server
+   wyoming-tts-hub
    ```
 
    The server listens on `tcp://127.0.0.1:10200` by default.
@@ -40,7 +40,7 @@ The Silero TTS Engine is the one implemented today.
    the working directory — so from somewhere else, point it at a configuration file:
 
    ```bash
-   silero-server --config /path/to/config.yml
+   wyoming-tts-hub --config /path/to/config.yml
    ```
 
 ### Docker

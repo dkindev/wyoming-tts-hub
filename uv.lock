@@ -813,7 +813,7 @@ wheels = [
 ]
 
 [[package]]
-name = "silero-server"
+name = "wyoming-tts-hub"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

@@ -2,7 +2,7 @@
 
 from importlib.metadata import metadata
 
-__metadata__ = metadata("silero-server")
+__metadata__ = metadata("wyoming-tts-hub")
 
 __project_urls__ = {}
 for item in __metadata__.get_all("Project-URL") or []:

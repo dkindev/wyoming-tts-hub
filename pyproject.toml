@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "silero-server"
+name = "wyoming-tts-hub"
 version = "0.1.0"
 description = "A simple, robust, and performant Wyoming protocol server built around a TTS Engine Hub that aggregates TTS Engines"
 readme = "README.md"
@@ -32,12 +32,12 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/dkindev/silero-server"
-Repository = "https://github.com/dkindev/silero-server"
-Issues = "https://github.com/dkindev/silero-server/issues"
+Homepage = "https://github.com/dkindev/wyoming-tts-hub"
+Repository = "https://github.com/dkindev/wyoming-tts-hub"
+Issues = "https://github.com/dkindev/wyoming-tts-hub/issues"
 
 [project.scripts]
-silero-server = "src.main:run"
+wyoming-tts-hub = "src.main:run"
 
 [project.optional-dependencies]
 dev = [

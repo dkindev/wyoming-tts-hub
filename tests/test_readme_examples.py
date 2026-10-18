@@ -14,6 +14,18 @@ DOCKERFILE = REPO_ROOT / "Dockerfile"
 MODELS_DIR = "models"
 """The directory the server caches models under, as the documentation names it."""
 
+PROJECT_NAME = "wyoming-tts-hub"
+"""The distribution, command and image tag, which the documentation must agree with."""
+
+PROJECT_URL = f"https://github.com/dkindev/{PROJECT_NAME}"
+"""Where the project lives, as the README documents it."""
+
+COMMAND = PROJECT_NAME
+"""The console script, which the distribution installs under its own name."""
+
+IMAGE_TAG = PROJECT_NAME
+"""The Docker image tag the README documents building and running."""
+
 IMAGE_WORKDIR = "/app"
 """The directory the image runs in, which relative paths resolve against."""
 
@@ -238,3 +250,18 @@ class TestDocumentedLayoutMatchesTheServer:
         from src.config import Settings
 
         assert Settings.model_fields["models_dir"].default == MODELS_DIR
+
+
+class TestDocumentedNameIsTheInstalledOne:
+    """The name a reader clones and types is the name the distribution installs."""
+
+    def test_the_documented_command_is_the_installed_command(self):
+        assert COMMAND in README.read_text()
+
+    def test_the_documented_clone_url_names_the_project_not_an_engine(self):
+        """Cloning must land on the project, whatever engines it aggregates."""
+        assert f"{PROJECT_URL}.git" in README.read_text()
+        assert "silero-server" not in README.read_text()
+
+    def test_the_documented_image_tag_names_the_project(self):
+        assert f"{IMAGE_TAG}:latest" in README.read_text()

@@ -50,4 +50,4 @@ EXPOSE 10200
 COPY --chmod=555 docker-entrypoint.sh /usr/local/bin
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-CMD ["silero-server"]
+CMD ["wyoming-tts-hub"]
