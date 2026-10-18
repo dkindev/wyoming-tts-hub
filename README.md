@@ -30,10 +30,18 @@ The Silero TTS Engine is the one implemented today.
 
 4. **Run the application**
    ```bash
-   python -m src.main
+   silero-server
    ```
 
    The server listens on `tcp://127.0.0.1:10200` by default.
+
+   The command can be run from anywhere. The configuration it reads is found relative
+   to where you run it, though — `data/data.yml` and `models/` both resolve against
+   the working directory — so from somewhere else, point it at a configuration file:
+
+   ```bash
+   silero-server --config /path/to/config.yml
+   ```
 
 ### Docker
 

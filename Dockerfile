@@ -50,4 +50,4 @@ EXPOSE 10200
 COPY --chmod=555 docker-entrypoint.sh /usr/local/bin
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-CMD ["python", "-m", "src.main"]
+CMD ["silero-server"]

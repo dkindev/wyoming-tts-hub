@@ -29,6 +29,9 @@ Homepage = "https://github.com/dkindev/silero-server"
 Repository = "https://github.com/dkindev/silero-server"
 Issues = "https://github.com/dkindev/silero-server/issues"
 
+[project.scripts]
+silero-server = "src.main:run"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
@@ -47,8 +50,13 @@ explicit = true
 torch = [{ index = "pytorch-cpu" }]
 
 [tool.setuptools]
-packages = ["src"]
 package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+# Every subpackage under `src` is part of the distribution. Naming only the top one
+# builds a wheel holding `src/main.py` and none of the code it imports, so the installed
+# command fails on import.
+include = ["src*"]
 
 [tool.ruff]
 line-length = 100

@@ -175,8 +175,17 @@ async def main():
         loop.remove_signal_handler(signal.SIGTERM)
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Start the server, and stop it without a traceback on Ctrl-C.
+
+    This is what the installed command and `python -m src.main` both call, so the two
+    ways in start the server identically.
+    """
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+
+
+if __name__ == "__main__":
+    run()
