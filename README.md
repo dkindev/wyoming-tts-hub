@@ -53,7 +53,6 @@ The Silero TTS Engine is the one implemented today.
 2. **Run the container**
    ```bash
    docker run -p 10200:10200 \
-     -e TTS_ENV_TYPE=production \
      -v ./data:/app/data \
      -v ./models:/app/models \
      wyoming-tts-hub:latest
@@ -108,7 +107,6 @@ models:
     engine_type: silero
     languages: [ru]
     ssml_supported: true
-    language_auto_detected: false
     warmup: true
     voices:
       - name: aidar
