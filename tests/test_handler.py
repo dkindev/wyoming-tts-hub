@@ -14,6 +14,7 @@ from wyoming.tts import (
     SynthesizeVoice,
 )
 
+from src import PROJECT_NAME, __metadata__
 from src.handler import TtsEngineHubEventHandler
 from src.tts.data_storage import YamlDataStorage
 from src.tts.middleware import ResolveLanguageMiddleware
@@ -214,6 +215,57 @@ class TestDescribe:
 
         voices = Info.from_event(events[0]).tts[0].voices
         assert [voice.name for voice in voices] == [f"{MODEL_ID}-aidar", f"{MODEL_ID}-zebra"]
+
+    async def test_the_description_is_what_the_package_says_the_project_is(self):
+        """The description is the package summary, not something restated beside it.
+
+        They were one string read twice; restating it would let the two drift, and the
+        client only ever sees this one.
+        """
+        client = WyomingClient()
+
+        events = await client.send(make_handler(client), Describe().event())
+
+        assert Info.from_event(events[0]).tts[0].description == __metadata__["summary"]
+
+    async def test_the_description_names_a_tts_engine_hub(self):
+        """A client reading this is told what the project is, not what it started as."""
+        client = WyomingClient()
+
+        events = await client.send(make_handler(client), Describe().event())
+
+        assert "TTS Engine Hub" in Info.from_event(events[0]).tts[0].description
+
+    async def test_the_attribution_names_the_project(self):
+        """Credit goes to the project, not to the service name or the distribution.
+
+        Both are the strings this used to be credited under: the distribution is named
+        after one engine family, and the service name is whatever the operator called
+        this deployment. Renaming a service to something of one's own must not make the
+        server claim the credit for it.
+        """
+        client = WyomingClient()
+
+        events = await client.send(make_handler(client), Describe().event())
+
+        attribution = Info.from_event(events[0]).tts[0].attribution
+        assert attribution.name == PROJECT_NAME
+        assert attribution.name != SERVICE_NAME
+        assert attribution.name != __metadata__["name"]
+
+    async def test_naming_the_service_does_not_change_the_credit(self):
+        """The two names are decided apart, so neither can become the other."""
+        client = WyomingClient()
+        handler = make_handler(client)
+
+        renamed = await client.send(handler, Describe().event())
+        client.written_events()
+        handler._wyoming_service_name = "Kitchen Speaker"
+        after_renaming = await client.send(handler, Describe().event())
+
+        program = Info.from_event(after_renaming[0]).tts[0]
+        assert program.name == "Kitchen Speaker"
+        assert program.attribution.name == Info.from_event(renamed[0]).tts[0].attribution.name
 
     async def test_each_voice_reports_its_model_info_languages(self):
         client = WyomingClient()

@@ -15,6 +15,7 @@ from setuptools import find_packages
 from wyoming.event import read_event, write_event
 from wyoming.info import Describe, Info
 
+from src import __metadata__
 from src import main as main_module
 from src.config import (
     NormalizationPrompt,
@@ -373,3 +374,45 @@ class TestConsoleScript:
             pytest.fail("the distribution declares no packages at all")
 
         assert declared == set(find_packages(where=REPO_ROOT, include=["src*"]))
+
+
+def pyproject() -> dict:
+    """The packaging metadata as it is written in the source."""
+    return tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+
+
+class TestPackageMetadata:
+    """What the distribution says about itself, which clients read over the protocol."""
+
+    @staticmethod
+    def project() -> dict:
+        return pyproject()["project"]
+
+    def test_the_installed_distribution_is_the_one_written(self):
+        """The served description is the *installed* summary, not this file's.
+
+        The two are read from different places — one from pyproject.toml, one from the
+        installed distribution's metadata — and nothing else ties them together, so
+        editing the summary and not reinstalling would leave a client being told
+        something the project no longer says.
+        """
+        assert __metadata__["summary"] == pyproject()["project"]["description"]
+
+    def test_the_summary_describes_a_tts_engine_hub(self):
+        """The summary is what a client is told the server is.
+
+        It used to say the server wraps the Silero TTS engine, which described one
+        engine family as though it were the whole of the project.
+        """
+        summary = self.project()["description"]
+
+        assert "TTS Engine Hub" in summary
+        assert "TTS Engines" in summary
+        assert "wraps the Silero" not in summary
+
+    def test_the_keywords_name_the_hub_and_the_engine_family_it_aggregates(self):
+        """Search terms a reader reaches for, naming what the project actually is."""
+        keywords = set(self.project()["keywords"])
+
+        assert "tts-engine-hub" in keywords
+        assert "silero" in keywords

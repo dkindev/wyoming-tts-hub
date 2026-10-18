@@ -5,11 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "silero-server"
 version = "0.1.0"
-description = "A simple, robust, and performant Wyoming protocol TTS server that wraps the Silero TTS engine"
+description = "A simple, robust, and performant Wyoming protocol server built around a TTS Engine Hub that aggregates TTS Engines"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Dmitry Kiselev", email = "dmitry@example.com"}]
-keywords = ["wyoming", "silero", "tts"]
+keywords = [
+    "wyoming",
+    "tts",
+    "text-to-speech",
+    "tts-engine-hub",
+    "silero",
+    "home-assistant",
+]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0.0",

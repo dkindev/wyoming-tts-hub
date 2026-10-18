@@ -13,7 +13,7 @@ from wyoming.tts import (
     SynthesizeTextFormat,
 )
 
-from src import __metadata__, __project_urls__
+from src import PROJECT_NAME, __metadata__, __project_urls__
 from src.tts.data_storage import DataStorage
 from src.tts.engine_hub import TtsEngineHub
 from src.tts.models import TextFormat
@@ -46,7 +46,7 @@ def _create_wyoming_info(data_storage: DataStorage, service_name: str, streaming
                 name=service_name,
                 description=__metadata__["summary"],
                 attribution=Attribution(
-                    name=__metadata__["name"],
+                    name=PROJECT_NAME,
                     url=__project_urls__["Homepage"],
                 ),
                 installed=True,
