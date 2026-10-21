@@ -17,11 +17,20 @@ SAMPLE_RATE = 24000
 class FakeQwenModel:
     """A loaded Qwen3-TTS model that records what the engine asks of it."""
 
-    def __init__(self, audio=None, sample_rate=SAMPLE_RATE):
+    def __init__(
+        self,
+        audio=None,
+        sample_rate=SAMPLE_RATE,
+        supported_speakers=None,
+        supported_languages=None,
+    ):
         self.audio = np.array([0.0, 0.5, -0.5], dtype=np.float32) if audio is None else audio
         self.sample_rate = sample_rate
+        self.supported_speakers = supported_speakers
+        self.supported_languages = supported_languages
         self.prompt_calls: list[dict] = []
         self.generate_calls: list[dict] = []
+        self.custom_voice_calls: list[dict] = []
 
     def create_voice_clone_prompt(self, **kwargs):
         self.prompt_calls.append(kwargs)
@@ -30,6 +39,16 @@ class FakeQwenModel:
     def generate_voice_clone(self, **kwargs):
         self.generate_calls.append(kwargs)
         return [self.audio], self.sample_rate
+
+    def generate_custom_voice(self, **kwargs):
+        self.custom_voice_calls.append(kwargs)
+        return [self.audio], self.sample_rate
+
+    def get_supported_speakers(self):
+        return self.supported_speakers
+
+    def get_supported_languages(self):
+        return self.supported_languages
 
 
 def make_engine(tmp_path, *, model_id=MODEL_ID, revision=None, device="cpu"):
@@ -46,25 +65,26 @@ def make_engine(tmp_path, *, model_id=MODEL_ID, revision=None, device="cpu"):
     )
 
 
-def write_checkpoint(model_type="base"):
+def write_checkpoint(model_type="base", model_size=None):
     """Return a snapshot_download stand-in that lays down a checkpoint config."""
 
     def download(*, repo_id, revision, local_dir):
         os.makedirs(local_dir, exist_ok=True)
-        with open(os.path.join(local_dir, "config.json"), "w", encoding="utf-8") as config:
-            json.dump({"tts_model_type": model_type}, config)
+        config = {"tts_model_type": model_type, "tts_model_size": model_size}
+        with open(os.path.join(local_dir, "config.json"), "w", encoding="utf-8") as config_file:
+            json.dump(config, config_file)
 
         return local_dir
 
     return download
 
 
-async def warmup(engine, fake_model, model_type="base"):
+async def warmup(engine, fake_model, model_type="base", model_size=None):
     """Warm `engine` against a fake downloaded checkpoint and loaded model."""
     with (
         unittest.mock.patch(
             "src.tts.qwen_engine.snapshot_download",
-            side_effect=write_checkpoint(model_type),
+            side_effect=write_checkpoint(model_type, model_size),
         ) as download,
         unittest.mock.patch(
             "src.tts.qwen_engine.Qwen3TTSModel.from_pretrained",
@@ -84,6 +104,16 @@ def make_voice(*, ref_audio="reference.wav", ref_text="Reference text"):
         model_id=MODEL_ID,
         ref_audio=ref_audio,
         ref_text=ref_text,
+    )
+
+
+def make_custom_voice(*, speaker="Vivian", instruct=None):
+    return Voice(
+        id=f"{MODEL_ID}-preset",
+        name="preset",
+        speaker=speaker,
+        model_id=MODEL_ID,
+        instruct=instruct,
     )
 
 
@@ -144,21 +174,23 @@ class TestWarmup:
 
         assert engine._checkpoint_family == "base"
 
-    @pytest.mark.parametrize(
-        ("model_type", "label"),
-        [("voice_design", "VoiceDesign"), ("custom_voice", "CustomVoice")],
-    )
-    async def test_unsupported_checkpoint_family_is_rejected_before_loading(
-        self, tmp_path, model_type, label
-    ):
-        """A checkpoint of another family is refused by name, without paying for a load."""
+    async def test_custom_voice_checkpoint_is_accepted(self, tmp_path):
+        """A CustomVoice checkpoint is served by the same TTS Engine as a Base one."""
+        engine = make_engine(tmp_path)
+
+        await warmup(engine, FakeQwenModel(), model_type="custom_voice")
+
+        assert engine._checkpoint_family == "custom_voice"
+
+    async def test_unsupported_checkpoint_family_is_rejected_before_loading(self, tmp_path):
+        """A VoiceDesign checkpoint is refused by name, without paying for a load."""
         engine = make_engine(tmp_path)
         fake = FakeQwenModel()
 
         with (
             unittest.mock.patch(
                 "src.tts.qwen_engine.snapshot_download",
-                side_effect=write_checkpoint(model_type),
+                side_effect=write_checkpoint("voice_design"),
             ),
             unittest.mock.patch(
                 "src.tts.qwen_engine.Qwen3TTSModel.from_pretrained",
@@ -169,8 +201,9 @@ class TestWarmup:
             await engine.warmup()
 
         message = str(exc_info.value)
-        assert label in message
+        assert "VoiceDesign" in message
         assert "Base" in message
+        assert "CustomVoice" in message
         from_pretrained.assert_not_called()
 
 
@@ -289,6 +322,121 @@ class TestVoiceCloning:
 
         assert voice.id in str(exc_info.value)
         assert fake.prompt_calls == []
+
+
+@pytest.mark.asyncio
+class TestCustomVoice:
+    async def test_dispatches_a_custom_voice_checkpoint_to_the_speaker_api(self, tmp_path):
+        """A CustomVoice checkpoint synthesizes from its Speaker, not from a Voice Prompt."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian"], supported_languages=["english"])
+        await warmup(engine, fake, model_type="custom_voice")
+        voice = make_custom_voice()
+
+        await synthesize(engine, voice, text="Hello there")
+
+        assert fake.prompt_calls == []
+        assert fake.generate_calls == []
+        assert fake.custom_voice_calls[0]["text"] == "Hello there"
+        assert fake.custom_voice_calls[0]["speaker"] == "Vivian"
+
+    async def test_passes_the_voices_instruction_through(self, tmp_path):
+        """An instruction declared on a Voice reaches the checkpoint unchanged."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian"], supported_languages=["english"])
+        await warmup(engine, fake, model_type="custom_voice")
+
+        await synthesize(engine, make_custom_voice(instruct="Speak angrily"))
+
+        assert fake.custom_voice_calls[0]["instruct"] == "Speak angrily"
+
+    async def test_an_absent_instruction_is_passed_as_none(self, tmp_path):
+        """A Voice without an instruction does not invent one."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian"], supported_languages=["english"])
+        await warmup(engine, fake, model_type="custom_voice")
+
+        await synthesize(engine, make_custom_voice())
+
+        assert fake.custom_voice_calls[0]["instruct"] is None
+
+    async def test_maps_the_language_for_custom_voice(self, tmp_path):
+        """A CustomVoice checkpoint receives the checkpoint's name for the Language."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian"], supported_languages=["russian"])
+        await warmup(engine, fake, model_type="custom_voice")
+
+        await synthesize(engine, make_custom_voice(), language="ru")
+
+        assert fake.custom_voice_calls[0]["language"] == "Russian"
+
+    async def test_an_unsupported_speaker_is_refused_by_name(self, tmp_path):
+        """A Speaker the checkpoint does not publish is an error naming the value."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian", "ryan"])
+        await warmup(engine, fake, model_type="custom_voice")
+        voice = make_custom_voice(speaker="Nobody")
+
+        with pytest.raises(ValueError) as exc_info:
+            await synthesize(engine, voice)
+
+        message = str(exc_info.value)
+        assert "Nobody" in message
+        assert "vivian" in message
+        assert fake.custom_voice_calls == []
+
+    async def test_an_unknown_language_code_is_refused_by_name(self, tmp_path):
+        """A Language code the engine cannot translate is an error, not automatic detection."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian"])
+        await warmup(engine, fake, model_type="custom_voice")
+
+        with pytest.raises(ValueError) as exc_info:
+            await synthesize(engine, make_custom_voice(), language="xx")
+
+        assert "xx" in str(exc_info.value)
+        assert fake.custom_voice_calls == []
+
+    async def test_a_language_the_checkpoint_rejects_is_refused_by_name(self, tmp_path):
+        """A mapped Language the checkpoint does not publish is an error naming it."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian"], supported_languages=["english", "auto"])
+        await warmup(engine, fake, model_type="custom_voice")
+
+        with pytest.raises(ValueError) as exc_info:
+            await synthesize(engine, make_custom_voice(), language="ru")
+
+        message = str(exc_info.value)
+        assert "ru" in message
+        assert "Russian" in message
+        assert fake.custom_voice_calls == []
+
+    async def test_warns_when_the_checkpoint_size_ignores_an_instruction(self, tmp_path):
+        """A 0.6B CustomVoice checkpoint ignores instructions, so the operator is warned."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian"], supported_languages=["english"])
+        await warmup(engine, fake, model_type="custom_voice", model_size="0b6")
+
+        with unittest.mock.patch("src.tts.qwen_engine.logger.warning") as warning:
+            await synthesize(engine, make_custom_voice(instruct="Speak angrily"))
+            await synthesize(engine, make_custom_voice(instruct="Speak angrily"))
+
+        warning.assert_called_once()
+        assert "instruction" in str(warning.call_args).lower()
+        assert [call["instruct"] for call in fake.custom_voice_calls] == [None, None]
+
+    async def test_a_voice_without_a_speaker_is_a_configuration_error(self, tmp_path):
+        """A CustomVoice Voice that names no Speaker is refused by name."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel(supported_speakers=["vivian"])
+        await warmup(engine, fake, model_type="custom_voice")
+        voice = make_custom_voice(speaker="")
+
+        with pytest.raises(ValueError) as exc_info:
+            await synthesize(engine, voice)
+
+        assert voice.id in str(exc_info.value)
+        assert fake.custom_voice_calls == []
 
 
 @pytest.mark.asyncio
