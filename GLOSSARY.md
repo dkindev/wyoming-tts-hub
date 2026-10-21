@@ -43,9 +43,20 @@ _Avoid_: Voice (when meaning a speaker profile)
 **Voice**:
 A named, user-facing preset that references exactly one **Model Info** and the
 engine-specific parameters for speaking in it — a **Speaker** within that **Model
-Info**, or reference audio and text for cloning-style engines. Multiple **Voices**
-can map to the same **Speaker** within a **Model Info**.
+Info**, or **Reference Audio** and the text spoken in it for cloning-style engines.
+Multiple **Voices** can map to the same **Speaker** within a **Model Info**.
 _Avoid_: Speaker (when meaning a named voice)
+
+**Reference Audio**:
+The audio a **Voice** carries as the source of its timbre for a cloning **TTS
+Engine**. It is input to a **Voice Prompt**, not audio that is played back.
+_Avoid_: voice sample, reference clip, sample
+
+**Voice Prompt**:
+The model-side conditioning built from a **Voice**'s **Reference Audio** that
+stands in for that **Voice** during cloning synthesis. It is not an LLM **Prompt**
+and carries no instruction text.
+_Avoid_: Prompt, clone prompt, voice embedding
 
 **VoiceNormalization**:
 A per-**Voice**, per-**Text Format**, per-**Language** override of normalization
@@ -55,8 +66,10 @@ _Avoid_: Normalization override, voice normalisation config
 
 **Prompt**:
 A reusable LLM prompt definition that specifies the instruction text and which
-LLM model to use for LLM-based **Text Normalization**.
-_Avoid_: LLM instruction
+LLM model to use for LLM-based **Text Normalization**. It is unrelated to a
+**Voice Prompt**, which conditions a cloning **TTS Engine** on **Reference
+Audio**.
+_Avoid_: LLM instruction, Voice Prompt
 
 ### Language and text
 
@@ -105,8 +118,10 @@ _Avoid_: Packet, block, window
 - A **Speaker** belongs to exactly one **Model Info**, and within that **Model
   Info** may be referenced by one or more **Voices**
 - A **Voice** references exactly one **Model Info** and either exactly one
-  **Speaker** or engine-specific reference parameters; the language of its speech
-  is derived from the **Model Info**
+  **Speaker** or a **Reference Audio**; the language of its speech is derived from
+  the **Model Info**
+- A cloning **TTS Engine** builds a **Voice Prompt** from a **Voice**'s
+  **Reference Audio**
 - A **Voice** has zero or more **VoiceNormalizations**; a **Prompt** is referenced
   by zero or more **VoiceNormalizations**
 - A **Model Info**'s declared **Languages** are the source of truth advertised
