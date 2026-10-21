@@ -22,6 +22,10 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "torch==2.12.1",
+    # Qwen3-TTS pulls torchaudio. Pin its last release to the same CPU index as torch so
+    # the resolver cannot install a second torch build; torchaudio 2.11.0 imports and runs
+    # against torch 2.12.1 even though no 2.12 release of torchaudio exists.
+    "torchaudio==2.11.0",
     "numpy==2.4.6",
     "pyyaml==6.0.3",
     "loguru>=0.7.3",
@@ -29,6 +33,11 @@ dependencies = [
     "wyoming>=1.10.0",
     "zeroconf>=0.149.16",
     "openai>=2.43.0",
+    # Qwen3-TTS is a large install because importing the package eagerly imports its 25 Hz
+    # speech tokenizer. That pulls in audio and inference libraries (librosa, soundfile, sox,
+    # onnxruntime, torchaudio) the 12 Hz path never uses. It also declares a Gradio web UI
+    # that is only reachable through its own demo command.
+    "qwen-tts==0.1.1",
 ]
 
 [project.urls]
@@ -55,6 +64,7 @@ explicit = true
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu" }]
+torchaudio = [{ index = "pytorch-cpu" }]
 
 [tool.setuptools]
 package-dir = {"" = "."}

@@ -28,6 +28,10 @@ RUN set -eux; \
 RUN set -eux; \
     apt-get update; \
 	apt-get install -y --no-install-recommends \
+        # qwen-tts imports its audio tokenizer eagerly, and the sox Python package
+        # shells out to the SoX binary for audio conversion.
+        sox \
+        libsox-fmt-all \
         # grab gosu for easy step-down from root
         gosu \
     ; \
@@ -44,6 +48,9 @@ RUN chown -R wthub:wthub .
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
+
+# Fail the image build if the audio engine's SoX binary or the Qwen3-TTS runtime is missing.
+RUN sox --version && python -c "import qwen_tts, sox; assert not sox.NO_SOX"
 
 EXPOSE 10200
 
