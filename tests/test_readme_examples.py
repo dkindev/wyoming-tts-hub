@@ -126,18 +126,18 @@ class TestWhatTheExamplesDeclare:
     def test_the_documented_id_form_is_the_one_derived(self):
         """The prose must state the same form the code builds, or the reader is misled."""
         assert f"`{VOICE_ID_FORM}`" in README.read_text()
-        assert "ru_RU-v5_5_ru-aidar" not in README.read_text()
+        assert "ru_RU-v5_6_ru-aidar" not in README.read_text()
 
     def test_a_voice_normalization_example_is_read_as_written(self, tmp_path):
         """An override is read for the Voice, Language and Text Format it names."""
         example = normalization_example()
-        written = yaml.safe_load(example)["models"]["v5_5_ru"]["voices"][0]["normalization"]
+        written = yaml.safe_load(example)["models"]["v5_6_ru"]["voices"][0]["normalization"]
         storage = load_example(tmp_path, example, 1)
 
         for language, formats in written.items():
             for text_format, declared in formats.items():
                 override = storage.get_voice_normalization(
-                    "v5_5_ru-aidar", TextFormat(text_format), language
+                    "v5_6_ru-aidar", TextFormat(text_format), language
                 )
 
                 assert (
@@ -150,7 +150,7 @@ class TestWhatTheExamplesDeclare:
         """A prompt the example references has to be there, or the reference is a lie."""
         example = normalization_example()
         written = yaml.safe_load(example)
-        declared = written["models"]["v5_5_ru"]["voices"][0]["normalization"]
+        declared = written["models"]["v5_6_ru"]["voices"][0]["normalization"]
         prompt_id = declared["ru"]["text"]["prompt_id"]
         storage = load_example(tmp_path, example, 1)
 

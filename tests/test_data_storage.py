@@ -26,7 +26,7 @@ def write_data_file(tmp_path: Path, contents: str, name: str = "data.yml") -> Pa
 
 MODEL_WITH_VOICE = """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -44,17 +44,17 @@ class TestYamlDataStorageInit:
             models=[make_model_info()],
             voices=[
                 Voice(
-                    id="v5_5_ru-aidar",
+                    id="v5_6_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model_id="v5_5_ru",
+                    model_id="v5_6_ru",
                 )
             ],
         )
 
         storage = YamlDataStorage(config_model)
 
-        assert storage.get_voice("v5_5_ru-aidar").name == "aidar"
+        assert storage.get_voice("v5_6_ru-aidar").name == "aidar"
 
 
 class TestGetVoices:
@@ -76,10 +76,10 @@ class TestGetVoices:
             models=[make_model_info()],
             voices=[
                 Voice(
-                    id="v5_5_ru-aidar",
+                    id="v5_6_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model_id="v5_5_ru",
+                    model_id="v5_6_ru",
                 )
             ],
         )
@@ -87,8 +87,8 @@ class TestGetVoices:
 
         result = storage.get_voices()
         assert len(result) == 1
-        assert result[0].id == "v5_5_ru-aidar"
-        assert result[0].model_id == "v5_5_ru"
+        assert result[0].id == "v5_6_ru-aidar"
+        assert result[0].model_id == "v5_6_ru"
 
     def test_get_voices_includes_all_voices(self):
         """get_voices should include all voices."""
@@ -97,16 +97,16 @@ class TestGetVoices:
             models=[make_model_info()],
             voices=[
                 Voice(
-                    id="v5_5_ru-aidar",
+                    id="v5_6_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model_id="v5_5_ru",
+                    model_id="v5_6_ru",
                 ),
                 Voice(
-                    id="v5_5_ru-baya",
+                    id="v5_6_ru-baya",
                     name="baya",
                     speaker="baya",
-                    model_id="v5_5_ru",
+                    model_id="v5_6_ru",
                 ),
             ],
         )
@@ -124,10 +124,10 @@ class TestGetVoices:
             models=[make_model_info(), make_model_info(id="v3_en")],
             voices=[
                 Voice(
-                    id="v5_5_ru-aidar",
+                    id="v5_6_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model_id="v5_5_ru",
+                    model_id="v5_6_ru",
                 ),
                 Voice(
                     id="v3_en-en_0",
@@ -153,18 +153,18 @@ class TestGetVoice:
             models=[make_model_info()],
             voices=[
                 Voice(
-                    id="v5_5_ru-aidar",
+                    id="v5_6_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model_id="v5_5_ru",
+                    model_id="v5_6_ru",
                 )
             ],
         )
         storage = YamlDataStorage(config_model)
 
-        voice = storage.get_voice("v5_5_ru-aidar")
+        voice = storage.get_voice("v5_6_ru-aidar")
         assert voice.speaker == "aidar"
-        assert voice.model_id == "v5_5_ru"
+        assert voice.model_id == "v5_6_ru"
 
 
 class TestYamlConstructor:
@@ -177,22 +177,22 @@ class TestYamlConstructor:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
 
-        voice = storage.get_voice("v5_5_ru-aidar")
+        voice = storage.get_voice("v5_6_ru-aidar")
         assert voice.name == "aidar"
         assert voice.speaker == "aidar"
-        assert voice.model_id == "v5_5_ru"
+        assert voice.model_id == "v5_6_ru"
 
     def test_loaded_voices_have_voice_configs(self, tmp_path):
         """get_voices should return Voice objects with computed id."""
@@ -201,13 +201,13 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
@@ -215,8 +215,8 @@ models:
 
         voices = storage.get_voices()
         assert len(voices) == 1
-        assert voices[0].id == "v5_5_ru-aidar"
-        assert voices[0].model_id == "v5_5_ru"
+        assert voices[0].id == "v5_6_ru-aidar"
+        assert voices[0].model_id == "v5_6_ru"
 
     def test_missing_speaker_defaults_to_voice_name(self, tmp_path):
         """YAML without speaker field should default speaker to voice_name."""
@@ -225,17 +225,17 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
       - name: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
-        voice = storage.get_voice("v5_5_ru-aidar")
+        voice = storage.get_voice("v5_6_ru-aidar")
         assert voice.speaker == "aidar"
 
     def test_empty_speaker_defaults_to_voice_name(self, tmp_path):
@@ -245,18 +245,18 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
       - name: aidar
         speaker: ""
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
-        voice = storage.get_voice("v5_5_ru-aidar")
+        voice = storage.get_voice("v5_6_ru-aidar")
         assert voice.speaker == "aidar"
 
 
@@ -270,7 +270,7 @@ class TestLocaleLessSchema:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     warmup: true
@@ -289,14 +289,14 @@ models:
         storage = YamlDataStorage(str(config_yml))
 
         assert [v.id for v in storage.get_voices()] == [
-            "v5_5_ru-aidar",
-            "v5_5_ru-eugene",
+            "v5_6_ru-aidar",
+            "v5_6_ru-eugene",
             "v3_en-henry",
         ]
-        assert not hasattr(storage.get_voice("v5_5_ru-aidar"), "locale")
+        assert not hasattr(storage.get_voice("v5_6_ru-aidar"), "locale")
         assert storage.get_voice("v3_en-henry").speaker == "en_2"
         assert storage.get_voice("v3_en-henry").name == "henry"
-        assert storage.get_model_info("v5_5_ru").warmup is True
+        assert storage.get_model_info("v5_6_ru").warmup is True
 
     def test_voices_sharing_speaker_load_with_distinct_name_ids(self, tmp_path):
         """Two voices sharing a speaker under one Model Info load with distinct name-based IDs."""
@@ -305,7 +305,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -319,11 +319,11 @@ models:
         storage = YamlDataStorage(str(config_yml))
 
         assert [v.id for v in storage.get_voices()] == [
-            "v5_5_ru-aidar-soft",
-            "v5_5_ru-aidar-loud",
+            "v5_6_ru-aidar-soft",
+            "v5_6_ru-aidar-loud",
         ]
-        assert storage.get_voice("v5_5_ru-aidar-soft").speaker == "aidar"
-        assert storage.get_voice("v5_5_ru-aidar-loud").speaker == "aidar"
+        assert storage.get_voice("v5_6_ru-aidar-soft").speaker == "aidar"
+        assert storage.get_voice("v5_6_ru-aidar-loud").speaker == "aidar"
 
     def test_duplicate_voice_name_in_one_model_info_raises_error(self, tmp_path):
         """Two voices with the same name in one Model Info derive the same ID and fail loudly."""
@@ -332,7 +332,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -343,7 +343,7 @@ models:
 """
         )
 
-        with pytest.raises(ValueError, match="v5_5_ru-aidar"):
+        with pytest.raises(ValueError, match="v5_6_ru-aidar"):
             YamlDataStorage(str(config_yml))
 
     def test_same_voice_name_in_different_models_loads(self, tmp_path):
@@ -353,7 +353,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -368,7 +368,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert [v.id for v in storage.get_voices()] == ["v5_5_ru-aidar", "v3_en-aidar"]
+        assert [v.id for v in storage.get_voices()] == ["v5_6_ru-aidar", "v3_en-aidar"]
 
     def test_voice_yaml_entries_populate_reference_fields(self, tmp_path):
         """ref_audio, ref_text, and instruct keys in a voice entry parse onto the Voice."""
@@ -377,7 +377,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -389,7 +389,7 @@ models:
         )
 
         storage = YamlDataStorage(str(config_yml))
-        voice = storage.get_voice("v5_5_ru-aidar")
+        voice = storage.get_voice("v5_6_ru-aidar")
 
         assert voice.ref_audio == "/audio/aidar.wav"
         assert voice.ref_text == "Hello world"
@@ -428,14 +428,14 @@ class TestYamlEnabledField:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     enabled: false
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
@@ -450,13 +450,13 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
@@ -471,14 +471,14 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     enabled: true
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
@@ -493,14 +493,14 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     enabled: false
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
   v3_en:
     engine_type: silero
     languages: [en]
@@ -515,7 +515,7 @@ models:
         storage = YamlDataStorage(str(config_yml))
 
         voices = storage.get_voices()
-        assert not any(v.model_id == "v5_5_ru" for v in voices)
+        assert not any(v.model_id == "v5_6_ru" for v in voices)
         assert any(v.model_id == "v3_en" for v in voices)
         assert any(v.name == "en_0" for v in voices)
 
@@ -532,8 +532,8 @@ class TestGetModelInfo:
         )
         storage = YamlDataStorage(config_model)
 
-        model_info = storage.get_model_info("v5_5_ru")
-        assert model_info.id == "v5_5_ru"
+        model_info = storage.get_model_info("v5_6_ru")
+        assert model_info.id == "v5_6_ru"
 
 
 class TestGetModelInfos:
@@ -547,10 +547,10 @@ class TestGetModelInfos:
             ],
             voices=[
                 Voice(
-                    id="v5_5_ru-aidar",
+                    id="v5_6_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model_id="v5_5_ru",
+                    model_id="v5_6_ru",
                 )
             ],
         )
@@ -558,7 +558,7 @@ class TestGetModelInfos:
         storage = YamlDataStorage(config_model)
         result = storage.get_model_infos()
 
-        model_info1 = [model_info for model_info in result if model_info.id == "v5_5_ru"]
+        model_info1 = [model_info for model_info in result if model_info.id == "v5_6_ru"]
         model_info2 = [model_info for model_info in result if model_info.id == "v3_en"]
 
         assert isinstance(result, list)
@@ -577,7 +577,7 @@ class TestModelInfoFromYaml:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
 """
@@ -585,7 +585,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert type(storage.get_model_info("v5_5_ru")) is ModelInfo
+        assert type(storage.get_model_info("v5_6_ru")) is ModelInfo
 
 
 class TestYamlWarmupField:
@@ -598,20 +598,20 @@ class TestYamlWarmupField:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     warmup: true
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model_info("v5_5_ru").warmup is True
+        assert storage.get_model_info("v5_6_ru").warmup is True
 
     def test_yaml_without_warmup_defaults_to_false(self, tmp_path):
         """YAML without warmup field should default to False."""
@@ -620,19 +620,19 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model_info("v5_5_ru").warmup is False
+        assert storage.get_model_info("v5_6_ru").warmup is False
 
 
 class TestYamlHashPrefixField:
@@ -645,20 +645,20 @@ class TestYamlHashPrefixField:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     hash_prefix: "a1b2c3d4"
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model_info("v5_5_ru").hash_prefix == "a1b2c3d4"
+        assert storage.get_model_info("v5_6_ru").hash_prefix == "a1b2c3d4"
 
     def test_yaml_without_hash_prefix_defaults_to_none(self, tmp_path):
         """YAML without hash_prefix should default to None."""
@@ -667,19 +667,19 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model_info("v5_5_ru").hash_prefix is None
+        assert storage.get_model_info("v5_6_ru").hash_prefix is None
 
     def test_yaml_empty_hash_prefix_defaults_to_none(self, tmp_path):
         """YAML with empty hash_prefix should default to None."""
@@ -688,20 +688,20 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     hash_prefix: ""
     voices:
       - name: aidar
         speaker: aidar
-        model: v5_5_ru
+        model: v5_6_ru
 """
         )
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model_info("v5_5_ru").hash_prefix is None
+        assert storage.get_model_info("v5_6_ru").hash_prefix is None
 
 
 class TestDisabledModelInfo:
@@ -717,10 +717,10 @@ class TestDisabledModelInfo:
             ],
             voices=[
                 Voice(
-                    id="v5_5_ru-aidar",
+                    id="v5_6_ru-aidar",
                     name="aidar",
                     speaker="aidar",
-                    model_id="v5_5_ru",
+                    model_id="v5_6_ru",
                 ),
                 Voice(
                     id="v3_en-en_0",
@@ -734,7 +734,7 @@ class TestDisabledModelInfo:
         storage = YamlDataStorage(config_model)
 
         result = storage.get_voices()
-        assert not any(v.model_id == "v5_5_ru" for v in result)
+        assert not any(v.model_id == "v5_6_ru" for v in result)
         assert any(v.model_id == "v3_en" for v in result)
         assert any(v.name == "en_0" for v in result)
 
@@ -750,7 +750,7 @@ class TestDisabledModelInfo:
 
         storage = YamlDataStorage(config_model)
 
-        assert storage.get_model_info("v5_5_ru") is None
+        assert storage.get_model_info("v5_6_ru") is None
 
 
 class TestGetPrompt:
@@ -827,7 +827,7 @@ class TestGetVoiceNormalization:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -841,9 +841,9 @@ models:
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
+        vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
         assert vn is not None
-        assert vn.voice_id == "v5_5_ru-aidar"
+        assert vn.voice_id == "v5_6_ru-aidar"
         assert vn.text_format == TextFormat.TEXT
         assert vn.language == "ru"
         assert vn.type == NormalizationType.OPENAI
@@ -856,7 +856,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -870,7 +870,7 @@ models:
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "en") is None
+        assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "en") is None
 
     def test_get_voice_normalization_multiple_languages(self, tmp_path):
         """get_voice_normalization distinguishes overrides for different languages."""
@@ -878,7 +878,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -896,8 +896,8 @@ models:
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        ru_vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
-        en_vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "en")
+        ru_vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
+        en_vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "en")
         assert ru_vn.language == "ru"
         assert ru_vn.enabled is True
         assert en_vn.language == "en"
@@ -909,7 +909,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -923,7 +923,7 @@ models:
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
+        vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
         assert vn is not None
         assert vn.enabled is True
         assert vn.type == NormalizationType.SIMPLE
@@ -935,7 +935,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -956,7 +956,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -969,7 +969,7 @@ models:
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.SSML, "ru") is None
+        assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.SSML, "ru") is None
 
     def test_get_voice_normalization_voice_without_normalization(self, tmp_path):
         """get_voice_normalization returns None when voice has no normalization section."""
@@ -977,7 +977,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -985,7 +985,7 @@ models:
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        assert storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru") is None
+        assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru") is None
 
     def test_get_voice_normalization_disabled_entry(self, tmp_path):
         """get_voice_normalization returns entry even if enabled=False."""
@@ -993,7 +993,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -1006,7 +1006,7 @@ models:
 """
         )
         storage = YamlDataStorage(str(config_yml))
-        vn = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
+        vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
         assert vn is not None
         assert vn.enabled is False
         assert vn.type == NormalizationType.SIMPLE
@@ -1022,7 +1022,7 @@ class TestModelInfoCapabilities:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     voices:
       - name: aidar
@@ -1047,7 +1047,7 @@ models:
         config_yml.write_text(
             f"""
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: {yaml_value}
     languages: [ru]
     voices:
@@ -1057,7 +1057,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model_info("v5_5_ru").engine_type is expected
+        assert storage.get_model_info("v5_6_ru").engine_type is expected
 
     def test_missing_engine_type_raises_value_error(self, tmp_path):
         """A Model Info without engine_type fails fast at load."""
@@ -1066,7 +1066,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     languages: [ru]
     voices:
       - name: aidar
@@ -1083,7 +1083,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: klingon
     languages: [ru]
     voices:
@@ -1101,7 +1101,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages:
       - " ru "
@@ -1113,7 +1113,7 @@ models:
 
         storage = YamlDataStorage(str(config_yml))
 
-        assert storage.get_model_info("v5_5_ru").languages == ["ru", "en"]
+        assert storage.get_model_info("v5_6_ru").languages == ["ru", "en"]
 
     def test_empty_languages_raises_value_error(self, tmp_path):
         """An explicitly empty languages list fails fast at load."""
@@ -1122,7 +1122,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: []
     voices:
@@ -1140,7 +1140,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -1149,7 +1149,7 @@ models:
         )
 
         storage = YamlDataStorage(str(config_yml))
-        model_info = storage.get_model_info("v5_5_ru")
+        model_info = storage.get_model_info("v5_6_ru")
 
         assert model_info.ssml_supported is False
         assert model_info.language_auto_detected is False
@@ -1161,7 +1161,7 @@ models:
         config_yml.write_text(
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     ssml_supported: true
@@ -1172,7 +1172,7 @@ models:
         )
 
         storage = YamlDataStorage(str(config_yml))
-        model_info = storage.get_model_info("v5_5_ru")
+        model_info = storage.get_model_info("v5_6_ru")
 
         assert model_info.ssml_supported is True
         assert model_info.language_auto_detected is True
@@ -1189,14 +1189,14 @@ class TestActiveModelsAllowlist:
                 make_model_info(id="v3_en"),
             ],
             voices=[
-                Voice(id="v5_5_ru-aidar", name="aidar", speaker="aidar", model_id="v5_5_ru"),
+                Voice(id="v5_6_ru-aidar", name="aidar", speaker="aidar", model_id="v5_6_ru"),
                 Voice(id="v3_en-en_0", name="en_0", speaker="en_0", model_id="v3_en"),
             ],
         )
 
-        storage = YamlDataStorage(config_model, active_models=["v5_5_ru"])
+        storage = YamlDataStorage(config_model, active_models=["v5_6_ru"])
 
-        assert storage.get_model_info("v5_5_ru") is not None
+        assert storage.get_model_info("v5_6_ru") is not None
         assert storage.get_model_info("v3_en") is None
         assert not any(v.model_id == "v3_en" for v in storage.get_voices())
 
@@ -1208,7 +1208,7 @@ class TestActiveModelsAllowlist:
                 make_model_info(id="v3_en", enabled=False),
             ],
             voices=[
-                Voice(id="v5_5_ru-aidar", name="aidar", speaker="aidar", model_id="v5_5_ru"),
+                Voice(id="v5_6_ru-aidar", name="aidar", speaker="aidar", model_id="v5_6_ru"),
                 Voice(id="v3_en-en_0", name="en_0", speaker="en_0", model_id="v3_en"),
             ],
         )
@@ -1216,7 +1216,7 @@ class TestActiveModelsAllowlist:
         sink = io.StringIO()
         handler = logger.add(sink, level="WARNING")
         try:
-            storage = YamlDataStorage(config_model, active_models=["v5_5_ru", "v3_en"])
+            storage = YamlDataStorage(config_model, active_models=["v5_6_ru", "v3_en"])
         finally:
             logger.remove(handler)
 
@@ -1238,7 +1238,7 @@ class TestInputsTheShapesAllow:
 
         storage = YamlDataStorage(path)
 
-        assert storage.get_voice("v5_5_ru-aidar").name == "aidar"
+        assert storage.get_voice("v5_6_ru-aidar").name == "aidar"
 
     def test_a_null_speaker_falls_back_to_the_voice_name(self, tmp_path):
         """An explicit null means the same as leaving the speaker out.
@@ -1250,7 +1250,7 @@ class TestInputsTheShapesAllow:
             tmp_path,
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -1261,7 +1261,7 @@ models:
 
         storage = YamlDataStorage(path)
 
-        assert storage.get_voice("v5_5_ru-aidar").speaker == "aidar"
+        assert storage.get_voice("v5_6_ru-aidar").speaker == "aidar"
 
     @pytest.mark.parametrize("section", ["models", "prompts"])
     def test_an_empty_section_is_read_as_absent(self, tmp_path, section):
@@ -1281,7 +1281,7 @@ models:
             tmp_path,
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices: null
@@ -1290,8 +1290,8 @@ models:
 
         storage = YamlDataStorage(path)
 
-        assert storage.get_voice("v5_5_ru-aidar") is None
-        assert storage.get_model_info("v5_5_ru") is not None
+        assert storage.get_voice("v5_6_ru-aidar") is None
+        assert storage.get_model_info("v5_6_ru") is not None
 
     def test_a_voice_without_a_name_is_refused_by_name(self, tmp_path):
         """A name is required, so it is refused — but by something a reader can act on."""
@@ -1299,7 +1299,7 @@ models:
             tmp_path,
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -1310,22 +1310,22 @@ models:
         with pytest.raises(ValueError) as exc_info:
             YamlDataStorage(path)
 
-        assert "v5_5_ru" in str(exc_info.value)
+        assert "v5_6_ru" in str(exc_info.value)
 
     @pytest.mark.parametrize(
         ("contents", "expected"),
         [
-            pytest.param("models:\n  v5_5_ru:\n", "v5_5_ru", id="model-with-no-body"),
+            pytest.param("models:\n  v5_6_ru:\n", "v5_6_ru", id="model-with-no-body"),
             pytest.param(
-                "models:\n  v5_5_ru:\n    engine_type: silero\n    languages: [ru]\n"
+                "models:\n  v5_6_ru:\n    engine_type: silero\n    languages: [ru]\n"
                 "    voices:\n      - null\n",
-                "v5_5_ru",
+                "v5_6_ru",
                 id="voice-entry-that-is-null",
             ),
             pytest.param(
-                "models:\n  v5_5_ru:\n    engine_type: silero\n    languages: [ru]\n"
+                "models:\n  v5_6_ru:\n    engine_type: silero\n    languages: [ru]\n"
                 "    voices:\n      - aidar\n",
-                "v5_5_ru",
+                "v5_6_ru",
                 id="voice-entry-that-is-not-a-mapping",
             ),
         ],
@@ -1347,7 +1347,7 @@ models:
         "contents",
         [
             pytest.param("- one\n- two\n", id="a-list"),
-            pytest.param("models: v5_5_ru\n", id="models-is-not-a-mapping"),
+            pytest.param("models: v5_6_ru\n", id="models-is-not-a-mapping"),
             pytest.param("prompts:\n  id: ru_text\n", id="prompts-is-not-a-list"),
         ],
     )
@@ -1425,7 +1425,7 @@ models:
             tmp_path,
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru, en]
 """,
@@ -1433,7 +1433,7 @@ models:
 
         storage = YamlDataStorage(path)
 
-        assert storage.get_model_info("v5_5_ru").languages == ["ru", "en"]
+        assert storage.get_model_info("v5_6_ru").languages == ["ru", "en"]
 
     def test_a_normalization_block_written_as_documented_is_read(self, tmp_path):
         """A correctly shaped override survives; only the malformed ones are refused."""
@@ -1441,7 +1441,7 @@ models:
             tmp_path,
             """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -1461,7 +1461,7 @@ prompts:
 
         storage = YamlDataStorage(path)
 
-        override = storage.get_voice_normalization("v5_5_ru-aidar", TextFormat.TEXT, "ru")
+        override = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
 
         assert override.type.value == "openai"
         assert override.enabled is True

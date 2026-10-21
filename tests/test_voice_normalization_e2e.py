@@ -10,7 +10,7 @@ from tests.helpers import make_voice
 
 YAML_WITH_LLM_NORMALIZATION = """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -30,7 +30,7 @@ prompts:
 
 YAML_WITH_DISABLED_NORMALIZATION = """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -50,7 +50,7 @@ prompts:
 
 YAML_WITHOUT_NORMALIZATION = """
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:
@@ -73,7 +73,7 @@ class TestE2EVoiceNormalizationLLM:
         )
 
         voice = make_voice(
-            voice_id="v5_5_ru-aidar",
+            voice_id="v5_6_ru-aidar",
             name="aidar",
         )
         result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
@@ -96,7 +96,7 @@ class TestE2EVoiceNormalizationDisabled:
         )
 
         voice = make_voice(
-            voice_id="v5_5_ru-aidar",
+            voice_id="v5_6_ru-aidar",
             name="aidar",
         )
         result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
@@ -122,7 +122,7 @@ class TestE2ENoVoiceNormalizationFallsThrough:
         )
 
         voice = make_voice(
-            voice_id="v5_5_ru-aidar",
+            voice_id="v5_6_ru-aidar",
             name="aidar",
         )
         result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")

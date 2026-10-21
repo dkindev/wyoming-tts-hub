@@ -114,9 +114,9 @@ class TestOldModelNamesAreGone:
 
     def test_the_engine_no_longer_answers_to_model(self):
         """A TTS Engine answers to model_info only."""
-        engine = helpers.FakeTtsEngine(helpers.make_model_info(id="v5_5_ru"))
+        engine = helpers.FakeTtsEngine(helpers.make_model_info(id="v5_6_ru"))
 
-        assert engine.model_info.id == "v5_5_ru"
+        assert engine.model_info.id == "v5_6_ru"
         assert not hasattr(engine, "model")
 
     def test_the_old_builder_name_is_gone(self):
@@ -150,23 +150,23 @@ class TestVoice:
     def test_voice_has_all_fields(self):
         """Voice dataclass has id, name, speaker, model_id fields."""
         voice = Voice(
-            id="v5_5_ru-aidar",
+            id="v5_6_ru-aidar",
             name="aidar",
             speaker="aidar",
-            model_id="v5_5_ru",
+            model_id="v5_6_ru",
         )
-        assert voice.id == "v5_5_ru-aidar"
+        assert voice.id == "v5_6_ru-aidar"
         assert voice.name == "aidar"
         assert voice.speaker == "aidar"
-        assert voice.model_id == "v5_5_ru"
+        assert voice.model_id == "v5_6_ru"
 
     def test_voice_has_optional_reference_fields(self):
         """Voice can be constructed with reference audio/text and instruct fields."""
         voice = Voice(
-            id="v5_5_ru-aidar",
+            id="v5_6_ru-aidar",
             name="aidar",
             speaker="aidar",
-            model_id="v5_5_ru",
+            model_id="v5_6_ru",
             ref_audio="path/to/ref.wav",
             ref_text="reference text",
             instruct="instructive prompt",
@@ -178,23 +178,23 @@ class TestVoice:
     def test_voice_can_be_created_with_only_required_fields(self):
         """Voice can be constructed with only the 4 essential fields."""
         voice = Voice(
-            id="v5_5_ru-aidar",
+            id="v5_6_ru-aidar",
             name="aidar",
             speaker="aidar",
-            model_id="v5_5_ru",
+            model_id="v5_6_ru",
         )
-        assert voice.id == "v5_5_ru-aidar"
+        assert voice.id == "v5_6_ru-aidar"
         assert voice.name == "aidar"
         assert voice.speaker == "aidar"
-        assert voice.model_id == "v5_5_ru"
+        assert voice.model_id == "v5_6_ru"
 
     def test_voice_is_frozen(self):
         """Voice dataclass is immutable (frozen)."""
         voice = Voice(
-            id="v5_5_ru-aidar",
+            id="v5_6_ru-aidar",
             name="aidar",
             speaker="aidar",
-            model_id="v5_5_ru",
+            model_id="v5_6_ru",
         )
         with pytest.raises(FrozenInstanceError):
             voice.speaker = "baya"

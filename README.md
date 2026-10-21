@@ -71,8 +71,8 @@ uv run --with "wyoming[http]" python -m wyoming.http.tts_server --uri tcp://127.
 
 What a client sees when it connects:
 
-- **Voices** are named `<model id>-<voice name>`, so the Model Info `v5_5_ru`
-  speaking as `aidar` is offered as `v5_5_ru-aidar`.
+- **Voices** are named `<model id>-<voice name>`, so the Model Info `v5_6_ru`
+  speaking as `aidar` is offered as `v5_6_ru-aidar`.
 - **Languages** come from the Model Info, not the Voice. Every Voice of a Model
   Info is advertised with that Model Info's declared Languages.
 - **Only Active Model Infos are offered** — a Model Info that is disabled, or
@@ -103,7 +103,7 @@ Voice and model mappings are defined in `data/data.yml`. The file has two top-le
 
 ```yaml
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     ssml_supported: true
@@ -125,7 +125,7 @@ models:
         speaker: en_3
 ```
 
-Each key under `models:` (e.g. `v5_5_ru`) is the model's id, and names a **Model Info**. Supported fields:
+Each key under `models:` (e.g. `v5_6_ru`) is the model's id, and names a **Model Info**. Supported fields:
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
@@ -174,7 +174,7 @@ Each voice entry has the following fields:
 | `ref_text` | No | — | Reference text for cloning-style engines. Read, but not yet consumed by any engine |
 | `instruct` | No | — | Instruction text for cloning-style engines. Read, but not yet consumed by any engine |
 
-A voice is identified by its computed ID: `<model id>-<voice name>` (e.g. `v5_5_ru-aidar`).
+A voice is identified by its computed ID: `<model id>-<voice name>` (e.g. `v5_6_ru-aidar`).
 
 #### Adding or renaming voices
 
@@ -188,7 +188,7 @@ reference a custom LLM prompt.
 
 ```yaml
 models:
-  v5_5_ru:
+  v5_6_ru:
     engine_type: silero
     languages: [ru]
     voices:

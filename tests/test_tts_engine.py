@@ -3,7 +3,7 @@ import numpy as np
 from src.tts.models import TextFormat
 from tests.helpers import FakeTtsEngine, make_model_info, make_voice, sample_index_audio
 
-MODEL_ID = "v5_5_ru"
+MODEL_ID = "v5_6_ru"
 
 
 def make_engine(**kwargs):

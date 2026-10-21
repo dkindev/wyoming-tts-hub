@@ -63,9 +63,9 @@ def registry_with_rates(sample_rates):
     """Registry body declaring a single Silero Model publishing `sample_rates`."""
     return f"""
       ru:
-        v5_5_ru:
+        v5_6_ru:
           latest:
-            package: 'http://example/v5_5_ru.pt'
+            package: 'http://example/v5_6_ru.pt'
             sample_rate: [{", ".join(str(rate) for rate in sample_rates)}]
     """
 
@@ -80,7 +80,7 @@ def loaded_silero_model():
         yield model
 
 
-async def synthesize_with(engine, model, text="hello", model_id="v5_5_ru"):
+async def synthesize_with(engine, model, text="hello", model_id="v5_6_ru"):
     """Synthesize `text` through `engine` and return the yielded TtsResults."""
     voice = make_voice(voice_id=f"ru_RU-{model_id}-aidar", name="aidar", model=model_id)
     return [result async for result in engine.synthesize_pcm(text, voice, TextFormat.TEXT)]
@@ -117,9 +117,9 @@ class TestResolveModelSection:
         scanning even when the Model Info's declared Language does not match."""
         registry = """
           ru:
-            v5_5_ru:
+            v5_6_ru:
               latest:
-                package: 'http://example/v5_5_ru.pt'
+                package: 'http://example/v5_6_ru.pt'
           cyrillic:
             v4_cyrillic:
               latest:
@@ -139,9 +139,9 @@ class TestResolveModelSection:
         """A multi-language Model Info resolves to the first registry section owning its id."""
         registry = """
           ru:
-            v5_5_ru:
+            v5_6_ru:
               latest:
-                package: 'http://example/v5_5_ru.pt'
+                package: 'http://example/v5_6_ru.pt'
           multi:
             multi_v2:
               latest:
@@ -166,11 +166,11 @@ class TestResolveModelSection:
         that id and the registry file it was looked up in."""
         registry = """
           ru:
-            v5_5_ru:
+            v5_6_ru:
               latest:
-                package: 'http://example/v5_5_ru.pt'
+                package: 'http://example/v5_6_ru.pt'
         """
-        engine = make_engine(tmp_path, registry, {"ru": ["v5_5_ru"]})
+        engine = make_engine(tmp_path, registry, {"ru": ["v5_6_ru"]})
         model_info = ModelInfo(id="v4_indic", engine_type=EngineType.SILERO, languages=["en"])
 
         with pytest.raises(RuntimeError) as exc_info:
@@ -184,9 +184,9 @@ class TestResolveModelSection:
         """A model id with no .pt file stored locally downloads into its section directory."""
         registry = """
           ru:
-            v5_5_ru:
+            v5_6_ru:
               latest:
-                package: 'http://example/v5_5_ru.pt'
+                package: 'http://example/v5_6_ru.pt'
           cyrillic:
             v4_cyrillic:
               latest:
@@ -253,9 +253,9 @@ class TestSampleRateSelection:
         engine = make_engine(
             tmp_path,
             registry_with_rates(model_rates),
-            {"ru": ["v5_5_ru"]},
+            {"ru": ["v5_6_ru"]},
             sample_rate=configured_rate,
-            model_id="v5_5_ru",
+            model_id="v5_6_ru",
         )
 
         with loaded_silero_model() as model:
@@ -283,9 +283,9 @@ class TestDeviceFallback:
         engine = make_engine(
             tmp_path,
             registry_with_rates([48000]),
-            {"ru": ["v5_5_ru"]},
+            {"ru": ["v5_6_ru"]},
             device=device,
-            model_id="v5_5_ru",
+            model_id="v5_6_ru",
         )
         unavailable_device = unittest.mock.MagicMock()
         unavailable_device.is_available.return_value = False
@@ -310,9 +310,9 @@ class TestDefaultModelsDirectory:
 
     REGISTRY = """
           ru:
-            v5_5_ru:
+            v5_6_ru:
               latest:
-                package: 'http://example/v5_5_ru.pt'
+                package: 'http://example/v5_6_ru.pt'
                 sample_rate: [48000]
         """
 
@@ -328,15 +328,15 @@ class TestDefaultModelsDirectory:
         engine = make_engine(
             tmp_path,
             self.REGISTRY,
-            {"ru": ["v5_5_ru"]},
-            model_id="v5_5_ru",
+            {"ru": ["v5_6_ru"]},
+            model_id="v5_6_ru",
             languages=["ru"],
             models_dir=Settings().models_dir,
         )
 
         model_path, _, _, _ = engine._resolve_model_metadata(engine.model_info)
 
-        assert model_path == os.path.join("models", "silero", "ru", "v5_5_ru.pt")
+        assert model_path == os.path.join("models", "silero", "ru", "v5_6_ru.pt")
 
     def test_a_model_missing_from_the_default_directory_downloads_there(
         self, tmp_path, monkeypatch
@@ -347,7 +347,7 @@ class TestDefaultModelsDirectory:
             tmp_path,
             self.REGISTRY,
             {},
-            model_id="v5_5_ru",
+            model_id="v5_6_ru",
             languages=["ru"],
             models_dir=Settings().models_dir,
         )
@@ -358,8 +358,8 @@ class TestDefaultModelsDirectory:
             model_path, _, _, _ = engine._resolve_model_metadata(engine.model_info)
 
         download.assert_called_once()
-        assert download.call_args.args[1] == os.path.join("models", "silero", "ru", "v5_5_ru.pt")
-        assert model_path == os.path.join("models", "silero", "ru", "v5_5_ru.pt")
+        assert download.call_args.args[1] == os.path.join("models", "silero", "ru", "v5_6_ru.pt")
+        assert model_path == os.path.join("models", "silero", "ru", "v5_6_ru.pt")
 
     def test_the_engine_factory_hands_the_engine_that_directory(self):
         """The default reaches the engine through the wiring that builds it.
@@ -369,7 +369,7 @@ class TestDefaultModelsDirectory:
         """
         settings = Settings()
         engine = TtsEngineFactory(settings=settings).create(
-            ModelInfo(id="v5_5_ru", engine_type=EngineType.SILERO), BackendType.TORCH
+            ModelInfo(id="v5_6_ru", engine_type=EngineType.SILERO), BackendType.TORCH
         )
 
         assert engine._models_dir == settings.models_dir == "models"

@@ -33,8 +33,8 @@ from tests.helpers import (
 )
 
 SERVICE_NAME = "wyoming-tts-hub"
-MODEL_ID = "v5_5_ru"
-VOICE_ID = "v5_5_ru-aidar"
+MODEL_ID = "v5_6_ru"
+VOICE_ID = "v5_6_ru-aidar"
 OTHER_MODEL_ID = "v3_en"
 SAMPLE_RATE = 24000
 FRAME_DURATION_MS = 50

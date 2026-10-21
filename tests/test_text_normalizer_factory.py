@@ -517,11 +517,11 @@ class TestUnreachableNormalizationPrompts:
         path = make_merged_yaml(
             tmp_path,
             {
-                "v5_5_ru": {"engine_type": "silero", "languages": ["ru"], "voices": []},
+                "v5_6_ru": {"engine_type": "silero", "languages": ["ru"], "voices": []},
                 "v3_en": {"engine_type": "silero", "languages": ["en"], "voices": []},
             },
         )
-        storage = YamlDataStorage(config_path_or_model=path, active_models=["v5_5_ru"])
+        storage = YamlDataStorage(config_path_or_model=path, active_models=["v5_6_ru"])
         settings = NormalizationSettings(
             text=TextFormatNormalizationSettings(
                 prompts={

@@ -200,7 +200,7 @@ class TestBackendType:
     def test_yaml_populates(self, monkeypatch, tmp_path):
         """backend_type: torch in YAML populates the setting."""
         cfg = write_config(
-            tmp_path, "backend_type: torch\nactive_models: [v5_5_ru]\n", name="config.yml"
+            tmp_path, "backend_type: torch\nactive_models: [v5_6_ru]\n", name="config.yml"
         )
         monkeypatch.setattr("sys.argv", ["prog", "--config", cfg])
 

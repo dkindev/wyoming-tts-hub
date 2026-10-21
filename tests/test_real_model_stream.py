@@ -11,7 +11,7 @@ reads none of them unless a Model is cached, and skips instead when none is. Run
 
     pytest tests/test_real_model_stream.py -v
 
-It needs `models/silero/models.yml` and `models/silero/ru/v5_5_ru.pt` to exist, and it
+It needs `models/silero/models.yml` and `models/silero/ru/v5_6_ru.pt` to exist, and it
 touches no network: every download is blocked for the duration of the synthesis.
 """
 
@@ -60,7 +60,7 @@ DATA_YML_PATH = REPO_ROOT / "data" / "data.yml"
 MODELS_DIR = REPO_ROOT / "models"
 REGISTRY_PATH = MODELS_DIR / "silero" / "models.yml"
 
-MODEL_ID = "v5_5_ru"
+MODEL_ID = "v5_6_ru"
 LANGUAGE = "ru"
 VOICE_ID = f"{MODEL_ID}-aidar"
 TEXT = "Это проверка потоковой передачи аудио."

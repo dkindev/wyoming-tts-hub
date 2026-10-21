@@ -154,7 +154,7 @@ def write_server_files(directory: Path, port: int) -> Path:
     data_yml = directory / "data.yml"
     data_yml.write_text(
         "models:\n"
-        "  v5_5_ru:\n"
+        "  v5_6_ru:\n"
         "    engine_type: silero\n"
         "    languages: [ru]\n"
         "    voices:\n"
@@ -162,7 +162,7 @@ def write_server_files(directory: Path, port: int) -> Path:
     )
     config_yml = directory / "config.yml"
     config_yml.write_text(
-        f"active_models: [v5_5_ru]\n"
+        f"active_models: [v5_6_ru]\n"
         f"uri: tcp://127.0.0.1:{port}\n"
         f'zeroconf: ""\n'
         f"data_yml_path: {data_yml}\n"
@@ -327,7 +327,7 @@ class TestConsoleScript:
         finally:
             server.stop()
 
-        assert [voice.name for program in info.tts for voice in program.voices] == ["v5_5_ru-aidar"]
+        assert [voice.name for program in info.tts for voice in program.voices] == ["v5_6_ru-aidar"]
 
     def test_the_command_stops_cleanly_on_interrupt(self, tmp_path):
         """Ctrl-C is an ordinary way to stop, not a traceback.

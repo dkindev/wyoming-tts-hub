@@ -46,7 +46,7 @@ def models_yml_path(models_dir: str) -> str:
 def make_models_dir(
     tmp_path,
     sample_rates=None,
-    model_name="v5_5_ru",
+    model_name="v5_6_ru",
     language="ru",
     yml_content=None,
     pt_content=b"fake model",
@@ -56,7 +56,7 @@ def make_models_dir(
     Args:
         tmp_path: Temporary path root (from pytest tmp_path fixture).
         sample_rates: List of sample rates for the model. Defaults to [48000].
-        model_name: Name of the model. Defaults to "v5_5_ru".
+        model_name: Name of the model. Defaults to "v5_6_ru".
         language: Language code. Defaults to "ru".
         yml_content: Optional custom models.yml content as bytes. When provided,
             replaces the auto-generated YAML with this content and uses the
@@ -98,7 +98,7 @@ def make_config_file(tmp_path, models=None):
     return str(config_yml)
 
 
-def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru"):
+def make_voice(*, voice_id, name, speaker=None, model="v5_6_ru"):
     return Voice(
         id=voice_id,
         name=name,
@@ -108,7 +108,7 @@ def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru"):
 
 
 def make_model_info(
-    id="v5_5_ru",
+    id="v5_6_ru",
     engine_type=EngineType.SILERO,
     languages=None,
     language_auto_detected=False,

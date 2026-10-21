@@ -16,8 +16,8 @@ from tests.helpers import (
     make_hub as make_tts_hub,
 )
 
-MODEL_ID = "v5_5_ru"
-VOICE_ID = "v5_5_ru-aidar"
+MODEL_ID = "v5_6_ru"
+VOICE_ID = "v5_6_ru-aidar"
 FRAME_DURATION_MS = 50
 
 # The Model Info every request is served by declares exactly this Language, which the

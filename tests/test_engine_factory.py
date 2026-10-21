@@ -14,8 +14,8 @@ from tests.helpers import (
     make_voice,
 )
 
-MODEL_ID = "v5_5_ru"
-VOICE_ID = "ru_RU-v5_5_ru-aidar"
+MODEL_ID = "v5_6_ru"
+VOICE_ID = "ru_RU-v5_6_ru-aidar"
 REGISTRY_URL = "https://example.com/registry.yml"
 
 

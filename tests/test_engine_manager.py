@@ -12,8 +12,8 @@ from tests.helpers import (
     make_voice,
 )
 
-MODEL_ID = "v5_5_ru"
-VOICE_ID = "v5_5_ru-aidar"
+MODEL_ID = "v5_6_ru"
+VOICE_ID = "v5_6_ru-aidar"
 
 # A test that waits for the background cleaner to drain an engine must allow more
 # than one poll of its interval.
