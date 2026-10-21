@@ -704,6 +704,88 @@ models:
         assert storage.get_model_info("v5_6_ru").hash_prefix is None
 
 
+class TestYamlRevisionField:
+    """Tests for parsing revision field from YAML config."""
+
+    def test_yaml_revision_sets_revision_on_model_info(self, tmp_path):
+        """YAML with revision should set revision on the Model Info."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  qwen3_tts:
+    engine_type: qwen
+    languages: [en]
+    revision: "0123456789abcdef"
+    voices:
+      - name: clone
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert storage.get_model_info("qwen3_tts").revision == "0123456789abcdef"
+
+    def test_yaml_without_revision_defaults_to_none(self, tmp_path):
+        """YAML without revision should default to None."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  qwen3_tts:
+    engine_type: qwen
+    languages: [en]
+    voices:
+      - name: clone
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert storage.get_model_info("qwen3_tts").revision is None
+
+    def test_yaml_empty_revision_defaults_to_none(self, tmp_path):
+        """YAML with empty revision should default to None."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  qwen3_tts:
+    engine_type: qwen
+    languages: [en]
+    revision: ""
+    voices:
+      - name: clone
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+
+        assert storage.get_model_info("qwen3_tts").revision is None
+
+    def test_yaml_revision_and_hash_prefix_stay_separate(self, tmp_path):
+        """A revision pin and a checksum pin are read as the distinct guarantees they are."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  qwen3_tts:
+    engine_type: qwen
+    languages: [en]
+    revision: "0123456789abcdef"
+    hash_prefix: "a1b2c3d4"
+    voices:
+      - name: clone
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml))
+        model_info = storage.get_model_info("qwen3_tts")
+
+        assert model_info.revision == "0123456789abcdef"
+        assert model_info.hash_prefix == "a1b2c3d4"
+
+
 class TestDisabledModelInfo:
     """Tests for Model Info disabling via enabled=False."""
 

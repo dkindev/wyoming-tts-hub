@@ -97,6 +97,22 @@ class TestModelInfo:
         model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO, hash_prefix="a1b2c3")
         assert model_info.hash_prefix == "a1b2c3"
 
+    def test_model_info_revision_defaults_to_none(self):
+        """ModelInfo.revision defaults to None."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.revision is None
+
+    def test_model_info_revision_can_be_set(self):
+        """ModelInfo(revision=...) stores the value, separately from hash_prefix."""
+        model_info = ModelInfo(
+            id="test_model",
+            engine_type=EngineType.QWEN,
+            revision="0123456789abcdef",
+            hash_prefix="a1b2c3",
+        )
+        assert model_info.revision == "0123456789abcdef"
+        assert model_info.hash_prefix == "a1b2c3"
+
     def test_model_info_is_frozen(self):
         """ModelInfo dataclass is immutable (frozen)."""
         model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)

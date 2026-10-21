@@ -75,6 +75,7 @@ class ModelInfo:
     enabled: bool = True
     warmup: bool = False
     hash_prefix: str | None = None
+    revision: str | None = None
 
 
 @dataclass(frozen=True)

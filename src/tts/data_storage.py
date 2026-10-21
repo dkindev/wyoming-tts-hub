@@ -168,6 +168,7 @@ class YamlDataStorage(DataStorage):
             enabled=model_data.get("enabled", True),
             warmup=model_data.get("warmup", False),
             hash_prefix=model_data.get("hash_prefix") or None,
+            revision=model_data.get("revision") or None,
         )
 
     @staticmethod
