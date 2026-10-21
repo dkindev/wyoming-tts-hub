@@ -6,6 +6,7 @@ import torch
 from src.config import Settings
 from src.tts.engine_factory import TtsEngineFactory
 from src.tts.models import BackendType, EngineType, TextFormat
+from src.tts.qwen_engine import QwenTtsEngine
 from src.tts.silero_engine import SileroTtsEngine
 from tests.helpers import (
     make_captured_silero_model,
@@ -69,13 +70,23 @@ class TestEngineResolution:
         assert isinstance(engine, SileroTtsEngine)
         assert engine.model_info.id == MODEL_ID
 
-    @pytest.mark.parametrize("engine_type", [EngineType.QWEN, EngineType.OPENAI])
-    def test_declared_but_unimplemented_family_is_rejected(
-        self, tmp_path, monkeypatch, engine_type
-    ):
+    def test_qwen_model_info_on_torch_backend_yields_qwen_engine(self, tmp_path, monkeypatch):
+        """A Qwen Model Info on the torch backend is built as a Qwen TTS Engine."""
+        engine = build_engine(
+            tmp_path,
+            monkeypatch,
+            model=MODEL_ID,
+            engine_type=EngineType.QWEN,
+        )
+
+        assert isinstance(engine, QwenTtsEngine)
+        assert engine.model_info.id == MODEL_ID
+
+    def test_declared_but_unimplemented_family_is_rejected(self, tmp_path, monkeypatch):
         """A family declared in the domain vocabulary with no engine behind it is rejected by name."""
         settings = make_settings(tmp_path, monkeypatch)
         factory = TtsEngineFactory(settings=settings)
+        engine_type = EngineType.OPENAI
 
         with pytest.raises(ValueError) as exc_info:
             factory.create(
