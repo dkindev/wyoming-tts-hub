@@ -5,11 +5,16 @@ import pytest
 import yaml
 
 from src.tts.data_storage import YamlDataStorage
-from src.tts.models import ModelInfo, NormalizationType, TextFormat, Voice
+from src.tts.models import EngineType, ModelInfo, NormalizationType, TextFormat, Voice
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = REPO_ROOT / "README.md"
 DOCKERFILE = REPO_ROOT / "Dockerfile"
+DATA_YML = REPO_ROOT / "data" / "data.yml"
+CONFIG_YML = REPO_ROOT / "config.yml"
+
+QWEN_BASE_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+QWEN_CUSTOM_VOICE_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
 
 MODELS_DIR = "models"
 """The directory the server caches models under, as the documentation names it."""
@@ -67,6 +72,11 @@ def normalization_example() -> str:
     return next(e for e in yaml_examples(README.read_text()) if "normalization" in e)
 
 
+def qwen_models_example() -> str:
+    """The example showing both Qwen3-TTS checkpoint families."""
+    return next(e for e in yaml_examples(README.read_text()) if "engine_type: qwen" in e)
+
+
 def load_example(tmp_path: Path, example: str, index: int) -> YamlDataStorage:
     """Load a documented example the way the server loads the data file."""
     written = yaml.safe_load(example)
@@ -76,6 +86,11 @@ def load_example(tmp_path: Path, example: str, index: int) -> YamlDataStorage:
     path.write_text(example)
 
     return YamlDataStorage(config_path_or_model=path, active_models=model_ids)
+
+
+def shipped_active_models() -> list[str]:
+    """The model ids the shipped config actually activates."""
+    return list(yaml.safe_load(CONFIG_YML.read_text())["active_models"])
 
 
 class TestEveryExampleLoads:
@@ -155,6 +170,94 @@ class TestWhatTheExamplesDeclare:
         storage = load_example(tmp_path, example, 1)
 
         assert storage.get_prompt(prompt_id) is not None, f"{prompt_id} was not read"
+
+
+class TestQwenDocumentation:
+    def test_the_readme_no_longer_calls_silero_the_only_implemented_engine(self):
+        """A reader must not be told Qwen3-TTS is unavailable when it is served."""
+        readme = " ".join(README.read_text().split())
+
+        assert "The Silero TTS Engine is the one implemented today" not in readme
+        assert "Silero and Qwen3-TTS" in readme
+
+    def test_the_readme_names_both_supported_qwen_checkpoint_families(self):
+        """The Qwen section names Base and CustomVoice, not just the engine family."""
+        section = README.read_text().split("#### Qwen3-TTS", 1)[1].split("\n####", 1)[0]
+
+        assert "**Base**" in section
+        assert "**CustomVoice**" in section
+
+    def test_the_example_declares_a_base_clone_and_a_custom_voice_speaker(self, tmp_path):
+        """The families survive loading with the fields each needs from a Voice."""
+        storage = load_example(tmp_path, qwen_models_example(), 0)
+
+        base = storage.get_model_info(QWEN_BASE_MODEL)
+        assert base is not None and base.engine_type is EngineType.QWEN
+        base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-narrator")
+        assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
+
+        custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)
+        assert custom is not None and custom.engine_type is EngineType.QWEN
+        custom_voice = storage.get_voice(f"{QWEN_CUSTOM_VOICE_MODEL}-ryan")
+        assert custom_voice is not None and custom_voice.speaker == "Ryan"
+        assert custom_voice.instruct
+
+    def test_the_example_shows_an_optional_revision_pin(self, tmp_path):
+        """A declared revision reaches the Model Info, and the field is documented."""
+        storage = load_example(tmp_path, qwen_models_example(), 0)
+
+        base = storage.get_model_info(QWEN_BASE_MODEL)
+
+        assert base is not None and base.revision
+        assert "revision" in documented_fields("Models")
+
+    def test_the_readme_says_where_checkpoints_are_cached(self):
+        """The operator is told the directory whose mount preserves the download."""
+        readme = README.read_text()
+
+        assert "`<models_dir>/qwen/<upstream id>`" in readme
+        assert "models/qwen/Qwen/Qwen3-TTS-12Hz-1.7B-Base" in readme
+
+    def test_the_readme_documents_the_dialect_speakers_and_automatic_detection(self):
+        """The caveat must be stated, not merely the speaker names and 'automatic'."""
+        readme = " ".join(README.read_text().split())
+
+        assert "Dylan" in readme and "Eric" in readme
+        assert "automatic-detection mode" in readme
+        assert "language_auto_detected: true" in readme
+
+
+class TestShippedQwenExample:
+    def test_the_shipped_example_declares_both_checkpoint_families(self):
+        """The same two families ship in the data file, not only in the README."""
+        storage = YamlDataStorage(config_path_or_model=DATA_YML, active_models=None)
+
+        base = storage.get_model_info(QWEN_BASE_MODEL)
+        assert base is not None and base.engine_type is EngineType.QWEN
+        base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-narrator")
+        assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
+
+        custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)
+        assert custom is not None and custom.engine_type is EngineType.QWEN
+        custom_voice = storage.get_voice(f"{QWEN_CUSTOM_VOICE_MODEL}-ryan")
+        assert custom_voice is not None and custom_voice.speaker == "Ryan"
+        assert custom_voice.instruct
+
+    def test_the_shipped_example_is_declared_but_not_activated(self):
+        """Declaring a checkpoint must not download it on a fresh boot.
+
+        A Model Info is served only when it is also named in `active_models`, so an
+        example that stays out of that list costs nothing until an operator opts in.
+        """
+        storage = YamlDataStorage(
+            config_path_or_model=DATA_YML, active_models=shipped_active_models()
+        )
+
+        served_model_ids = {model_info.id for model_info in storage.get_model_infos()}
+
+        assert served_model_ids
+        assert QWEN_BASE_MODEL not in served_model_ids
+        assert QWEN_CUSTOM_VOICE_MODEL not in served_model_ids
 
 
 class TestDocumentedTypesExist:

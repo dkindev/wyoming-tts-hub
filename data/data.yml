@@ -19,3 +19,24 @@ models:
         speaker: en_2
       - name: sophia
         speaker: en_3
+
+  # Qwen3-TTS examples. They are declared here but not listed in config.yml's
+  # active_models, so a fresh boot serves nothing from them and downloads nothing.
+  # Add a model id to active_models to activate it; its checkpoint is then fetched
+  # into models/qwen/.
+  Qwen/Qwen3-TTS-12Hz-1.7B-Base:
+    engine_type: qwen
+    languages: [en]
+    revision: fd4b254389122332181a7c3db7f27e918eec64e3
+    voices:
+      - name: narrator
+        # Replace with a clip of the voice you want to clone.
+        ref_audio: data/reference/my_voice.wav
+        ref_text: "The words spoken in the reference audio."
+  Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice:
+    engine_type: qwen
+    languages: [en]
+    voices:
+      - name: ryan
+        speaker: Ryan
+        instruct: "Speak calmly and clearly."

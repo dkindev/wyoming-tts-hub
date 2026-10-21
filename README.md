@@ -5,7 +5,11 @@ TTS Engine Hub: it aggregates TTS Engines and routes each synthesis request to
 the engine that owns the requested Model Info. Supports Home Assistant
 integration, streaming audio, and optional per-voice LLM normalization.
 
-The Silero TTS Engine is the one implemented today.
+Two TTS Engine families are implemented on the `torch` backend: Silero and
+Qwen3-TTS. Qwen3-TTS serves its **Base** checkpoint family, which clones a Voice
+from Reference Audio, and its **CustomVoice** checkpoint family, which speaks
+with a preset Speaker and optional instruction. Its third family, VoiceDesign, is
+not supported. The OpenAI-compatible family is declared but not implemented.
 
 ## Quick Start
 
@@ -135,21 +139,80 @@ Each key under `models:` (e.g. `v5_6_ru`) is the model's id, and names a **Model
 | `language_auto_detected` | No | `false` | `true` when it may be asked to synthesize without a language |
 | `enabled` | No | `true` | `false` to drop the model and its voices |
 | `warmup` | No | `false` | `true` to preload at startup, up to `max_models` of them; otherwise loaded on the first request for it |
-| `hash_prefix` | No | — | SHA-256 prefix checked against the downloaded model files |
+| `hash_prefix` | No | — | SHA-256 prefix checked against the downloaded Silero model files |
+| `revision` | No | — | Upstream commit or tag to fetch a Qwen3-TTS checkpoint at. Omit to follow upstream |
 | `voices` | No | none | The voices this model speaks with |
 
 A model is served only when it is both `enabled` **and** listed in `active_models` in
 `config.yml`. Neither switch implies the other.
 
-#### Engine families
+#### TTS Engine families
 
-`engine_type` names the TTS Engine family that builds the model. Those families
-are declared up front, but only one is implemented behind them: a `silero` model
-on the `torch` backend is the only combination that builds an engine. A model
-written as `qwen` or `openai` is read and served like any other, and then fails
-when its engine would be built — at startup for a model marked `warmup`,
-otherwise on the first request for it — with an error naming the family and the
-backend.
+`engine_type` names the TTS Engine family that builds the model. `silero` and
+`qwen` are implemented on the `torch` backend. A model written as `openai` is
+read and served like any other, and then fails when its engine would be built —
+at startup for a model marked `warmup`, otherwise on the first request for it —
+with an error naming the family and the backend.
+
+#### Qwen3-TTS
+
+Qwen3-TTS is enabled with `engine_type: qwen` on the `torch` backend. The engine
+reads the checkpoint's own `config.json` before loading it, so one engine serves
+both supported families:
+
+- **Base** checkpoints clone a Voice from its **Reference Audio**. Set `ref_audio`
+  to a local path or URL. Add `ref_text` with the words spoken in it; without it
+  the Voice is cloned from the speaker embedding alone and quality is reduced. A
+  Base Voice without `ref_audio` is rejected when it is first synthesized.
+- **CustomVoice** checkpoints synthesize from a preset **Speaker**. Set `speaker`
+  to one of the checkpoint's speakers — `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`,
+  `Eric`, `Ryan`, `Aiden`, `Ono_Anna` or `Sohee` — and optionally `instruct`. No
+  Reference Audio or Voice Prompt is involved. The 0.6B CustomVoice checkpoint
+  ignores instructions, so an `instruct` there is dropped with a warning.
+
+VoiceDesign checkpoints are not supported: loading one fails with an error naming
+the two supported families, whether at warmup or on the first request.
+
+Checkpoints are fetched from their upstream repository id into
+`<models_dir>/qwen/<upstream id>` — for example
+`models/qwen/Qwen/Qwen3-TTS-12Hz-1.7B-Base` — and reused from there on later
+boots. Set `revision` on the Model Info to fetch a named commit or tag instead of
+following upstream. This is separate from `hash_prefix`, which applies to Silero
+checkpoints and verifies the bytes of a downloaded file locally.
+
+The checkpoint maps project Language codes (`zh`, `en`, ...) onto its own
+language names. On a Base checkpoint an unrecognised code falls back to automatic
+detection with a warning; on a CustomVoice checkpoint it is refused. The two
+dialect Speakers, `Dylan` (Beijing) and `Eric` (Sichuan), only use their dialect
+when the Language is Chinese or the checkpoint is in automatic-detection mode. If
+a client may omit the Language, declare `language_auto_detected: true`; with any
+other Language those Speakers speak that Language in their own timbre.
+
+This example declares one model of each family; the same entries ship in
+`data/data.yml`. Replace `data/reference/my_voice.wav` with a clip of the voice
+you want to clone. Neither model is downloaded until its id is added to
+`active_models` in `config.yml` (or `TTS_ACTIVE_MODELS`); it is then fetched on
+first use, or at startup when `warmup: true`.
+
+```yaml
+models:
+  Qwen/Qwen3-TTS-12Hz-1.7B-Base:
+    engine_type: qwen
+    languages: [en]
+    # Optional: fetch this exact upstream commit instead of following upstream.
+    revision: fd4b254389122332181a7c3db7f27e918eec64e3
+    voices:
+      - name: narrator
+        ref_audio: data/reference/my_voice.wav  # replace with your own clip
+        ref_text: "The words spoken in the reference audio."
+  Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice:
+    engine_type: qwen
+    languages: [en]
+    voices:
+      - name: ryan
+        speaker: Ryan
+        instruct: "Speak calmly and clearly."
+```
 
 #### Adding a new model
 
@@ -169,10 +232,10 @@ Each voice entry has the following fields:
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `name` | Yes | — | Voice name, and the second half of the voice id |
-| `speaker` | No | the voice name | The speaker profile the TTS Engine selects within the model |
-| `ref_audio` | No | — | Reference audio for cloning-style engines. Read, but not yet consumed by any engine |
-| `ref_text` | No | — | Reference text for cloning-style engines. Read, but not yet consumed by any engine |
-| `instruct` | No | — | Instruction text for cloning-style engines. Read, but not yet consumed by any engine |
+| `speaker` | No | the voice name | The preset Speaker a Silero or Qwen3-TTS CustomVoice model selects |
+| `ref_audio` | No | — | Reference Audio for a Qwen3-TTS Base Voice — a local path or URL. Synthesis fails without it |
+| `ref_text` | No | — | The words spoken in the Reference Audio. Without it, cloning uses the speaker embedding alone and quality is reduced |
+| `instruct` | No | — | Instruction for a Qwen3-TTS CustomVoice Voice. Ignored with a warning by the 0.6B CustomVoice checkpoint |
 
 A voice is identified by its computed ID: `<model id>-<voice name>` (e.g. `v5_6_ru-aidar`).
 
@@ -239,9 +302,10 @@ Reusable LLM prompt definitions referenced by `prompt_id` in voice normalization
 ### Audio Output
 
 - Format: raw PCM (WAV-compatible)
-- Sample rate: announced per model, not configured per client. `silero.sample_rate`
-  is the rate you ask for; the server emits the nearest rate that model supports
-  (8000, 16000, 24000 or 48000 Hz) and tells the client that rate
+- Sample rate: announced per model, not configured per client. For Silero,
+  `silero.sample_rate` is the rate you ask for; the server emits the nearest rate
+  that model supports (8000, 16000, 24000 or 48000 Hz). Qwen3-TTS emits at the
+  checkpoint's own sample rate. Either way the client is told the rate used
 - Bit depth: 16-bit signed integer
 - Channels: mono (1 channel)
 
