@@ -200,11 +200,25 @@ class TestWarmup:
         ):
             await engine.warmup()
 
-        message = str(exc_info.value)
+        cause = exc_info.value.__cause__
+        assert type(cause) is RuntimeError
+        message = str(cause)
         assert "VoiceDesign" in message
         assert "Base" in message
         assert "CustomVoice" in message
         from_pretrained.assert_not_called()
+
+    async def test_synthesis_with_an_unsupported_family_is_a_plain_runtime_error(self, tmp_path):
+        """A checkpoint that slipped past warmup is refused with the shared error type."""
+        engine = make_engine(tmp_path)
+        await warmup(engine, FakeQwenModel())
+        engine._checkpoint_family = "voice_design"
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await synthesize(engine, make_voice())
+
+        assert type(exc_info.value) is RuntimeError
+        assert "does not support synthesis" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

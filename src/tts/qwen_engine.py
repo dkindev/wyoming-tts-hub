@@ -56,10 +56,6 @@ translates here rather than making every operator write the checkpoint's names.
 """
 
 
-class UnsupportedCheckpointError(RuntimeError):
-    """A checkpoint declares a family this engine cannot synthesize with."""
-
-
 class QwenTtsEngine(TorchTtsEngine):
     """A Qwen3-TTS TTS Engine serving Base cloning and CustomVoice preset checkpoints."""
 
@@ -80,20 +76,6 @@ class QwenTtsEngine(TorchTtsEngine):
         self._voice_prompt_cache: VoicePromptCache = VoicePromptCache(
             capacity=voice_prompt_capacity
         )
-
-    async def warmup(self) -> None:
-        """Warm up the model, surfacing a rejected family without the wrapper.
-
-        The base warmup wraps every failure in a generic message. A checkpoint of
-        the wrong family is a configuration error the operator has to act on, so
-        its message — which names the supported families — reaches them intact.
-        """
-        try:
-            await super().warmup()
-        except RuntimeError as error:
-            if isinstance(error.__cause__, UnsupportedCheckpointError):
-                raise error.__cause__ from None
-            raise
 
     async def _warmup_on_device(self, device: torch.device) -> bool:
         loaded_model, checkpoint_family, checkpoint_size = await asyncio.to_thread(
@@ -196,7 +178,7 @@ class QwenTtsEngine(TorchTtsEngine):
             CHECKPOINT_FAMILY_LABELS[name] for name in sorted(SUPPORTED_CHECKPOINT_FAMILIES)
         )
 
-        raise UnsupportedCheckpointError(
+        raise RuntimeError(
             f"Qwen3-TTS checkpoint '{model_info.id}' declares the '{declared}' family, "
             f"but only {supported} checkpoints are supported"
         )
@@ -213,7 +195,7 @@ class QwenTtsEngine(TorchTtsEngine):
         elif self._checkpoint_family == CHECKPOINT_FAMILY_BASE:
             wavs, sample_rate = await self._synthesize_voice_clone(text, voice, language)
         else:
-            raise UnsupportedCheckpointError(
+            raise RuntimeError(
                 f"Qwen3-TTS checkpoint '{self._model_info.id}' does not support synthesis"
             )
 
