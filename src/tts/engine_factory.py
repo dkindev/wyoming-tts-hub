@@ -3,7 +3,7 @@ from collections.abc import Callable
 from src.config import Settings
 from src.tts.engine import TtsEngine
 from src.tts.models import BackendType, ModelInfo
-from src.tts.qwen_engine import QwenTtsEngine
+from src.tts.qwen3_engine import Qwen3TtsEngine
 from src.tts.silero_engine import SileroTtsEngine
 
 
@@ -19,7 +19,7 @@ class TtsEngineFactory:
                 models_yml_url=str(settings.silero.models_yml_url),
                 models_yml_hash=settings.silero.models_yml_hash,
             ),
-            "qwen3__torch": lambda model_info: QwenTtsEngine(
+            "qwen3__torch": lambda model_info: Qwen3TtsEngine(
                 model_info=model_info,
                 device=settings.torch.device,
                 models_dir=settings.models_dir,

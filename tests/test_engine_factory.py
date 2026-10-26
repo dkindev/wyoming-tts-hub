@@ -6,7 +6,7 @@ import torch
 from src.config import Settings
 from src.tts.engine_factory import TtsEngineFactory
 from src.tts.models import BackendType, EngineType, TextFormat
-from src.tts.qwen_engine import QwenTtsEngine
+from src.tts.qwen3_engine import Qwen3TtsEngine
 from src.tts.silero_engine import SileroTtsEngine
 from tests.helpers import (
     make_captured_silero_model,
@@ -79,7 +79,7 @@ class TestEngineResolution:
             engine_type=EngineType.QWEN3,
         )
 
-        assert isinstance(engine, QwenTtsEngine)
+        assert isinstance(engine, Qwen3TtsEngine)
         assert engine.model_info.id == MODEL_ID
 
     def test_declared_but_unimplemented_family_is_rejected(self, tmp_path, monkeypatch):

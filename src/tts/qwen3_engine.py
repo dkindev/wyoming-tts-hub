@@ -2,6 +2,8 @@ import asyncio
 import functools
 import json
 import os
+import shutil
+import threading
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
@@ -14,6 +16,11 @@ from qwen_tts import Qwen3TTSModel
 from src.tts.engine import TorchTtsEngine
 from src.tts.models import ModelInfo, TextFormat, TtsResult, Voice
 from src.tts.voice_prompt_cache import VoicePromptCache
+
+CHECKPOINT_DIRECTORY = "qwen3"
+LEGACY_CHECKPOINT_DIRECTORY = "qwen"
+
+_LEGACY_CHECKPOINT_MIGRATION_LOCK = threading.Lock()
 
 CHECKPOINT_FAMILY_BASE = "base"
 CHECKPOINT_FAMILY_CUSTOM_VOICE = "custom_voice"
@@ -56,7 +63,7 @@ translates here rather than making every operator write the checkpoint's names.
 """
 
 
-class QwenTtsEngine(TorchTtsEngine):
+class Qwen3TtsEngine(TorchTtsEngine):
     """A Qwen3-TTS TTS Engine serving Base cloning and CustomVoice preset checkpoints."""
 
     def __init__(
@@ -90,6 +97,7 @@ class QwenTtsEngine(TorchTtsEngine):
     def _load_model_sync(
         self, model_info: ModelInfo, device: torch.device
     ) -> tuple[Any, str, str | None]:
+        self._migrate_legacy_checkpoints()
         checkpoint_dir = self._checkpoint_dir(model_info)
         self._download_checkpoint(model_info, checkpoint_dir)
         checkpoint_config = self._read_checkpoint_config(model_info, checkpoint_dir)
@@ -128,7 +136,46 @@ class QwenTtsEngine(TorchTtsEngine):
         dropped rather than followed.
         """
         parts = [part for part in model_info.id.split("/") if part not in ("", ".", "..")]
-        return os.path.join(self._models_dir, "qwen", *parts)
+        return os.path.join(self._models_dir, CHECKPOINT_DIRECTORY, *parts)
+
+    def _migrate_legacy_checkpoints(self) -> None:
+        """Move every checkpoint downloaded under the old qwen directory into qwen3."""
+        legacy_dir = os.path.join(self._models_dir, LEGACY_CHECKPOINT_DIRECTORY)
+        checkpoint_dir = os.path.join(self._models_dir, CHECKPOINT_DIRECTORY)
+
+        with _LEGACY_CHECKPOINT_MIGRATION_LOCK:
+            if not os.path.isdir(legacy_dir):
+                return
+
+            logger.debug(
+                "Moving checkpoints from the legacy directory '{legacy_dir}' to '{checkpoint_dir}'",
+                legacy_dir=legacy_dir,
+                checkpoint_dir=checkpoint_dir,
+            )
+
+            if not os.path.exists(checkpoint_dir):
+                try:
+                    os.replace(legacy_dir, checkpoint_dir)
+                    return
+                except OSError:
+                    pass
+
+            self._merge_directory(legacy_dir, checkpoint_dir)
+            shutil.rmtree(legacy_dir, ignore_errors=True)
+
+    @staticmethod
+    def _merge_directory(source: str, target: str) -> None:
+        """Move every file under `source` into `target`, keeping target files on conflict."""
+        for root, _, files in os.walk(source):
+            relative = os.path.relpath(root, source)
+            target_root = target if relative == "." else os.path.join(target, relative)
+            os.makedirs(target_root, exist_ok=True)
+
+            for name in files:
+                source_file = os.path.join(root, name)
+                target_file = os.path.join(target_root, name)
+                if not os.path.exists(target_file):
+                    os.replace(source_file, target_file)
 
     @staticmethod
     def _download_checkpoint(model_info: ModelInfo, checkpoint_dir: str) -> None:

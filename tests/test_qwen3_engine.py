@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from src.tts.models import EngineType, ModelInfo, TextFormat, Voice
-from src.tts.qwen_engine import QwenTtsEngine
+from src.tts.qwen3_engine import Qwen3TtsEngine
 
 MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 VOICE_ID = f"{MODEL_ID}-clone"
@@ -58,11 +58,20 @@ def make_engine(tmp_path, *, model_id=MODEL_ID, revision=None, device="cpu"):
         languages=["en"],
         revision=revision,
     )
-    return QwenTtsEngine(
+    return Qwen3TtsEngine(
         model_info=model_info,
         device=device,
         models_dir=str(tmp_path / "models"),
     )
+
+
+def write_checkpoint_file(checkpoint_dir, name, content):
+    """Write a file under `checkpoint_dir`, creating the directories it needs."""
+    path = os.path.join(checkpoint_dir, name)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as checkpoint_file:
+        checkpoint_file.write(content)
+    return path
 
 
 def write_checkpoint(model_type="base", model_size=None):
@@ -83,11 +92,11 @@ async def warmup(engine, fake_model, model_type="base", model_size=None):
     """Warm `engine` against a fake downloaded checkpoint and loaded model."""
     with (
         unittest.mock.patch(
-            "src.tts.qwen_engine.snapshot_download",
+            "src.tts.qwen3_engine.snapshot_download",
             side_effect=write_checkpoint(model_type, model_size),
         ) as download,
         unittest.mock.patch(
-            "src.tts.qwen_engine.Qwen3TTSModel.from_pretrained",
+            "src.tts.qwen3_engine.Qwen3TTSModel.from_pretrained",
             return_value=fake_model,
         ) as from_pretrained,
     ):
@@ -125,8 +134,8 @@ async def synthesize(engine, voice, *, text="Hello", language="en"):
 
 @pytest.mark.asyncio
 class TestWarmup:
-    async def test_downloads_the_checkpoint_into_the_models_directory(self, tmp_path):
-        """The upstream id is fetched into the configured Models directory."""
+    async def test_downloads_the_checkpoint_into_the_qwen3_directory(self, tmp_path):
+        """The upstream id is fetched into the configured Models directory under qwen3."""
         engine = make_engine(tmp_path)
         fake = FakeQwenModel()
 
@@ -136,13 +145,73 @@ class TestWarmup:
         call = download.call_args.kwargs
         assert call["repo_id"] == MODEL_ID
         assert call["revision"] is None
-        assert os.path.commonpath([call["local_dir"], engine._models_dir]) == engine._models_dir
+        assert call["local_dir"] == os.path.join(engine._models_dir, "qwen3", MODEL_ID)
 
         from_pretrained.assert_called_once()
         loaded_path = from_pretrained.call_args.args[0]
         assert loaded_path == call["local_dir"]
         assert from_pretrained.call_args.kwargs["device_map"] == "cpu"
         assert engine.device == torch.device("cpu")
+
+    async def test_moves_a_checkpoint_from_the_old_qwen_directory(self, tmp_path):
+        """A checkpoint downloaded under the old directory is reused from qwen3."""
+        engine = make_engine(tmp_path)
+        legacy_dir = os.path.join(engine._models_dir, "qwen", MODEL_ID)
+        write_checkpoint_file(legacy_dir, "checkpoint.bin", "already downloaded")
+
+        download, from_pretrained = await warmup(engine, FakeQwenModel())
+
+        checkpoint_dir = os.path.join(engine._models_dir, "qwen3", MODEL_ID)
+        assert download.call_args.kwargs["local_dir"] == checkpoint_dir
+        assert from_pretrained.call_args.args[0] == checkpoint_dir
+        assert os.path.isfile(os.path.join(checkpoint_dir, "checkpoint.bin"))
+        assert not os.path.exists(legacy_dir)
+
+    async def test_moves_every_legacy_checkpoint_not_only_the_warmed_one(self, tmp_path):
+        """A checkpoint that is not warmed yet still moves out of the old directory."""
+        engine = make_engine(tmp_path)
+        legacy_dir = os.path.join(engine._models_dir, "qwen")
+        write_checkpoint_file(os.path.join(legacy_dir, MODEL_ID), "checkpoint.bin", "warmed")
+        write_checkpoint_file(
+            os.path.join(legacy_dir, "Other", "Inactive"), "checkpoint.bin", "inactive"
+        )
+
+        await warmup(engine, FakeQwenModel())
+
+        assert os.path.isfile(os.path.join(engine._models_dir, "qwen3", MODEL_ID, "checkpoint.bin"))
+        assert os.path.isfile(
+            os.path.join(engine._models_dir, "qwen3", "Other", "Inactive", "checkpoint.bin")
+        )
+        assert not os.path.exists(legacy_dir)
+
+    async def test_moves_a_legacy_checkpoint_when_qwen3_already_has_others(self, tmp_path):
+        """One checkpoint already under qwen3 does not strand another under qwen."""
+        engine = make_engine(tmp_path)
+        existing_dir = os.path.join(engine._models_dir, "qwen3", "Other", "Checkpoint")
+        os.makedirs(existing_dir)
+        legacy_dir = os.path.join(engine._models_dir, "qwen", MODEL_ID)
+        write_checkpoint_file(legacy_dir, "checkpoint.bin", "already downloaded")
+
+        await warmup(engine, FakeQwenModel())
+
+        checkpoint_dir = os.path.join(engine._models_dir, "qwen3", MODEL_ID)
+        assert os.path.isfile(os.path.join(checkpoint_dir, "checkpoint.bin"))
+        assert os.path.isdir(existing_dir)
+        assert not os.path.exists(os.path.dirname(legacy_dir))
+
+    async def test_merges_a_legacy_checkpoint_into_an_existing_qwen3_one(self, tmp_path):
+        """An interrupted qwen3 checkout is completed from the old copy, not abandoned."""
+        engine = make_engine(tmp_path)
+        checkpoint_dir = os.path.join(engine._models_dir, "qwen3", MODEL_ID)
+        write_checkpoint_file(checkpoint_dir, "partial.bin", "new")
+        legacy_dir = os.path.join(engine._models_dir, "qwen", MODEL_ID)
+        write_checkpoint_file(legacy_dir, "checkpoint.bin", "already downloaded")
+
+        await warmup(engine, FakeQwenModel())
+
+        assert os.path.isfile(os.path.join(checkpoint_dir, "partial.bin"))
+        assert os.path.isfile(os.path.join(checkpoint_dir, "checkpoint.bin"))
+        assert not os.path.exists(legacy_dir)
 
     async def test_downloads_the_declared_revision(self, tmp_path):
         """A Model Info naming a revision asks upstream for that commit."""
@@ -189,11 +258,11 @@ class TestWarmup:
 
         with (
             unittest.mock.patch(
-                "src.tts.qwen_engine.snapshot_download",
+                "src.tts.qwen3_engine.snapshot_download",
                 side_effect=write_checkpoint("voice_design"),
             ),
             unittest.mock.patch(
-                "src.tts.qwen_engine.Qwen3TTSModel.from_pretrained",
+                "src.tts.qwen3_engine.Qwen3TTSModel.from_pretrained",
                 return_value=fake,
             ) as from_pretrained,
             pytest.raises(RuntimeError) as exc_info,
@@ -254,7 +323,7 @@ class TestLanguageMapping:
         fake = FakeQwenModel()
         await warmup(engine, fake)
 
-        with unittest.mock.patch("src.tts.qwen_engine.logger.warning") as warning:
+        with unittest.mock.patch("src.tts.qwen3_engine.logger.warning") as warning:
             await synthesize(engine, make_voice(), language="xx")
 
         assert fake.generate_calls[0]["language"] == "Auto"
@@ -267,7 +336,7 @@ class TestLanguageMapping:
         fake = FakeQwenModel()
         await warmup(engine, fake)
 
-        with unittest.mock.patch("src.tts.qwen_engine.logger.warning") as warning:
+        with unittest.mock.patch("src.tts.qwen3_engine.logger.warning") as warning:
             await synthesize(engine, make_voice(), language=None)
 
         assert fake.generate_calls[0]["language"] == "Auto"
@@ -316,7 +385,7 @@ class TestVoiceCloning:
         fake = FakeQwenModel()
         await warmup(engine, fake)
 
-        with unittest.mock.patch("src.tts.qwen_engine.logger.warning") as warning:
+        with unittest.mock.patch("src.tts.qwen3_engine.logger.warning") as warning:
             await synthesize(engine, make_voice(ref_text=None))
 
         assert fake.prompt_calls[0]["x_vector_only_mode"] is True
@@ -431,7 +500,7 @@ class TestCustomVoice:
         fake = FakeQwenModel(supported_speakers=["vivian"], supported_languages=["english"])
         await warmup(engine, fake, model_type="custom_voice", model_size="0b6")
 
-        with unittest.mock.patch("src.tts.qwen_engine.logger.warning") as warning:
+        with unittest.mock.patch("src.tts.qwen3_engine.logger.warning") as warning:
             await synthesize(engine, make_custom_voice(instruct="Speak angrily"))
             await synthesize(engine, make_custom_voice(instruct="Speak angrily"))
 

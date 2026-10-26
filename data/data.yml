@@ -23,7 +23,7 @@ models:
   # Qwen3-TTS examples. They are declared here but not listed in config.yml's
   # active_models, so a fresh boot serves nothing from them and downloads nothing.
   # Add a model id to active_models to activate it; its checkpoint is then fetched
-  # into models/qwen/.
+  # into models/qwen3/.
   Qwen/Qwen3-TTS-12Hz-1.7B-Base:
     engine_type: qwen3
     languages: [ru]
