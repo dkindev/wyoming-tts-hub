@@ -198,13 +198,13 @@ first use, or at startup when `warmup: true`.
 models:
   Qwen/Qwen3-TTS-12Hz-1.7B-Base:
     engine_type: qwen
-    languages: [en]
+    languages: [ru]
     # Optional: fetch this exact upstream commit instead of following upstream.
     revision: fd4b254389122332181a7c3db7f27e918eec64e3
     voices:
-      - name: narrator
-        ref_audio: data/reference/my_voice.wav  # replace with your own clip
-        ref_text: "The words spoken in the reference audio."
+      - name: bandit
+        ref_audio: data/reference/bandit.wav  # replace with your own clip
+        ref_text: "Привет! Я твой новый голос. Я буду жить на этой странице донатов."
   Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice:
     engine_type: qwen
     languages: [en]

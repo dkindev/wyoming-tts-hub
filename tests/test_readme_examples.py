@@ -193,7 +193,7 @@ class TestQwenDocumentation:
 
         base = storage.get_model_info(QWEN_BASE_MODEL)
         assert base is not None and base.engine_type is EngineType.QWEN
-        base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-narrator")
+        base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-bandit")
         assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
 
         custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)
@@ -234,7 +234,7 @@ class TestShippedQwenExample:
 
         base = storage.get_model_info(QWEN_BASE_MODEL)
         assert base is not None and base.engine_type is EngineType.QWEN
-        base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-narrator")
+        base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-bandit")
         assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
 
         custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)

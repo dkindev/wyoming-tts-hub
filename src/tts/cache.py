@@ -5,10 +5,6 @@ from typing import Any
 
 from loguru import logger
 
-from src.tts.voice_prompt_cache import VoicePromptCache
-
-__all__ = ["ExponentialDecayCache", "VoicePromptCache"]
-
 
 class ExponentialDecayCache:
     def __init__(
