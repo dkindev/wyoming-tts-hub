@@ -132,18 +132,18 @@ class YamlDataStorage(DataStorage):
     @staticmethod
     def _parse_model_info(model_id: str, model_data: dict) -> ModelInfo:
         """Read one model entry, refusing one that declares nothing speakable."""
+        valid_families = ", ".join(engine_type.value for engine_type in EngineType)
         engine_type_value = model_data.get("engine_type")
         if engine_type_value is None:
             raise ValueError(
-                f"Model '{model_id}' is missing required 'engine_type' "
-                "(one of: silero, qwen, openai)"
+                f"Model '{model_id}' is missing required 'engine_type' (one of: {valid_families})"
             )
         try:
             engine_type = EngineType(engine_type_value)
         except ValueError:
             raise ValueError(
                 f"Model '{model_id}' has unknown 'engine_type' '{engine_type_value}' "
-                "(expected one of: silero, qwen, openai)"
+                f"(expected one of: {valid_families})"
             ) from None
 
         languages_raw = model_data.get("languages")

@@ -74,7 +74,7 @@ def normalization_example() -> str:
 
 def qwen_models_example() -> str:
     """The example showing both Qwen3-TTS checkpoint families."""
-    return next(e for e in yaml_examples(README.read_text()) if "engine_type: qwen" in e)
+    return next(e for e in yaml_examples(README.read_text()) if "engine_type: qwen3" in e)
 
 
 def load_example(tmp_path: Path, example: str, index: int) -> YamlDataStorage:
@@ -192,12 +192,12 @@ class TestQwenDocumentation:
         storage = load_example(tmp_path, qwen_models_example(), 0)
 
         base = storage.get_model_info(QWEN_BASE_MODEL)
-        assert base is not None and base.engine_type is EngineType.QWEN
+        assert base is not None and base.engine_type is EngineType.QWEN3
         base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-bandit")
         assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
 
         custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)
-        assert custom is not None and custom.engine_type is EngineType.QWEN
+        assert custom is not None and custom.engine_type is EngineType.QWEN3
         custom_voice = storage.get_voice(f"{QWEN_CUSTOM_VOICE_MODEL}-ryan")
         assert custom_voice is not None and custom_voice.speaker == "Ryan"
         assert custom_voice.instruct
@@ -233,12 +233,12 @@ class TestShippedQwenExample:
         storage = YamlDataStorage(config_path_or_model=DATA_YML, active_models=None)
 
         base = storage.get_model_info(QWEN_BASE_MODEL)
-        assert base is not None and base.engine_type is EngineType.QWEN
+        assert base is not None and base.engine_type is EngineType.QWEN3
         base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-bandit")
         assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
 
         custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)
-        assert custom is not None and custom.engine_type is EngineType.QWEN
+        assert custom is not None and custom.engine_type is EngineType.QWEN3
         custom_voice = storage.get_voice(f"{QWEN_CUSTOM_VOICE_MODEL}-ryan")
         assert custom_voice is not None and custom_voice.speaker == "Ryan"
         assert custom_voice.instruct

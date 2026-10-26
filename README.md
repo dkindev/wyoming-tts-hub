@@ -133,7 +133,7 @@ Each key under `models:` (e.g. `v5_6_ru`) is the model's id, and names a **Model
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `engine_type` | Yes | — | Which TTS Engine family builds it: `silero`, `qwen`, `openai` |
+| `engine_type` | Yes | — | Which TTS Engine family builds it: `silero`, `qwen3`, `openai` |
 | `languages` | Yes | — | Non-empty list of language codes it can speak, e.g. `[ru]`. A request carrying any other language is refused |
 | `ssml_supported` | No | `false` | `true` when it accepts SSML. An SSML request against `false` is refused |
 | `language_auto_detected` | No | `false` | `true` when it may be asked to synthesize without a language |
@@ -149,14 +149,14 @@ A model is served only when it is both `enabled` **and** listed in `active_model
 #### TTS Engine families
 
 `engine_type` names the TTS Engine family that builds the model. `silero` and
-`qwen` are implemented on the `torch` backend. A model written as `openai` is
+`qwen3` are implemented on the `torch` backend. A model written as `openai` is
 read and served like any other, and then fails when its engine would be built —
 at startup for a model marked `warmup`, otherwise on the first request for it —
 with an error naming the family and the backend.
 
 #### Qwen3-TTS
 
-Qwen3-TTS is enabled with `engine_type: qwen` on the `torch` backend. The engine
+Qwen3-TTS is enabled with `engine_type: qwen3` on the `torch` backend. The engine
 reads the checkpoint's own `config.json` before loading it, so one engine serves
 both supported families:
 
@@ -197,7 +197,7 @@ first use, or at startup when `warmup: true`.
 ```yaml
 models:
   Qwen/Qwen3-TTS-12Hz-1.7B-Base:
-    engine_type: qwen
+    engine_type: qwen3
     languages: [ru]
     # Optional: fetch this exact upstream commit instead of following upstream.
     revision: fd4b254389122332181a7c3db7f27e918eec64e3
@@ -206,7 +206,7 @@ models:
         ref_audio: data/reference/bandit.wav  # replace with your own clip
         ref_text: "Привет! Я твой новый голос. Я буду жить на этой странице донатов."
   Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice:
-    engine_type: qwen
+    engine_type: qwen3
     languages: [en]
     voices:
       - name: ryan

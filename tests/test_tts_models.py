@@ -19,11 +19,12 @@ from tests import helpers
 
 
 class TestEngineType:
-    def test_engine_type_has_silero_qwen_openai_values(self):
-        """EngineType exposes SILERO, QWEN, and OPENAI members with expected values."""
+    def test_engine_type_has_silero_qwen3_openai_values(self):
+        """EngineType exposes SILERO, QWEN3, and OPENAI members with expected values."""
         assert EngineType.SILERO.value == "silero"
-        assert EngineType.QWEN.value == "qwen"
+        assert EngineType.QWEN3.value == "qwen3"
         assert EngineType.OPENAI.value == "openai"
+        assert not hasattr(EngineType, "QWEN")
 
 
 class TestModelInfo:
@@ -106,7 +107,7 @@ class TestModelInfo:
         """ModelInfo(revision=...) stores the value, separately from hash_prefix."""
         model_info = ModelInfo(
             id="test_model",
-            engine_type=EngineType.QWEN,
+            engine_type=EngineType.QWEN3,
             revision="0123456789abcdef",
             hash_prefix="a1b2c3",
         )
@@ -117,7 +118,7 @@ class TestModelInfo:
         """ModelInfo dataclass is immutable (frozen)."""
         model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
         with pytest.raises(FrozenInstanceError):
-            model_info.engine_type = EngineType.QWEN
+            model_info.engine_type = EngineType.QWEN3
 
 
 class TestOldModelNamesAreGone:
@@ -143,7 +144,7 @@ class TestOldModelNamesAreGone:
         """make_model_info carries each declared field onto the value it is given."""
         model_info = helpers.make_model_info(
             id="v3_en",
-            engine_type=EngineType.QWEN,
+            engine_type=EngineType.QWEN3,
             languages=["en", "ru"],
             language_auto_detected=True,
             ssml_supported=True,
@@ -153,7 +154,7 @@ class TestOldModelNamesAreGone:
 
         assert model_info == ModelInfo(
             id="v3_en",
-            engine_type=EngineType.QWEN,
+            engine_type=EngineType.QWEN3,
             languages=["en", "ru"],
             language_auto_detected=True,
             ssml_supported=True,
@@ -363,7 +364,7 @@ class TestEngineTypeRepoUrls:
         ("engine_type", "expected_url"),
         [
             (EngineType.SILERO, "https://github.com/snakers4/silero-models"),
-            (EngineType.QWEN, "https://github.com/QwenLM/Qwen3-TTS"),
+            (EngineType.QWEN3, "https://github.com/QwenLM/Qwen3-TTS"),
             (EngineType.OPENAI, "https://openai.com"),
         ],
     )

@@ -16,7 +16,7 @@ _Avoid_: TTS server, orchestrator
 
 **TTS Engine**:
 A backend that synthesizes speech from text for one provider family (e.g. Silero,
-Qwen3-tts, an OpenAI-compatible API), producing raw PCM audio.
+Qwen3-TTS, an OpenAI-compatible API), producing raw PCM audio.
 _Avoid_: Speech generator, voice synthesizer
 
 **Model Info**:

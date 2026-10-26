@@ -31,13 +31,13 @@ class BackendType(Enum):
 @unique
 class EngineType(Enum):
     SILERO = "silero"
-    QWEN = "qwen"
+    QWEN3 = "qwen3"
     OPENAI = "openai"
 
 
 ENGINE_REPO_URLS: dict[EngineType, str] = {
     EngineType.SILERO: "https://github.com/snakers4/silero-models",
-    EngineType.QWEN: "https://github.com/QwenLM/Qwen3-TTS",
+    EngineType.QWEN3: "https://github.com/QwenLM/Qwen3-TTS",
     EngineType.OPENAI: "https://openai.com",
 }
 """Where each TTS Engine family comes from, keyed by the family itself.

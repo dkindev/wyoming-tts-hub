@@ -285,7 +285,7 @@ class TestDescribe:
                 models=[
                     make_model_info(id=MODEL_ID, engine_type=EngineType.SILERO, languages=["ru"]),
                     make_model_info(
-                        id=OTHER_MODEL_ID, engine_type=EngineType.QWEN, languages=["en"]
+                        id=OTHER_MODEL_ID, engine_type=EngineType.QWEN3, languages=["en"]
                     ),
                 ],
                 voices=[
@@ -306,7 +306,7 @@ class TestDescribe:
         }
         assert credits == {
             f"{MODEL_ID}-aidar": ("silero", ENGINE_REPO_URLS[EngineType.SILERO]),
-            f"{OTHER_MODEL_ID}-vivian": ("qwen", ENGINE_REPO_URLS[EngineType.QWEN]),
+            f"{OTHER_MODEL_ID}-vivian": ("qwen3", ENGINE_REPO_URLS[EngineType.QWEN3]),
         }
 
     async def test_a_voice_whose_model_info_is_gone_is_refused_by_name(self):

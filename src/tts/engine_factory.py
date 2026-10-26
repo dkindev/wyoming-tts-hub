@@ -19,7 +19,7 @@ class TtsEngineFactory:
                 models_yml_url=str(settings.silero.models_yml_url),
                 models_yml_hash=settings.silero.models_yml_hash,
             ),
-            "qwen__torch": lambda model_info: QwenTtsEngine(
+            "qwen3__torch": lambda model_info: QwenTtsEngine(
                 model_info=model_info,
                 device=settings.torch.device,
                 models_dir=settings.models_dir,

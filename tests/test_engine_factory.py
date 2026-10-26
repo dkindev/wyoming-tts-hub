@@ -70,13 +70,13 @@ class TestEngineResolution:
         assert isinstance(engine, SileroTtsEngine)
         assert engine.model_info.id == MODEL_ID
 
-    def test_qwen_model_info_on_torch_backend_yields_qwen_engine(self, tmp_path, monkeypatch):
-        """A Qwen Model Info on the torch backend is built as a Qwen TTS Engine."""
+    def test_qwen3_model_info_on_torch_backend_yields_qwen3_engine(self, tmp_path, monkeypatch):
+        """A qwen3 Model Info on the torch backend is built as a Qwen3-TTS Engine."""
         engine = build_engine(
             tmp_path,
             monkeypatch,
             model=MODEL_ID,
-            engine_type=EngineType.QWEN,
+            engine_type=EngineType.QWEN3,
         )
 
         assert isinstance(engine, QwenTtsEngine)

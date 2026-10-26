@@ -54,7 +54,7 @@ class FakeQwenModel:
 def make_engine(tmp_path, *, model_id=MODEL_ID, revision=None, device="cpu"):
     model_info = ModelInfo(
         id=model_id,
-        engine_type=EngineType.QWEN,
+        engine_type=EngineType.QWEN3,
         languages=["en"],
         revision=revision,
     )

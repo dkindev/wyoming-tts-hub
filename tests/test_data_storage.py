@@ -714,7 +714,7 @@ class TestYamlRevisionField:
             """
 models:
   qwen3_tts:
-    engine_type: qwen
+    engine_type: qwen3
     languages: [en]
     revision: "0123456789abcdef"
     voices:
@@ -733,7 +733,7 @@ models:
             """
 models:
   qwen3_tts:
-    engine_type: qwen
+    engine_type: qwen3
     languages: [en]
     voices:
       - name: clone
@@ -751,7 +751,7 @@ models:
             """
 models:
   qwen3_tts:
-    engine_type: qwen
+    engine_type: qwen3
     languages: [en]
     revision: ""
     voices:
@@ -770,7 +770,7 @@ models:
             """
 models:
   qwen3_tts:
-    engine_type: qwen
+    engine_type: qwen3
     languages: [en]
     revision: "0123456789abcdef"
     hash_prefix: "a1b2c3d4"
@@ -1118,7 +1118,7 @@ models:
         ("yaml_value", "expected"),
         [
             ("silero", EngineType.SILERO),
-            ("qwen", EngineType.QWEN),
+            ("qwen3", EngineType.QWEN3),
             ("openai", EngineType.OPENAI),
         ],
     )
@@ -1175,6 +1175,29 @@ models:
 
         with pytest.raises(ValueError, match="engine_type"):
             YamlDataStorage(str(config_yml))
+
+    def test_the_old_qwen_spelling_is_rejected_with_the_valid_families_named(self, tmp_path):
+        """`qwen` is no longer a family, and the error says which families are."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: qwen
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(str(config_yml))
+
+        message = str(exc_info.value)
+        assert "qwen3" in message
+        assert "silero" in message
+        assert "openai" in message
 
     def test_languages_parse_as_trimmed_list(self, tmp_path):
         """languages parses into a list with each entry whitespace-trimmed."""
