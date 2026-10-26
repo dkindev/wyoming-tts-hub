@@ -65,15 +65,6 @@ def make_engine(tmp_path, *, model_id=MODEL_ID, revision=None, device="cpu"):
     )
 
 
-def write_checkpoint_file(checkpoint_dir, name, content):
-    """Write a file under `checkpoint_dir`, creating the directories it needs."""
-    path = os.path.join(checkpoint_dir, name)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as checkpoint_file:
-        checkpoint_file.write(content)
-    return path
-
-
 def write_checkpoint(model_type="base", model_size=None):
     """Return a snapshot_download stand-in that lays down a checkpoint config."""
 
@@ -152,66 +143,6 @@ class TestWarmup:
         assert loaded_path == call["local_dir"]
         assert from_pretrained.call_args.kwargs["device_map"] == "cpu"
         assert engine.device == torch.device("cpu")
-
-    async def test_moves_a_checkpoint_from_the_old_qwen_directory(self, tmp_path):
-        """A checkpoint downloaded under the old directory is reused from qwen3."""
-        engine = make_engine(tmp_path)
-        legacy_dir = os.path.join(engine._models_dir, "qwen", MODEL_ID)
-        write_checkpoint_file(legacy_dir, "checkpoint.bin", "already downloaded")
-
-        download, from_pretrained = await warmup(engine, FakeQwenModel())
-
-        checkpoint_dir = os.path.join(engine._models_dir, "qwen3", MODEL_ID)
-        assert download.call_args.kwargs["local_dir"] == checkpoint_dir
-        assert from_pretrained.call_args.args[0] == checkpoint_dir
-        assert os.path.isfile(os.path.join(checkpoint_dir, "checkpoint.bin"))
-        assert not os.path.exists(legacy_dir)
-
-    async def test_moves_every_legacy_checkpoint_not_only_the_warmed_one(self, tmp_path):
-        """A checkpoint that is not warmed yet still moves out of the old directory."""
-        engine = make_engine(tmp_path)
-        legacy_dir = os.path.join(engine._models_dir, "qwen")
-        write_checkpoint_file(os.path.join(legacy_dir, MODEL_ID), "checkpoint.bin", "warmed")
-        write_checkpoint_file(
-            os.path.join(legacy_dir, "Other", "Inactive"), "checkpoint.bin", "inactive"
-        )
-
-        await warmup(engine, FakeQwenModel())
-
-        assert os.path.isfile(os.path.join(engine._models_dir, "qwen3", MODEL_ID, "checkpoint.bin"))
-        assert os.path.isfile(
-            os.path.join(engine._models_dir, "qwen3", "Other", "Inactive", "checkpoint.bin")
-        )
-        assert not os.path.exists(legacy_dir)
-
-    async def test_moves_a_legacy_checkpoint_when_qwen3_already_has_others(self, tmp_path):
-        """One checkpoint already under qwen3 does not strand another under qwen."""
-        engine = make_engine(tmp_path)
-        existing_dir = os.path.join(engine._models_dir, "qwen3", "Other", "Checkpoint")
-        os.makedirs(existing_dir)
-        legacy_dir = os.path.join(engine._models_dir, "qwen", MODEL_ID)
-        write_checkpoint_file(legacy_dir, "checkpoint.bin", "already downloaded")
-
-        await warmup(engine, FakeQwenModel())
-
-        checkpoint_dir = os.path.join(engine._models_dir, "qwen3", MODEL_ID)
-        assert os.path.isfile(os.path.join(checkpoint_dir, "checkpoint.bin"))
-        assert os.path.isdir(existing_dir)
-        assert not os.path.exists(os.path.dirname(legacy_dir))
-
-    async def test_merges_a_legacy_checkpoint_into_an_existing_qwen3_one(self, tmp_path):
-        """An interrupted qwen3 checkout is completed from the old copy, not abandoned."""
-        engine = make_engine(tmp_path)
-        checkpoint_dir = os.path.join(engine._models_dir, "qwen3", MODEL_ID)
-        write_checkpoint_file(checkpoint_dir, "partial.bin", "new")
-        legacy_dir = os.path.join(engine._models_dir, "qwen", MODEL_ID)
-        write_checkpoint_file(legacy_dir, "checkpoint.bin", "already downloaded")
-
-        await warmup(engine, FakeQwenModel())
-
-        assert os.path.isfile(os.path.join(checkpoint_dir, "partial.bin"))
-        assert os.path.isfile(os.path.join(checkpoint_dir, "checkpoint.bin"))
-        assert not os.path.exists(legacy_dir)
 
     async def test_downloads_the_declared_revision(self, tmp_path):
         """A Model Info naming a revision asks upstream for that commit."""

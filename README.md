@@ -176,9 +176,8 @@ the two supported families, whether at warmup or on the first request.
 Checkpoints are fetched from their upstream repository id into
 `<models_dir>/qwen3/<upstream id>` — for example
 `models/qwen3/Qwen/Qwen3-TTS-12Hz-1.7B-Base` — and reused from there on later
-boots. Checkpoints already downloaded under the old `<models_dir>/qwen` directory
-are moved into `qwen3` automatically. Set `revision` on the Model Info to fetch a
-named commit or tag instead of following upstream. This is separate from
+boots. Set `revision` on the Model Info to fetch a named commit or tag instead of
+following upstream. This is separate from
 `hash_prefix`, which applies to Silero checkpoints and verifies the bytes of a
 downloaded file locally.
 
