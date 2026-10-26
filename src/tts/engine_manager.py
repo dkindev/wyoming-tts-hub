@@ -5,9 +5,9 @@ from dataclasses import dataclass
 
 from loguru import logger
 
-from src.tts.cache import ExponentialDecayCache
 from src.tts.data_storage import DataStorage
 from src.tts.engine import TorchTtsEngine, TtsEngine
+from src.tts.engine_cache import ExponentialDecayCache
 from src.tts.engine_factory import TtsEngineFactory
 from src.tts.models import BackendType, ModelInfo, TextFormat, TtsResult, Voice
 

@@ -3,7 +3,7 @@ import unittest.mock
 
 import pytest
 
-from src.tts.cache import ExponentialDecayCache
+from src.tts.engine_cache import ExponentialDecayCache
 
 
 class TestPublicAPI:
