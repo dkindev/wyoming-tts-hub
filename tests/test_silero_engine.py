@@ -295,6 +295,33 @@ class TestResolveModelSection:
         assert "my-local-en" in message
         assert "v9_ghost" not in message
 
+    def test_download_failure_names_the_local_id_not_the_upstream_id(self, tmp_path):
+        """A failed download is reported against the id the operator configured."""
+        registry = """
+          en:
+            v3_en:
+              latest:
+                package: 'http://example/v3_en.pt'
+        """
+        engine = make_engine(tmp_path, registry, {})
+        model_info = ModelInfo(
+            id="my-local-en",
+            engine_type=EngineType.SILERO,
+            languages=["en"],
+            upstream_id="v3_en",
+        )
+
+        with unittest.mock.patch(
+            "src.tts.silero_engine.torch.hub.download_url_to_file",
+            side_effect=RuntimeError("connection failed"),
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                engine._resolve_model_metadata(model_info)
+
+        message = str(exc_info.value)
+        assert "my-local-en" in message
+        assert "v3_en" not in message
+
     @pytest.mark.parametrize("upstream_id", [None, "   "])
     def test_blank_upstream_id_falls_back_to_the_local_id(self, tmp_path, upstream_id):
         """A directly built Model Info without a usable upstream_id resolves under
