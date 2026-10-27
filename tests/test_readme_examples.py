@@ -93,6 +93,11 @@ def shipped_active_models() -> list[str]:
     return list(yaml.safe_load(CONFIG_YML.read_text())["active_models"])
 
 
+def declared_model_ids() -> list[str]:
+    """Every model id the shipped data file declares."""
+    return list(yaml.safe_load(DATA_YML.read_text())["models"])
+
+
 class TestEveryExampleLoads:
     def test_the_readme_documents_at_least_one_model_and_voice(self):
         """Guard against the checks below passing because no example was found."""
@@ -230,7 +235,7 @@ class TestQwenDocumentation:
 class TestShippedQwenExample:
     def test_the_shipped_example_declares_both_checkpoint_families(self):
         """The same two families ship in the data file, not only in the README."""
-        storage = YamlDataStorage(config_path_or_model=DATA_YML, active_models=None)
+        storage = YamlDataStorage(config_path_or_model=DATA_YML, active_models=declared_model_ids())
 
         base = storage.get_model_info(QWEN_BASE_MODEL)
         assert base is not None and base.engine_type is EngineType.QWEN3

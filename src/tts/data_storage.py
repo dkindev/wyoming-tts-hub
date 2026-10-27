@@ -165,7 +165,6 @@ class YamlDataStorage(DataStorage):
             ssml_supported=model_data.get("ssml_supported", False),
             language_auto_detected=model_data.get("language_auto_detected", False),
             languages=[lang.strip() for lang in languages_raw],
-            enabled=model_data.get("enabled", True),
             warmup=model_data.get("warmup", False),
             hash_prefix=model_data.get("hash_prefix") or None,
             revision=model_data.get("revision") or None,
@@ -321,10 +320,8 @@ class YamlDataStorage(DataStorage):
 
     @staticmethod
     def _check_active_models(config: PredefinedData, active_models: list[str] | None) -> None:
-        if active_models is None:
-            return
         declared_ids = {model_info.id for model_info in config.models}
-        unknown_ids = sorted(set(active_models) - declared_ids)
+        unknown_ids = sorted(set(active_models or []) - declared_ids)
         if unknown_ids:
             raise ValueError(
                 f"active_models references unknown model id(s): {', '.join(unknown_ids)}"
@@ -332,21 +329,9 @@ class YamlDataStorage(DataStorage):
 
     @staticmethod
     def _filter_served(config: PredefinedData, active_models: list[str] | None) -> PredefinedData:
-        allowed_ids = set(active_models) if active_models is not None else None
+        allowed_ids = set(active_models or [])
 
-        served_models: list[ModelInfo] = []
-        for model_info in config.models:
-            if allowed_ids is not None and model_info.id not in allowed_ids:
-                continue
-            if not model_info.enabled:
-                if allowed_ids is not None and model_info.id in allowed_ids:
-                    logger.warning(
-                        "Model '{model_id}' is listed in active_models but disabled "
-                        "in the model config; it will not be served",
-                        model_id=model_info.id,
-                    )
-                continue
-            served_models.append(model_info)
+        served_models = [model_info for model_info in config.models if model_info.id in allowed_ids]
 
         served_model_ids = {model_info.id for model_info in served_models}
         filtered_voices = [v for v in config.voices if v.model_id in served_model_ids]

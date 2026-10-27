@@ -1,8 +1,7 @@
-import io
 from pathlib import Path
 
 import pytest
-from loguru import logger
+import yaml
 
 from src.tts.data_storage import YamlDataStorage
 from src.tts.models import (
@@ -22,6 +21,25 @@ def write_data_file(tmp_path: Path, contents: str, name: str = "data.yml") -> Pa
     path.write_text(contents)
 
     return path
+
+
+def make_storage(config_path_or_model) -> YamlDataStorage:
+    """Load data with every declared Model Info active.
+
+    Tests that are about parsing should not also have to spell out the allowlist;
+    tests about which models are served construct the storage directly instead.
+    """
+    if isinstance(config_path_or_model, PredefinedData):
+        active_models = [model_info.id for model_info in config_path_or_model.models]
+    else:
+        try:
+            data = yaml.safe_load(Path(config_path_or_model).read_text()) or {}
+        except yaml.YAMLError:
+            data = {}
+        models = data.get("models") if isinstance(data, dict) else None
+        active_models = list(models) if isinstance(models, dict) else []
+
+    return YamlDataStorage(config_path_or_model, active_models=active_models)
 
 
 MODEL_WITH_VOICE = """
@@ -52,7 +70,7 @@ class TestYamlDataStorageInit:
             ],
         )
 
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
 
         assert storage.get_voice("v5_6_ru-aidar").name == "aidar"
 
@@ -64,7 +82,7 @@ class TestGetVoices:
         """get_voices should return a list of Voice objects."""
 
         config_model = PredefinedData(models=[], voices=[])
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
 
         result = storage.get_voices()
         assert isinstance(result, list)
@@ -83,7 +101,7 @@ class TestGetVoices:
                 )
             ],
         )
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
 
         result = storage.get_voices()
         assert len(result) == 1
@@ -110,7 +128,7 @@ class TestGetVoices:
                 ),
             ],
         )
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
 
         result = storage.get_voices()
         assert len(result) == 2
@@ -137,7 +155,7 @@ class TestGetVoices:
                 ),
             ],
         )
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
 
         result = storage.get_voices()
         assert len(result) == 2
@@ -160,7 +178,7 @@ class TestGetVoice:
                 )
             ],
         )
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
 
         voice = storage.get_voice("v5_6_ru-aidar")
         assert voice.speaker == "aidar"
@@ -187,7 +205,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         voice = storage.get_voice("v5_6_ru-aidar")
         assert voice.name == "aidar"
@@ -211,7 +229,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         voices = storage.get_voices()
         assert len(voices) == 1
@@ -234,7 +252,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         voice = storage.get_voice("v5_6_ru-aidar")
         assert voice.speaker == "aidar"
 
@@ -255,7 +273,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         voice = storage.get_voice("v5_6_ru-aidar")
         assert voice.speaker == "aidar"
 
@@ -286,7 +304,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert [v.id for v in storage.get_voices()] == [
             "v5_6_ru-aidar",
@@ -316,7 +334,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert [v.id for v in storage.get_voices()] == [
             "v5_6_ru-aidar-soft",
@@ -344,7 +362,7 @@ models:
         )
 
         with pytest.raises(ValueError, match="v5_6_ru-aidar"):
-            YamlDataStorage(str(config_yml))
+            make_storage(str(config_yml))
 
     def test_same_voice_name_in_different_models_loads(self, tmp_path):
         """Same voice name under different models derives distinct IDs and loads fine."""
@@ -366,7 +384,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert [v.id for v in storage.get_voices()] == ["v5_6_ru-aidar", "v3_en-aidar"]
 
@@ -388,7 +406,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         voice = storage.get_voice("v5_6_ru-aidar")
 
         assert voice.ref_audio == "/audio/aidar.wav"
@@ -403,7 +421,7 @@ class TestEmptyData:
         """Should handle empty config with no locales or models."""
 
         config_model = PredefinedData(models=[], voices=[])
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
 
         assert storage.get_voices() == []
 
@@ -413,81 +431,16 @@ class TestEmptyData:
         config_yml = tmp_path / "empty.yml"
         config_yml.write_text("")
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_voices() == []
 
 
 class TestYamlEnabledField:
-    """Tests for parsing enabled field from YAML config."""
+    """The retired per-model enabled switch is inert when left in a data file."""
 
-    def test_yaml_enabled_false_disables_model_info(self, tmp_path):
-        """YAML with enabled: false should disable the Model Info."""
-
-        config_yml = tmp_path / "config.yml"
-        config_yml.write_text(
-            """
-models:
-  v5_6_ru:
-    engine_type: silero
-    languages: [ru]
-    enabled: false
-    voices:
-      - name: aidar
-        speaker: aidar
-        model: v5_6_ru
-"""
-        )
-
-        storage = YamlDataStorage(str(config_yml))
-
-        assert storage.get_voices() == []
-
-    def test_yaml_without_enabled_defaults_to_enabled(self, tmp_path):
-        """YAML without enabled field should keep the Model Info enabled."""
-
-        config_yml = tmp_path / "config.yml"
-        config_yml.write_text(
-            """
-models:
-  v5_6_ru:
-    engine_type: silero
-    languages: [ru]
-    voices:
-      - name: aidar
-        speaker: aidar
-        model: v5_6_ru
-"""
-        )
-
-        storage = YamlDataStorage(str(config_yml))
-
-        assert len(storage.get_voices()) == 1
-
-    def test_yaml_enabled_true_explicitly_enables_model_info(self, tmp_path):
-        """YAML with enabled: true should keep the Model Info enabled."""
-
-        config_yml = tmp_path / "config.yml"
-        config_yml.write_text(
-            """
-models:
-  v5_6_ru:
-    engine_type: silero
-    languages: [ru]
-    enabled: true
-    voices:
-      - name: aidar
-        speaker: aidar
-        model: v5_6_ru
-"""
-        )
-
-        storage = YamlDataStorage(str(config_yml))
-
-        assert len(storage.get_voices()) == 1
-
-    def test_yaml_mixed_enabled_and_disabled(self, tmp_path):
-        """YAML with mixed enabled/disabled Model Infos filters correctly."""
+    def test_enabled_false_does_not_stop_a_model_from_being_served(self, tmp_path):
+        """A value still written under enabled is not read, so it cannot hide a model."""
 
         config_yml = tmp_path / "config.yml"
         config_yml.write_text(
@@ -501,23 +454,12 @@ models:
       - name: aidar
         speaker: aidar
         model: v5_6_ru
-  v3_en:
-    engine_type: silero
-    languages: [en]
-    enabled: true
-    voices:
-      - name: en_0
-        speaker: en_0
-        model: v3_en
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml), active_models=["v5_6_ru"])
 
-        voices = storage.get_voices()
-        assert not any(v.model_id == "v5_6_ru" for v in voices)
-        assert any(v.model_id == "v3_en" for v in voices)
-        assert any(v.name == "en_0" for v in voices)
+        assert len(storage.get_voices()) == 1
 
 
 class TestGetModelInfo:
@@ -530,15 +472,15 @@ class TestGetModelInfo:
             models=[make_model_info()],
             voices=[],
         )
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
 
         model_info = storage.get_model_info("v5_6_ru")
         assert model_info.id == "v5_6_ru"
 
 
 class TestGetModelInfos:
-    def test_get_model_infos_returns_all_enabled_models(self):
-        """get_model_infos() returns the list of all enabled Model Info objects."""
+    def test_get_model_infos_returns_all_served_models(self):
+        """get_model_infos() returns the list of all served Model Info objects."""
 
         config_model = PredefinedData(
             models=[
@@ -555,7 +497,7 @@ class TestGetModelInfos:
             ],
         )
 
-        storage = YamlDataStorage(config_model)
+        storage = make_storage(config_model)
         result = storage.get_model_infos()
 
         model_info1 = [model_info for model_info in result if model_info.id == "v5_6_ru"]
@@ -583,7 +525,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert type(storage.get_model_info("v5_6_ru")) is ModelInfo
 
@@ -609,7 +551,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("v5_6_ru").warmup is True
 
@@ -630,7 +572,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("v5_6_ru").warmup is False
 
@@ -656,7 +598,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("v5_6_ru").hash_prefix == "a1b2c3d4"
 
@@ -677,7 +619,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("v5_6_ru").hash_prefix is None
 
@@ -699,7 +641,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("v5_6_ru").hash_prefix is None
 
@@ -722,7 +664,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("qwen3_tts").revision == "0123456789abcdef"
 
@@ -740,7 +682,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("qwen3_tts").revision is None
 
@@ -759,7 +701,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("qwen3_tts").revision is None
 
@@ -779,60 +721,11 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         model_info = storage.get_model_info("qwen3_tts")
 
         assert model_info.revision == "0123456789abcdef"
         assert model_info.hash_prefix == "a1b2c3d4"
-
-
-class TestDisabledModelInfo:
-    """Tests for Model Info disabling via enabled=False."""
-
-    def test_disabled_model_info_voices_excluded_from_get_voices(self):
-        """get_voices should exclude voices that reference a disabled Model Info."""
-
-        config_model = PredefinedData(
-            models=[
-                make_model_info(enabled=False),
-                make_model_info(id="v3_en", enabled=True),
-            ],
-            voices=[
-                Voice(
-                    id="v5_6_ru-aidar",
-                    name="aidar",
-                    speaker="aidar",
-                    model_id="v5_6_ru",
-                ),
-                Voice(
-                    id="v3_en-en_0",
-                    name="en_0",
-                    speaker="en_0",
-                    model_id="v3_en",
-                ),
-            ],
-        )
-
-        storage = YamlDataStorage(config_model)
-
-        result = storage.get_voices()
-        assert not any(v.model_id == "v5_6_ru" for v in result)
-        assert any(v.model_id == "v3_en" for v in result)
-        assert any(v.name == "en_0" for v in result)
-
-    def test_disabled_model_info_get_model_info_returns_none(self):
-        """get_model_info should return None for a disabled Model Info."""
-
-        config_model = PredefinedData(
-            models=[
-                make_model_info(enabled=False),
-            ],
-            voices=[],
-        )
-
-        storage = YamlDataStorage(config_model)
-
-        assert storage.get_model_info("v5_6_ru") is None
 
 
 class TestGetPrompt:
@@ -851,7 +744,7 @@ models: {}
 voices: []
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         prompt = storage.get_prompt("p1")
         assert prompt is not None
         assert prompt.id == "p1"
@@ -871,7 +764,7 @@ models: {}
 voices: []
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         assert storage.get_prompt("unknown") is None
 
     def test_get_prompt_from_empty_prompts(self, tmp_path):
@@ -884,7 +777,7 @@ models: {}
 voices: []
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         assert storage.get_prompt("p1") is None
 
     def test_get_prompt_from_missing_prompts_key(self, tmp_path):
@@ -896,7 +789,7 @@ models: {}
 voices: []
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         assert storage.get_prompt("p1") is None
 
 
@@ -922,7 +815,7 @@ models:
               prompt_id: p1
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
         assert vn is not None
         assert vn.voice_id == "v5_6_ru-aidar"
@@ -951,7 +844,7 @@ models:
               prompt_id: p1
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "en") is None
 
     def test_get_voice_normalization_multiple_languages(self, tmp_path):
@@ -977,7 +870,7 @@ models:
               type: simple
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         ru_vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
         en_vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "en")
         assert ru_vn.language == "ru"
@@ -1004,7 +897,7 @@ models:
               enabled: false
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
         assert vn is not None
         assert vn.enabled is True
@@ -1029,7 +922,7 @@ models:
               type: openai
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         assert storage.get_voice_normalization("unknown-voice", TextFormat.TEXT, "ru") is None
 
     def test_get_voice_normalization_returns_none_for_unknown_format(self, tmp_path):
@@ -1050,7 +943,7 @@ models:
               type: openai
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.SSML, "ru") is None
 
     def test_get_voice_normalization_voice_without_normalization(self, tmp_path):
@@ -1066,7 +959,7 @@ models:
       - name: aidar
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru") is None
 
     def test_get_voice_normalization_disabled_entry(self, tmp_path):
@@ -1087,7 +980,7 @@ models:
               type: simple
 """
         )
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
         assert vn is not None
         assert vn.enabled is False
@@ -1112,7 +1005,7 @@ models:
         )
 
         with pytest.raises(ValueError, match="languages"):
-            YamlDataStorage(str(config_yml))
+            make_storage(str(config_yml))
 
     @pytest.mark.parametrize(
         ("yaml_value", "expected"),
@@ -1137,7 +1030,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("v5_6_ru").engine_type is expected
 
@@ -1156,7 +1049,7 @@ models:
         )
 
         with pytest.raises(ValueError, match="engine_type"):
-            YamlDataStorage(str(config_yml))
+            make_storage(str(config_yml))
 
     def test_unknown_engine_type_raises_value_error(self, tmp_path):
         """An unrecognized engine_type value fails fast at load."""
@@ -1174,7 +1067,7 @@ models:
         )
 
         with pytest.raises(ValueError, match="engine_type"):
-            YamlDataStorage(str(config_yml))
+            make_storage(str(config_yml))
 
     def test_the_old_qwen_spelling_is_rejected_with_the_valid_families_named(self, tmp_path):
         """`qwen` is no longer a family, and the error says which families are."""
@@ -1192,7 +1085,7 @@ models:
         )
 
         with pytest.raises(ValueError) as exc_info:
-            YamlDataStorage(str(config_yml))
+            make_storage(str(config_yml))
 
         message = str(exc_info.value)
         assert "qwen3" in message
@@ -1216,7 +1109,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
 
         assert storage.get_model_info("v5_6_ru").languages == ["ru", "en"]
 
@@ -1236,7 +1129,7 @@ models:
         )
 
         with pytest.raises(ValueError, match="languages"):
-            YamlDataStorage(str(config_yml))
+            make_storage(str(config_yml))
 
     def test_ssml_supported_and_language_auto_detected_default_to_false(self, tmp_path):
         """Omitted ssml_supported and language_auto_detected default to false."""
@@ -1253,7 +1146,7 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         model_info = storage.get_model_info("v5_6_ru")
 
         assert model_info.ssml_supported is False
@@ -1276,58 +1169,60 @@ models:
 """
         )
 
-        storage = YamlDataStorage(str(config_yml))
+        storage = make_storage(str(config_yml))
         model_info = storage.get_model_info("v5_6_ru")
 
         assert model_info.ssml_supported is True
         assert model_info.language_auto_detected is True
 
 
-class TestActiveModelsAllowlist:
-    """Tests for the active_models runtime allowlist."""
+def make_config_model() -> PredefinedData:
+    """Two Model Infos, each with one Voice, so serving can be observed per model."""
+    return PredefinedData(
+        models=[
+            make_model_info(),
+            make_model_info(id="v3_en"),
+        ],
+        voices=[
+            Voice(id="v5_6_ru-aidar", name="aidar", speaker="aidar", model_id="v5_6_ru"),
+            Voice(id="v3_en-en_0", name="en_0", speaker="en_0", model_id="v3_en"),
+        ],
+    )
 
-    def test_active_model_is_served(self):
-        """A model listed in active_models and enabled is served; unlisted models' voices are dropped."""
-        config_model = PredefinedData(
-            models=[
-                make_model_info(),
-                make_model_info(id="v3_en"),
-            ],
-            voices=[
-                Voice(id="v5_6_ru-aidar", name="aidar", speaker="aidar", model_id="v5_6_ru"),
-                Voice(id="v3_en-en_0", name="en_0", speaker="en_0", model_id="v3_en"),
-            ],
-        )
 
-        storage = YamlDataStorage(config_model, active_models=["v5_6_ru"])
+class TestActiveModelsSoleServingSwitch:
+    """active_models alone decides which Model Infos and Voices are served."""
+
+    def test_active_model_is_served_and_unlisted_models_are_dropped(self):
+        """A model listed in active_models is served; an unlisted model is not."""
+        storage = YamlDataStorage(make_config_model(), active_models=["v5_6_ru"])
 
         assert storage.get_model_info("v5_6_ru") is not None
         assert storage.get_model_info("v3_en") is None
         assert not any(v.model_id == "v3_en" for v in storage.get_voices())
 
-    def test_listed_but_disabled_model_is_not_served_and_warns(self):
-        """A model listed in active_models but disabled is not served and logs a warning."""
-        config_model = PredefinedData(
-            models=[
-                make_model_info(),
-                make_model_info(id="v3_en", enabled=False),
-            ],
-            voices=[
-                Voice(id="v5_6_ru-aidar", name="aidar", speaker="aidar", model_id="v5_6_ru"),
-                Voice(id="v3_en-en_0", name="en_0", speaker="en_0", model_id="v3_en"),
-            ],
-        )
+    def test_absent_active_models_serves_no_models_and_no_voices(self):
+        """With no allowlist at all, nothing is served."""
+        storage = YamlDataStorage(make_config_model(), active_models=None)
 
-        sink = io.StringIO()
-        handler = logger.add(sink, level="WARNING")
-        try:
-            storage = YamlDataStorage(config_model, active_models=["v5_6_ru", "v3_en"])
-        finally:
-            logger.remove(handler)
+        assert storage.get_model_infos() == []
+        assert storage.get_voices() == []
 
-        assert storage.get_model_info("v3_en") is None
-        assert not any(v.model_id == "v3_en" for v in storage.get_voices())
-        assert "v3_en" in sink.getvalue()
+    def test_empty_active_models_serves_no_models_and_no_voices(self):
+        """An empty allowlist serves nothing, just like an absent one."""
+        storage = YamlDataStorage(make_config_model(), active_models=[])
+
+        assert storage.get_model_infos() == []
+        assert storage.get_voices() == []
+
+    def test_unknown_active_model_fails_naming_every_offending_id(self):
+        """An id absent from the data file stops startup and names the unknown ids."""
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(make_config_model(), active_models=["ghost", "other"])
+
+        message = str(exc_info.value)
+        assert "ghost" in message
+        assert "other" in message
 
 
 class TestInputsTheShapesAllow:
@@ -1341,7 +1236,7 @@ class TestInputsTheShapesAllow:
         """
         path = write_data_file(tmp_path, MODEL_WITH_VOICE)
 
-        storage = YamlDataStorage(path)
+        storage = make_storage(path)
 
         assert storage.get_voice("v5_6_ru-aidar").name == "aidar"
 
@@ -1364,7 +1259,7 @@ models:
 """,
         )
 
-        storage = YamlDataStorage(path)
+        storage = make_storage(path)
 
         assert storage.get_voice("v5_6_ru-aidar").speaker == "aidar"
 
@@ -1376,7 +1271,7 @@ models:
         )
         path = write_data_file(tmp_path, contents)
 
-        storage = YamlDataStorage(path)
+        storage = make_storage(path)
 
         assert storage.get_model_infos() if section == "models" else storage.get_voices()
 
@@ -1393,7 +1288,7 @@ models:
 """,
         )
 
-        storage = YamlDataStorage(path)
+        storage = make_storage(path)
 
         assert storage.get_voice("v5_6_ru-aidar") is None
         assert storage.get_model_info("v5_6_ru") is not None
@@ -1413,7 +1308,7 @@ models:
         )
 
         with pytest.raises(ValueError) as exc_info:
-            YamlDataStorage(path)
+            make_storage(path)
 
         assert "v5_6_ru" in str(exc_info.value)
 
@@ -1444,7 +1339,7 @@ models:
         path = write_data_file(tmp_path, contents)
 
         with pytest.raises(ValueError) as exc_info:
-            YamlDataStorage(path)
+            make_storage(path)
 
         assert expected in str(exc_info.value)
 
@@ -1461,7 +1356,7 @@ models:
         path = write_data_file(tmp_path, contents)
 
         with pytest.raises(ValueError) as exc_info:
-            YamlDataStorage(path)
+            make_storage(path)
 
         assert "data.yml" in str(exc_info.value), "the error must name the file that was wrong"
 
@@ -1520,7 +1415,7 @@ models:
         path = write_data_file(tmp_path, contents)
 
         with pytest.raises(ValueError) as exc_info:
-            YamlDataStorage(path)
+            make_storage(path)
 
         assert expected in str(exc_info.value)
 
@@ -1536,7 +1431,7 @@ models:
 """,
         )
 
-        storage = YamlDataStorage(path)
+        storage = make_storage(path)
 
         assert storage.get_model_info("v5_6_ru").languages == ["ru", "en"]
 
@@ -1564,7 +1459,7 @@ prompts:
 """,
         )
 
-        storage = YamlDataStorage(path)
+        storage = make_storage(path)
 
         override = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
 

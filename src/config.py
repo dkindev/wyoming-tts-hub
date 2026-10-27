@@ -207,22 +207,15 @@ class Settings(BaseSettings):
 
     active_models: list[str] = Field(
         default_factory=list,
-        description="Strict runtime allowlist of model ids this instance serves. Must be non-empty.",
+        description="Runtime allowlist of model ids this instance serves. Absent or empty serves nothing.",
     )
-    """Strict runtime allowlist of model ids this instance serves. Must be non-empty."""
+    """Runtime allowlist of model ids this instance serves. Absent or empty serves nothing."""
 
     @field_validator("active_models", mode="before")
     @classmethod
     def coerce_active_models_none(cls, v: object) -> object:
         if v is None:
             return []
-        return v
-
-    @field_validator("active_models")
-    @classmethod
-    def active_models_must_be_non_empty(cls, v: list[str]) -> list[str]:
-        if not v:
-            raise ValueError("active_models must be a non-empty list of model ids")
         return v
 
     streaming: bool = Field(

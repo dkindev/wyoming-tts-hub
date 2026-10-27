@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from pydantic import ValidationError
 from pydantic_settings import YamlConfigSettingsSource
 
 from src.config import Settings
@@ -139,23 +138,29 @@ class TestSileroSettings:
 
 
 class TestActiveModels:
-    def test_missing_active_models_is_validation_error(self, monkeypatch, tmp_path):
-        """A config without active_models is a startup validation error."""
+    def test_missing_active_models_serves_nothing(self, monkeypatch, tmp_path):
+        """A config without active_models starts with an empty allowlist."""
         cfg = tmp_path / "config.yml"
-        cfg.write_text("app_name: test\n")
+        cfg.write_text("models_dir: models\n")
         monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
 
-        with pytest.raises(ValidationError):
-            Settings()
+        assert Settings().active_models == []
 
-    def test_empty_active_models_is_validation_error(self, monkeypatch, tmp_path):
-        """An empty active_models list is a startup validation error."""
+    def test_empty_active_models_is_allowed(self, monkeypatch, tmp_path):
+        """An empty active_models list is read as an empty allowlist, not a validation error."""
         cfg = tmp_path / "config.yml"
         cfg.write_text("active_models: []\n")
         monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
 
-        with pytest.raises(ValidationError, match="non-empty list"):
-            Settings()
+        assert Settings().active_models == []
+
+    def test_null_active_models_serves_nothing(self, monkeypatch, tmp_path):
+        """An explicit null is read as an empty allowlist."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("active_models: null\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        assert Settings().active_models == []
 
     def test_yaml_list_populates_active_models(self, monkeypatch, tmp_path):
         """active_models: [a, b] in YAML populates the setting."""

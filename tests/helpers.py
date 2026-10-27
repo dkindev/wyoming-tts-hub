@@ -114,7 +114,6 @@ def make_model_info(
     language_auto_detected=False,
     ssml_supported=False,
     warmup=False,
-    enabled=True,
 ):
     return ModelInfo(
         id=id,
@@ -123,7 +122,6 @@ def make_model_info(
         language_auto_detected=language_auto_detected,
         ssml_supported=ssml_supported,
         warmup=warmup,
-        enabled=enabled,
     )
 
 

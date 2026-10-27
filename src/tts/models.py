@@ -72,7 +72,6 @@ class ModelInfo:
     ssml_supported: bool = False
     language_auto_detected: bool = False
     languages: list[str] = field(default_factory=list)
-    enabled: bool = True
     warmup: bool = False
     hash_prefix: str | None = None
     revision: str | None = None

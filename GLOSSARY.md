@@ -27,8 +27,8 @@ SSML (`ssml_supported`).
 _Avoid_: Neural network, PyTorch model
 
 **Active Model Info**:
-A **Model Info** that the running instance serves — enabled (`enabled`) **and**
-named in the instance's `active_models` allowlist.
+A **Model Info** that the running instance serves, because it is named in the
+instance's `active_models` allowlist. No other switch selects what is served.
 _Avoid_: loaded model, warmed-up model
 
 ### Voices

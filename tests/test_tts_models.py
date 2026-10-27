@@ -114,6 +114,10 @@ class TestModelInfo:
         assert model_info.revision == "0123456789abcdef"
         assert model_info.hash_prefix == "a1b2c3"
 
+    def test_model_info_does_not_carry_enabled(self):
+        """The retired serving switch is not part of the domain model."""
+        assert "enabled" not in ModelInfo.__dataclass_fields__
+
     def test_model_info_is_frozen(self):
         """ModelInfo dataclass is immutable (frozen)."""
         model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
@@ -149,7 +153,6 @@ class TestOldModelNamesAreGone:
             language_auto_detected=True,
             ssml_supported=True,
             warmup=True,
-            enabled=False,
         )
 
         assert model_info == ModelInfo(
@@ -159,7 +162,6 @@ class TestOldModelNamesAreGone:
             language_auto_detected=True,
             ssml_supported=True,
             warmup=True,
-            enabled=False,
         )
 
 

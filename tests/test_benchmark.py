@@ -156,7 +156,8 @@ def make_counting_stack():
         PredefinedData(
             models=[make_model_info(id=MODEL_ID, languages=["en"])],
             voices=[make_voice(voice_id=VOICE_ID, name="aidar", model=MODEL_ID)],
-        )
+        ),
+        active_models=[MODEL_ID],
     )
     engine = CountingTtsEngine(FakeTtsEngine(make_model_info(id=MODEL_ID)))
     recorder = SentenceRecorder()

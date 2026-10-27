@@ -18,8 +18,8 @@ uri: tcp://127.0.0.1:10200
 # Env: TTS_ZEROCONF
 zeroconf: wyoming-tts-hub
 
-# Strict runtime allowlist of model ids this instance serves.
-# A Model is served if enabled AND listed here.
+# Runtime allowlist of model ids this instance serves. This is the sole switch:
+# a model is served only if listed here, and an absent or empty list serves nothing.
 # CLI: --active_models a --active_models b
 # Env: TTS_ACTIVE_MODELS=["v5_6_ru","v3_en"]
 active_models: [v5_6_ru]

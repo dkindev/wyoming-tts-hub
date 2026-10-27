@@ -33,9 +33,9 @@ def hermetic_environment(tmp_path, monkeypatch):
     is an input. A test that wants a setting from the environment still sets it,
     after this fixture runs.
 
-    The per-test config carries only an `active_models` allowlist, which Settings
-    requires. A test that exercises the YAML source points `--config` at its own file
-    and therefore ignores this one.
+    The per-test config carries only an `active_models` allowlist, so the default
+    settings serve one model rather than nothing. A test that exercises the YAML
+    source points `--config` at its own file and therefore ignores this one.
 
     The dotenv source is switched off outright rather than merely outvoted: outvoting
     it means every test has to set whatever it expects to win, which is how a local

@@ -52,7 +52,8 @@ def make_storage(
                 )
             ],
             voices=[make_voice(voice_id=voice_id, name="aidar", model=model_id)],
-        )
+        ),
+        active_models=[model_id],
     )
 
 

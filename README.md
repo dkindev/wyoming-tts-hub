@@ -79,8 +79,8 @@ What a client sees when it connects:
   speaking as `aidar` is offered as `v5_6_ru-aidar`.
 - **Languages** come from the Model Info, not the Voice. Every Voice of a Model
   Info is advertised with that Model Info's declared Languages.
-- **Only Active Model Infos are offered** — a Model Info that is disabled, or
-  that is not listed in `active_models`, contributes no Voices at all.
+- **Only Active Model Infos are offered** — a Model Info that is not listed in
+  `active_models` contributes no Voices at all.
 - **Discovery** is advertised over zeroconf as `wyoming-tts-hub`. Set `zeroconf`
   to an empty string to turn it off.
 - **Errors** reach the client in full when `env_type` is `development`, and as a
@@ -137,14 +137,14 @@ Each key under `models:` (e.g. `v5_6_ru`) is the model's id, and names a **Model
 | `languages` | Yes | — | Non-empty list of language codes it can speak, e.g. `[ru]`. A request carrying any other language is refused |
 | `ssml_supported` | No | `false` | `true` when it accepts SSML. An SSML request against `false` is refused |
 | `language_auto_detected` | No | `false` | `true` when it may be asked to synthesize without a language |
-| `enabled` | No | `true` | `false` to drop the model and its voices |
 | `warmup` | No | `false` | `true` to preload at startup, up to `max_models` of them; otherwise loaded on the first request for it |
 | `hash_prefix` | No | — | SHA-256 prefix checked against the downloaded Silero model files |
 | `revision` | No | — | Upstream commit or tag to fetch a Qwen3-TTS checkpoint at. Omit to follow upstream |
 | `voices` | No | none | The voices this model speaks with |
 
-A model is served only when it is both `enabled` **and** listed in `active_models` in
-`config.yml`. Neither switch implies the other.
+A model is served only when it is listed in `active_models` in `config.yml`. That
+list is the sole switch: a model left out of it is not served, and neither are its
+voices. An absent or empty `active_models` serves nothing.
 
 #### TTS Engine families
 
@@ -224,7 +224,8 @@ models:
 
 #### Disabling a model
 
-Set `enabled: false` on the model entry. Its voices are automatically excluded from discovery.
+Remove the model's id from `active_models` in `config.yml`. The model and its
+voices are excluded from discovery.
 
 ### Voices
 
