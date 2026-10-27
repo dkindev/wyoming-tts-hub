@@ -212,6 +212,113 @@ class TestResolveModelSection:
         assert sample_rates == [8000, 24000, 48000]
         assert example_text == "Пример"
 
+    def test_upstream_id_resolves_the_registry_entry_and_stored_file(self, tmp_path):
+        """A Model Info whose id differs from its upstream_id resolves the registry
+        entry and stored .pt file named by the upstream id."""
+        registry = """
+          en:
+            v3_en:
+              latest:
+                package: 'http://example/v3_en.pt'
+                sample_rate: [8000, 24000]
+                example: 'Hello'
+                speakers:
+                  en_0:
+                    example: 'Hello from en_0'
+        """
+        engine = make_engine(tmp_path, registry, {"en": ["v3_en"]})
+        model_info = ModelInfo(
+            id="my-local-en",
+            engine_type=EngineType.SILERO,
+            languages=["en"],
+            upstream_id="v3_en",
+        )
+
+        model_path, sample_rates, example_text, speakers = engine._resolve_model_metadata(
+            model_info
+        )
+
+        assert model_path.endswith(os.path.join("en", "v3_en.pt"))
+        assert "my-local-en" not in model_path
+        assert sample_rates == [8000, 24000]
+        assert example_text == "Hello"
+        assert speakers == {"en_0": "Hello from en_0"}
+
+    def test_upstream_id_downloads_into_the_upstream_file_name(self, tmp_path):
+        """A model with no stored file downloads to `<upstream id>.pt` in its section."""
+        registry = """
+          en:
+            v3_en:
+              latest:
+                package: 'http://example/v3_en.pt'
+                sample_rate: [8000, 24000]
+        """
+        engine = make_engine(tmp_path, registry, {})
+        model_info = ModelInfo(
+            id="my-local-en",
+            engine_type=EngineType.SILERO,
+            languages=["en"],
+            upstream_id="v3_en",
+        )
+
+        with unittest.mock.patch(
+            "src.tts.silero_engine.torch.hub.download_url_to_file"
+        ) as mock_download:
+            model_path, _, _, _ = engine._resolve_model_metadata(model_info)
+
+        mock_download.assert_called_once()
+        assert mock_download.call_args.args[0] == "http://example/v3_en.pt"
+        assert mock_download.call_args.args[1].endswith(os.path.join("en", "v3_en.pt"))
+        assert model_path.endswith(os.path.join("en", "v3_en.pt"))
+
+    def test_registry_miss_names_the_local_id_not_the_upstream_id(self, tmp_path):
+        """An upstream artifact absent from the registry is reported against the id
+        the operator configured, not the upstream name."""
+        registry = """
+          en:
+            v3_en:
+              latest:
+                package: 'http://example/v3_en.pt'
+        """
+        engine = make_engine(tmp_path, registry, {})
+        model_info = ModelInfo(
+            id="my-local-en",
+            engine_type=EngineType.SILERO,
+            languages=["en"],
+            upstream_id="v9_ghost",
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            engine._resolve_model_metadata(model_info)
+
+        message = str(exc_info.value)
+        assert "my-local-en" in message
+        assert "v9_ghost" not in message
+
+    @pytest.mark.parametrize("upstream_id", [None, "   "])
+    def test_blank_upstream_id_falls_back_to_the_local_id(self, tmp_path, upstream_id):
+        """A directly built Model Info without a usable upstream_id resolves under
+        its local id, exactly as it did before upstream_id existed."""
+        registry = """
+          en:
+            v3_en:
+              latest:
+                package: 'http://example/v3_en.pt'
+                sample_rate: [8000]
+        """
+        engine = make_engine(tmp_path, registry, {"en": ["v3_en"]})
+        model_info = ModelInfo(
+            id="v3_en",
+            engine_type=EngineType.SILERO,
+            languages=["en"],
+            upstream_id=upstream_id,
+        )
+
+        model_path, sample_rates, _, _ = engine._resolve_model_metadata(model_info)
+
+        assert model_path.endswith(os.path.join("en", "v3_en.pt"))
+        assert sample_rates == [8000]
+
     def test_resolution_uses_constructor_models_dir_not_config_object(self, tmp_path):
         """Resolution routes models_dir from the constructor — the engine has no `config`
         object and must not crash before the lookup runs."""

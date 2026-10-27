@@ -241,6 +241,29 @@ class TestQwenDocumentation:
         assert "language_auto_detected: true" in readme
 
 
+class TestSileroDocumentation:
+    def test_the_readme_says_how_a_silero_model_info_maps_to_its_registry_entry(self):
+        """The operator is told which name the registry lookup and stored file use."""
+        readme = README.read_text()
+        flattened = " ".join(readme.split())
+
+        assert "#### Silero" in readme
+        assert "`<models_dir>/silero/<section>/<upstream id>.pt`" in flattened
+        assert (
+            "registry entry and the stored file are named by the Model Info's **Upstream Id**"
+            in flattened
+        )
+
+    def test_the_upstream_id_field_row_documents_silero(self):
+        """The field table says what Silero fetches under the upstream id."""
+        row = next(
+            line for line in README.read_text().splitlines() if line.startswith("| `upstream_id`")
+        )
+
+        assert "Silero" in row
+        assert "registry entry" in row
+
+
 class TestShippedQwenExample:
     def test_the_shipped_example_declares_both_checkpoint_families(self):
         """The same two families ship in the data file, not only in the README."""

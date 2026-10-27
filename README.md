@@ -138,7 +138,7 @@ Each key under `models:` (e.g. `v5_6_ru`) is the model's id, and names a **Model
 | `language_auto_detected` | No | `false` | `true` when it may be asked to synthesize without a language |
 | `hash_prefix` | No | — | SHA-256 prefix checked against the downloaded Silero model files |
 | `revision` | No | — | Upstream commit or tag to fetch a Qwen3-TTS checkpoint at. Omit to follow upstream |
-| `upstream_id` | No | the model's id | Artifact to fetch when it differs from the id clients use. Qwen3-TTS fetches this checkpoint repository and caches it under this name |
+| `upstream_id` | No | the model's id | Artifact to fetch when it differs from the id clients use. Qwen3-TTS fetches this checkpoint repository and caches it under this name; Silero resolves this `models.yml` registry entry and stores it as `<upstream id>.pt` |
 | `voices` | No | none | The voices this model speaks with |
 
 A model is served only when it is listed in `active_models` in `config.yml`. That
@@ -157,6 +157,19 @@ skipped with a warning, and an id that names no declared Model Info fails startu
 read and served like any other, and then fails when its engine would be built —
 at startup for a model listed in `warmup_models`, otherwise on the first request
 for it — with an error naming the family and the backend.
+
+#### Silero
+
+Silero is enabled with `engine_type: silero` on the `torch` backend. The engine
+looks its model up in the Silero `models.yml` registry and stores the downloaded
+checkpoint as `<models_dir>/silero/<section>/<upstream id>.pt` — for example
+`models/silero/en/v3_en.pt` — reused from there on later boots.
+
+The registry entry and the stored file are named by the Model Info's **Upstream
+Id**: `upstream_id` when it names an artifact, and otherwise the Model Info's
+local `id`; an absent, null, empty, or whitespace-only `upstream_id` all mean the
+same fallback. The local `id` remains the identity clients, `active_models`,
+`warmup_models`, logs, and operator-facing errors use.
 
 #### Qwen3-TTS
 

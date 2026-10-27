@@ -159,14 +159,15 @@ class SileroTtsEngine(TorchTtsEngine):
         lang_dir = os.path.join(models_dir, "silero", language)
         os.makedirs(lang_dir, exist_ok=True)
 
-        model_entry = tts_models[language][model_info.id]
+        upstream_id = self._upstream_id(model_info)
+        model_entry = tts_models[language][upstream_id]
         latest = model_entry.get("latest", {})
         sample_rates = latest.get("sample_rate", [])
         example_text = latest.get("example", "")
         raw_speakers = latest.get("speakers", {})
         speakers = {name: s.get("example", "") for name, s in raw_speakers.items()}
 
-        model_path = os.path.join(lang_dir, f"{model_info.id}.pt")
+        model_path = os.path.join(lang_dir, f"{upstream_id}.pt")
         if os.path.isfile(model_path):
             logger.debug(
                 "Model '{model}' found at path '{path}'", model=model_info.id, path=model_path
@@ -204,6 +205,11 @@ class SileroTtsEngine(TorchTtsEngine):
         return model_path, sample_rates, example_text, speakers
 
     @staticmethod
+    def _upstream_id(model_info: ModelInfo) -> str:
+        """The registry key and file name to resolve, falling back to the local id."""
+        return (model_info.upstream_id or "").strip() or model_info.id
+
+    @staticmethod
     def _resolve_internal_model_language(
         tts_models: dict, model_info: ModelInfo, yml_path: str
     ) -> str:
@@ -213,15 +219,16 @@ class SileroTtsEngine(TorchTtsEngine):
         falls back to scanning every section. Raises RuntimeError when no
         section owns the model.
         """
+        upstream_id = SileroTtsEngine._upstream_id(model_info)
         declared_languages = model_info.languages
 
         if len(declared_languages) == 1:
             declared = declared_languages[0]
-            if model_info.id in tts_models.get(declared, {}):
+            if upstream_id in tts_models.get(declared, {}):
                 return declared
 
         for section, section_models in tts_models.items():
-            if model_info.id in section_models:
+            if upstream_id in section_models:
                 return section
 
         raise RuntimeError(
