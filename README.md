@@ -138,6 +138,7 @@ Each key under `models:` (e.g. `v5_6_ru`) is the model's id, and names a **Model
 | `language_auto_detected` | No | `false` | `true` when it may be asked to synthesize without a language |
 | `hash_prefix` | No | — | SHA-256 prefix checked against the downloaded Silero model files |
 | `revision` | No | — | Upstream commit or tag to fetch a Qwen3-TTS checkpoint at. Omit to follow upstream |
+| `upstream_id` | No | the model's id | Artifact to fetch when it differs from the id clients use. Qwen3-TTS fetches this checkpoint repository and caches it under this name |
 | `voices` | No | none | The voices this model speaks with |
 
 A model is served only when it is listed in `active_models` in `config.yml`. That
@@ -176,13 +177,16 @@ both supported families:
 VoiceDesign checkpoints are not supported: loading one fails with an error naming
 the two supported families, whether at warmup or on the first request.
 
-Checkpoints are fetched from their upstream repository id into
+Checkpoints are fetched from the Model Info's **Upstream Id** into
 `<models_dir>/qwen3/<upstream id>` — for example
 `models/qwen3/Qwen/Qwen3-TTS-12Hz-1.7B-Base` — and reused from there on later
-boots. Set `revision` on the Model Info to fetch a named commit or tag instead of
-following upstream. This is separate from
-`hash_prefix`, which applies to Silero checkpoints and verifies the bytes of a
-downloaded file locally.
+boots. The Upstream Id is `upstream_id` when it names an artifact, and otherwise
+falls back to the Model Info's local `id`; an absent, null, empty, or
+whitespace-only `upstream_id` all mean the same fallback. The local `id` remains
+the identity clients, `active_models`, `warmup_models`, logs, and operator-facing
+errors use. Set `revision` on the Model Info to fetch a named commit or tag
+instead of following upstream. This is separate from `hash_prefix`, which applies
+to Silero checkpoints and verifies the bytes of a downloaded file locally.
 
 The checkpoint maps project Language codes (`zh`, `en`, ...) onto its own
 language names. On a Base checkpoint an unrecognised code falls back to automatic

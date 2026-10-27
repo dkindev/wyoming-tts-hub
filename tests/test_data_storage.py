@@ -788,6 +788,118 @@ models:
         assert model_info.hash_prefix == "a1b2c3d4"
 
 
+class TestYamlUpstreamIdField:
+    """Tests for parsing upstream_id from YAML config."""
+
+    def test_yaml_upstream_id_names_a_different_upstream_artifact(self, tmp_path):
+        """An explicit upstream_id is kept while the Model Info keeps its local id."""
+        config_yml = write_data_file(
+            tmp_path,
+            """
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: "owner/upstream-model"
+    voices:
+      - name: clone
+""",
+        )
+
+        model_info = make_storage(str(config_yml)).get_model_info("local_model")
+
+        assert model_info.id == "local_model"
+        assert model_info.upstream_id == "owner/upstream-model"
+
+    def test_yaml_upstream_id_is_trimmed(self, tmp_path):
+        """Surrounding whitespace is not part of the upstream artifact name."""
+        config_yml = write_data_file(
+            tmp_path,
+            """
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: "  owner/upstream-model  "
+    voices:
+      - name: clone
+""",
+        )
+
+        model_info = make_storage(str(config_yml)).get_model_info("local_model")
+
+        assert model_info.upstream_id == "owner/upstream-model"
+
+    @pytest.mark.parametrize(
+        "declared",
+        [
+            "",
+            "   ",
+            "null",
+            "~",
+        ],
+    )
+    def test_yaml_blank_upstream_id_falls_back_to_the_local_id(self, tmp_path, declared):
+        """An empty, whitespace-only or null upstream_id means the id is upstream."""
+        config_yml = write_data_file(
+            tmp_path,
+            f"""
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: {declared}
+    voices:
+      - name: clone
+""",
+        )
+
+        model_info = make_storage(str(config_yml)).get_model_info("local_model")
+
+        assert model_info.upstream_id == "local_model"
+
+    def test_yaml_without_upstream_id_falls_back_to_the_local_id(self, tmp_path):
+        """A Model Info that names no upstream artifact uses its own id."""
+        config_yml = write_data_file(
+            tmp_path,
+            """
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    voices:
+      - name: clone
+""",
+        )
+
+        model_info = make_storage(str(config_yml)).get_model_info("local_model")
+
+        assert model_info.upstream_id == "local_model"
+
+    @pytest.mark.parametrize("declared", ["123", "true", "[owner, model]", "{owner: model}"])
+    def test_yaml_non_string_upstream_id_is_refused_by_model_name(self, tmp_path, declared):
+        """A non-string upstream_id is refused with an error naming the Model Info."""
+        config_yml = write_data_file(
+            tmp_path,
+            f"""
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: {declared}
+    voices:
+      - name: clone
+""",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            make_storage(str(config_yml))
+
+        message = str(exc_info.value)
+        assert "local_model" in message
+        assert "upstream_id" in message
+
+
 class TestGetPrompt:
     """Tests for get_prompt() method."""
 

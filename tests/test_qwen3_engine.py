@@ -51,10 +51,11 @@ class FakeQwenModel:
         return self.supported_languages
 
 
-def make_engine(tmp_path, *, model_id=MODEL_ID, revision=None, device="cpu"):
+def make_engine(tmp_path, *, model_id=MODEL_ID, upstream_id=None, revision=None, device="cpu"):
     model_info = ModelInfo(
         id=model_id,
         engine_type=EngineType.QWEN3,
+        upstream_id=upstream_id,
         languages=["en"],
         revision=revision,
     )
@@ -143,6 +144,48 @@ class TestWarmup:
         assert loaded_path == call["local_dir"]
         assert from_pretrained.call_args.kwargs["device_map"] == "cpu"
         assert engine.device == torch.device("cpu")
+
+    async def test_fetches_the_upstream_artifact_named_by_upstream_id(self, tmp_path):
+        """A local id with an upstream_id fetches and caches the upstream artifact."""
+        local_id = "bandit"
+        upstream_id = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+        engine = make_engine(tmp_path, model_id=local_id, upstream_id=upstream_id)
+
+        download, from_pretrained = await warmup(engine, FakeQwenModel())
+
+        call = download.call_args.kwargs
+        assert call["repo_id"] == upstream_id
+        assert call["local_dir"] == os.path.join(engine._models_dir, "qwen3", upstream_id)
+        assert from_pretrained.call_args.args[0] == call["local_dir"]
+        assert engine.model_info.id == local_id
+
+    async def test_blank_upstream_id_falls_back_to_the_local_id(self, tmp_path):
+        """A directly built Model Info with a blank upstream_id fetches under its id."""
+        engine = make_engine(tmp_path, upstream_id="   ")
+
+        download, from_pretrained = await warmup(engine, FakeQwenModel())
+
+        call = download.call_args.kwargs
+        assert call["repo_id"] == MODEL_ID
+        assert call["local_dir"] == os.path.join(engine._models_dir, "qwen3", MODEL_ID)
+        assert from_pretrained.call_args.args[0] == call["local_dir"]
+
+    async def test_download_failure_names_the_local_id_not_the_upstream_id(self, tmp_path):
+        """A failed fetch is reported against the id the operator configured."""
+        local_id = "bandit"
+        upstream_id = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+        engine = make_engine(tmp_path, model_id=local_id, upstream_id=upstream_id)
+
+        with unittest.mock.patch(
+            "src.tts.qwen3_engine.snapshot_download",
+            side_effect=RuntimeError("connection failed"),
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                await engine.warmup()
+
+        message = str(exc_info.value)
+        assert local_id in message
+        assert upstream_id not in message
 
     async def test_downloads_the_declared_revision(self, tmp_path):
         """A Model Info naming a revision asks upstream for that commit."""

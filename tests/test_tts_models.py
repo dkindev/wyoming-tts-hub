@@ -98,6 +98,26 @@ class TestModelInfo:
         model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO, hash_prefix="a1b2c3")
         assert model_info.hash_prefix == "a1b2c3"
 
+    def test_model_info_upstream_id_defaults_to_none(self):
+        """ModelInfo.upstream_id defaults to None, meaning the id is used upstream."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.upstream_id is None
+
+    def test_model_info_keeps_its_existing_positional_field_order(self):
+        """A third positional argument still means ssml_supported, not upstream_id."""
+        model_info = ModelInfo("test_model", EngineType.SILERO, True)
+        assert model_info.ssml_supported is True
+        assert model_info.upstream_id is None
+
+    def test_model_info_upstream_id_can_be_set(self):
+        """ModelInfo(upstream_id=...) stores the different upstream artifact name."""
+        model_info = ModelInfo(
+            id="local-model",
+            engine_type=EngineType.QWEN3,
+            upstream_id="owner/upstream-model",
+        )
+        assert model_info.upstream_id == "owner/upstream-model"
+
     def test_model_info_revision_defaults_to_none(self):
         """ModelInfo.revision defaults to None."""
         model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
@@ -149,6 +169,7 @@ class TestOldModelNamesAreGone:
         model_info = helpers.make_model_info(
             id="v3_en",
             engine_type=EngineType.QWEN3,
+            upstream_id="owner/upstream-model",
             languages=["en", "ru"],
             language_auto_detected=True,
             ssml_supported=True,
@@ -158,6 +179,7 @@ class TestOldModelNamesAreGone:
         assert model_info == ModelInfo(
             id="v3_en",
             engine_type=EngineType.QWEN3,
+            upstream_id="owner/upstream-model",
             languages=["en", "ru"],
             language_auto_detected=True,
             ssml_supported=True,

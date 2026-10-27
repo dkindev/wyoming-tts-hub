@@ -122,6 +122,11 @@ class Qwen3TtsEngine(TorchTtsEngine):
     def _non_empty_string(value: Any) -> str | None:
         return value if isinstance(value, str) and value else None
 
+    @staticmethod
+    def _upstream_id(model_info: ModelInfo) -> str:
+        """The artifact to fetch, falling back to the local id when none is named."""
+        return (model_info.upstream_id or "").strip() or model_info.id
+
     def _checkpoint_dir(self, model_info: ModelInfo) -> str:
         """The directory under the Models directory this checkpoint is kept in.
 
@@ -129,16 +134,17 @@ class Qwen3TtsEngine(TorchTtsEngine):
         directories. Path components that would escape the Models directory are
         dropped rather than followed.
         """
-        parts = [part for part in model_info.id.split("/") if part not in ("", ".", "..")]
+        parts = [
+            part for part in self._upstream_id(model_info).split("/") if part not in ("", ".", "..")
+        ]
         return os.path.join(self._models_dir, CHECKPOINT_DIRECTORY, *parts)
 
-    @staticmethod
-    def _download_checkpoint(model_info: ModelInfo, checkpoint_dir: str) -> None:
+    def _download_checkpoint(self, model_info: ModelInfo, checkpoint_dir: str) -> None:
         os.makedirs(checkpoint_dir, exist_ok=True)
 
         try:
             snapshot_download(
-                repo_id=model_info.id,
+                repo_id=self._upstream_id(model_info),
                 revision=model_info.revision,
                 local_dir=checkpoint_dir,
             )

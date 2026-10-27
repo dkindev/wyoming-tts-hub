@@ -223,6 +223,15 @@ class TestQwenDocumentation:
         assert "`<models_dir>/qwen3/<upstream id>`" in readme
         assert "models/qwen3/Qwen/Qwen3-TTS-12Hz-1.7B-Base" in readme
 
+    def test_the_readme_documents_the_upstream_id_and_its_fallback(self):
+        """The field is documented, and the local id stays the configured identity."""
+        readme = " ".join(README.read_text().split())
+
+        assert "upstream_id" in documented_fields("Models")
+        assert "**Upstream Id**" in readme
+        assert "falls back to the Model Info's local `id`" in readme
+        assert "`active_models`, `warmup_models`, logs" in readme
+
     def test_the_readme_documents_the_dialect_speakers_and_automatic_detection(self):
         """The caveat must be stated, not merely the speaker names and 'automatic'."""
         readme = " ".join(README.read_text().split())

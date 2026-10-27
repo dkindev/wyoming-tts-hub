@@ -176,12 +176,32 @@ class YamlDataStorage(DataStorage):
         return ModelInfo(
             id=model_id,
             engine_type=engine_type,
+            upstream_id=YamlDataStorage._parse_upstream_id(model_id, model_data),
             ssml_supported=model_data.get("ssml_supported", False),
             language_auto_detected=model_data.get("language_auto_detected", False),
             languages=[lang.strip() for lang in languages_raw],
             hash_prefix=model_data.get("hash_prefix") or None,
             revision=model_data.get("revision") or None,
         )
+
+    @staticmethod
+    def _parse_upstream_id(model_id: str, model_data: dict) -> str:
+        """The upstream artifact a model names, falling back to its local id.
+
+        An absent, null, empty or whitespace-only value all mean the same thing:
+        this model is fetched under the id it is served under.
+        """
+        upstream_id = model_data.get("upstream_id")
+        if upstream_id is None:
+            return model_id
+
+        if not isinstance(upstream_id, str):
+            raise ValueError(
+                f"Model '{model_id}' must declare 'upstream_id' as a string, but it holds "
+                f"a {type(upstream_id).__name__}"
+            )
+
+        return upstream_id.strip() or model_id
 
     @staticmethod
     def _parse_voice(

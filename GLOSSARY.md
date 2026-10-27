@@ -26,6 +26,14 @@ asked to synthesize without one (`language_auto_detected`), and whether it accep
 SSML (`ssml_supported`).
 _Avoid_: Neural network, PyTorch model
 
+**Upstream Id**:
+The name a **Model Info** uses to fetch its artifact from its **TTS Engine**'s
+upstream source, which may differ from the Model Info's local `id`. An absent,
+null, empty, or whitespace-only value means the local `id` is used. Clients,
+`active_models`, `warmup_models`, logs, and operator-facing errors always use the
+local `id`.
+_Avoid_: model id, remote id (when meaning the local identity)
+
 **Active Model Info**:
 A **Model Info** that the running instance serves, because it is named in the
 instance's `active_models` allowlist. No other switch selects what is served.

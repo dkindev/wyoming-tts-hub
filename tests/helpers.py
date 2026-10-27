@@ -110,6 +110,7 @@ def make_voice(*, voice_id, name, speaker=None, model="v5_6_ru"):
 def make_model_info(
     id="v5_6_ru",
     engine_type=EngineType.SILERO,
+    upstream_id=None,
     languages=None,
     language_auto_detected=False,
     ssml_supported=False,
@@ -118,6 +119,7 @@ def make_model_info(
     return ModelInfo(
         id=id,
         engine_type=engine_type,
+        upstream_id=upstream_id,
         languages=languages if languages is not None else [],
         language_auto_detected=language_auto_detected,
         ssml_supported=ssml_supported,

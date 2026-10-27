@@ -75,6 +75,7 @@ class ModelInfo:
     warmup: bool = False
     hash_prefix: str | None = None
     revision: str | None = None
+    upstream_id: str | None = None
 
 
 @dataclass(frozen=True)
