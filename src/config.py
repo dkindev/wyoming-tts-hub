@@ -211,9 +211,20 @@ class Settings(BaseSettings):
     )
     """Runtime allowlist of model ids this instance serves. Absent or empty serves nothing."""
 
-    @field_validator("active_models", mode="before")
+    warmup_models: list[str] = Field(
+        default_factory=list,
+        description="Model ids to preload at startup, up to max_models. Each id must also be in active_models to be served.",
+    )
+    """Model ids to preload at startup, up to `max_models`.
+
+    An id must also be in `active_models` to be served; one that is declared but
+    inactive is skipped with a warning, and one that names no declared Model Info
+    fails startup.
+    """
+
+    @field_validator("active_models", "warmup_models", mode="before")
     @classmethod
-    def coerce_active_models_none(cls, v: object) -> object:
+    def coerce_model_lists_none(cls, v: object) -> object:
         if v is None:
             return []
         return v

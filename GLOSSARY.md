@@ -133,8 +133,9 @@ _Avoid_: Packet, block, window
 - A **TTS Engine** synthesizes each **Sentence** into one or more **Chunks**,
   which the server streams over the Wyoming protocol
 - A **Frame** is a slice of a **Chunk** sized by the configured frame duration
-- A **Model Info** is loaded on the first synthesis request for it, unless it sets
-  `warmup` to be pre-warmed at startup
+- A **Model Info** is loaded on the first synthesis request for it, unless the
+  instance names it in `warmup_models` to be pre-warmed at startup; only an
+  **Active Model Info** can be warmed
 - Only the **Voices** of **Active Model Infos** are advertised over the Wyoming
   protocol, plus their per-**Model Info** **Languages**
 - A **Text Format** is chosen per request rather than advertised: the Wyoming

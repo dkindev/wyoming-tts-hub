@@ -1,3 +1,4 @@
+import unittest.mock
 from pathlib import Path
 
 import pytest
@@ -291,7 +292,6 @@ models:
   v5_6_ru:
     engine_type: silero
     languages: [ru]
-    warmup: true
     voices:
       - name: aidar
       - name: eugene
@@ -314,7 +314,6 @@ models:
         assert not hasattr(storage.get_voice("v5_6_ru-aidar"), "locale")
         assert storage.get_voice("v3_en-henry").speaker == "en_2"
         assert storage.get_voice("v3_en-henry").name == "henry"
-        assert storage.get_model_info("v5_6_ru").warmup is True
 
     def test_voices_sharing_speaker_load_with_distinct_name_ids(self, tmp_path):
         """Two voices sharing a speaker under one Model Info load with distinct name-based IDs."""
@@ -530,14 +529,32 @@ models:
         assert type(storage.get_model_info("v5_6_ru")) is ModelInfo
 
 
-class TestYamlWarmupField:
-    """Tests for parsing warmup field from YAML config."""
+class TestYamlWarmupDerivation:
+    """Warmup is chosen by the instance configuration, not written in the data file."""
 
-    def test_yaml_warmup_true_sets_warmup_on_model_info(self, tmp_path):
-        """YAML with warmup: true should set warmup=True on the Model Info."""
+    def test_a_listed_model_info_is_flagged_for_warmup(self, tmp_path):
+        """A served Model Info is warmed when its id is in warmup_models."""
 
-        config_yml = tmp_path / "config.yml"
-        config_yml.write_text(
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"], warmup_models=["v5_6_ru"])
+
+        assert storage.get_model_info("v5_6_ru").warmup is True
+
+    def test_an_unlisted_model_info_is_not_flagged_for_warmup(self, tmp_path):
+        """A served Model Info absent from warmup_models is loaded on first request."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"])
+
+        assert storage.get_model_info("v5_6_ru").warmup is False
+
+    def test_warmup_written_in_the_data_file_is_inert(self, tmp_path):
+        """A value left under warmup is not read, so it cannot preload a model."""
+
+        path = write_data_file(
+            tmp_path,
             """
 models:
   v5_6_ru:
@@ -546,35 +563,78 @@ models:
     warmup: true
     voices:
       - name: aidar
-        speaker: aidar
-        model: v5_6_ru
-"""
+""",
         )
 
-        storage = make_storage(str(config_yml))
-
-        assert storage.get_model_info("v5_6_ru").warmup is True
-
-    def test_yaml_without_warmup_defaults_to_false(self, tmp_path):
-        """YAML without warmup field should default to False."""
-
-        config_yml = tmp_path / "config.yml"
-        config_yml.write_text(
-            """
-models:
-  v5_6_ru:
-    engine_type: silero
-    languages: [ru]
-    voices:
-      - name: aidar
-        speaker: aidar
-        model: v5_6_ru
-"""
-        )
-
-        storage = make_storage(str(config_yml))
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"])
 
         assert storage.get_model_info("v5_6_ru").warmup is False
+
+    def test_an_unknown_warmup_id_fails_naming_every_offending_id(self, tmp_path):
+        """An id absent from the data file stops startup and names the unknown ids."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(
+                str(path),
+                active_models=["v5_6_ru"],
+                warmup_models=["ghost", "other"],
+            )
+
+        message = str(exc_info.value)
+        assert "ghost" in message
+        assert "other" in message
+
+    def test_a_declared_but_inactive_warmup_id_warns_and_is_skipped(self, tmp_path):
+        """A warmup id that cannot be served is reported, but does not fail startup."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        with unittest.mock.patch("src.tts.data_storage.logger.warning") as warning:
+            storage = YamlDataStorage(str(path), active_models=[], warmup_models=["v5_6_ru"])
+
+        warning.assert_called_once()
+        assert "v5_6_ru" in warning.call_args.kwargs["model_ids"]
+        assert storage.get_model_info("v5_6_ru") is None
+
+
+class TestDirectPredefinedDataWarmup:
+    """A supplied PredefinedData keeps its own warmup values."""
+
+    def test_the_config_warmup_list_does_not_override_them(self):
+        """Warmup already on the Model Infos survives, in both directions."""
+
+        data = PredefinedData(
+            models=[
+                make_model_info(id="warm", warmup=True),
+                make_model_info(id="lazy", warmup=False),
+            ],
+            voices=[],
+        )
+
+        storage = YamlDataStorage(
+            data,
+            active_models=["warm", "lazy"],
+            warmup_models=["lazy"],
+        )
+
+        assert storage.get_model_info("warm").warmup is True
+        assert storage.get_model_info("lazy").warmup is False
+
+    def test_the_warmup_list_is_inert_for_a_supplied_configuration(self):
+        """No id is validated or warned about, because the list is never applied."""
+        data = PredefinedData(models=[make_model_info(id="warm", warmup=True)], voices=[])
+
+        with unittest.mock.patch("src.tts.data_storage.logger.warning") as warning:
+            storage = YamlDataStorage(
+                data,
+                active_models=["warm"],
+                warmup_models=["ghost"],
+            )
+
+        warning.assert_not_called()
+        assert storage.get_model_info("warm").warmup is True
 
 
 class TestYamlHashPrefixField:

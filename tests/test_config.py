@@ -190,6 +190,56 @@ class TestActiveModels:
         assert settings.active_models == ["a", "b"]
 
 
+class TestWarmupModels:
+    def test_missing_warmup_models_is_empty(self, monkeypatch, tmp_path):
+        """A config without warmup_models starts with no model to pre-warm."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("models_dir: models\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        assert Settings().warmup_models == []
+
+    def test_empty_warmup_models_is_allowed(self, monkeypatch, tmp_path):
+        """An empty warmup_models list is read as no model to pre-warm."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("warmup_models: []\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        assert Settings().warmup_models == []
+
+    def test_null_warmup_models_is_empty(self, monkeypatch, tmp_path):
+        """An explicit null is read as no model to pre-warm."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("warmup_models: null\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        assert Settings().warmup_models == []
+
+    def test_yaml_list_populates_warmup_models(self, monkeypatch, tmp_path):
+        """warmup_models: [a, b] in YAML populates the setting."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("warmup_models: [a, b]\n")
+        monkeypatch.delenv("TTS_WARMUP_MODELS", raising=False)
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        assert Settings().warmup_models == ["a", "b"]
+
+    def test_cli_repeated_flags_populate_warmup_models(self, monkeypatch):
+        """Repeated --warmup_models CLI flags populate the setting as a list."""
+        monkeypatch.setattr(
+            "sys.argv",
+            ["prog", "--warmup_models", "a", "--warmup_models", "b"],
+        )
+
+        assert Settings().warmup_models == ["a", "b"]
+
+    def test_env_json_populates_warmup_models(self, monkeypatch):
+        """TTS_WARMUP_MODELS as a JSON array populates the setting."""
+        monkeypatch.setenv("TTS_WARMUP_MODELS", '["a", "b"]')
+
+        assert Settings().warmup_models == ["a", "b"]
+
+
 class TestBackendType:
     def test_default_is_torch(self):
         """backend_type defaults to BackendType.TORCH."""

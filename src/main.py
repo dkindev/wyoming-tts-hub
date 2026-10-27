@@ -99,7 +99,9 @@ async def main():
 
     normalization_client = create_openai_client(settings.normalization.openai)
     data_storage = YamlDataStorage(
-        config_path_or_model=settings.data_yml_path, active_models=settings.active_models
+        config_path_or_model=settings.data_yml_path,
+        active_models=settings.active_models,
+        warmup_models=settings.warmup_models,
     )
     warn_unreachable_prompts(settings.normalization, data_storage)
     engine_manager = TtsEngineManager(

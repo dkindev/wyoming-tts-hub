@@ -24,6 +24,13 @@ zeroconf: wyoming-tts-hub
 # Env: TTS_ACTIVE_MODELS=["v5_6_ru","v3_en"]
 active_models: [v5_6_ru]
 
+# Model ids to preload at startup, up to max_models. Ids must also be listed in
+# active_models; an inactive id is skipped with a warning, and an undeclared one
+# fails startup.
+# CLI: --warmup_models v5_6_ru --warmup_models v3_en
+# Env: TTS_WARMUP_MODELS=["v5_6_ru"]
+warmup_models: [v5_6_ru]
+
 # Enable audio streaming.
 # CLI: --streaming / --no-streaming
 # Env: TTS_STREAMING

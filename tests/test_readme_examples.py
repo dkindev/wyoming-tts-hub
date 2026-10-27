@@ -265,6 +265,22 @@ class TestShippedQwenExample:
         assert QWEN_CUSTOM_VOICE_MODEL not in served_model_ids
 
 
+class TestShippedWarmup:
+    def test_the_shipped_warmup_models_preserve_startup_behaviour(self):
+        """The model warmed before this moved to config.yml is still the one warmed."""
+        config = yaml.safe_load(CONFIG_YML.read_text())
+
+        storage = YamlDataStorage(
+            config_path_or_model=DATA_YML,
+            active_models=config["active_models"],
+            warmup_models=config["warmup_models"],
+        )
+
+        warmed = [model_info.id for model_info in storage.get_model_infos() if model_info.warmup]
+
+        assert warmed == ["v5_6_ru"]
+
+
 class TestDocumentedTypesExist:
     def test_no_type_is_documented_that_the_code_has_no_such_type_for(self):
         """A normalization type the enum does not have falls back silently to simple."""

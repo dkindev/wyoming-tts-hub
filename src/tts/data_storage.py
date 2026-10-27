@@ -1,5 +1,6 @@
 import os
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -50,15 +51,28 @@ class YamlDataStorage(DataStorage):
         self,
         config_path_or_model: str | Path | PredefinedData,
         active_models: list[str] | None = None,
+        warmup_models: list[str] | None = None,
     ):
-        if isinstance(config_path_or_model, str | Path):
-            config_model = self._load_config_model(config_path_or_model)
-        else:
+        if isinstance(config_path_or_model, PredefinedData):
+            # A supplied PredefinedData is already the configuration: its warmup
+            # values are kept as given, while warmup_models only derives them for
+            # data loaded from a file.
+            loaded_from_file = False
             config_model = config_path_or_model
+        else:
+            loaded_from_file = True
+            config_model = self._load_config_model(config_path_or_model)
 
         self._check_active_models(config_model, active_models)
 
+        if loaded_from_file:
+            self._check_warmup_models(config_model, warmup_models)
+            self._warn_inactive_warmup_ids(config_model, active_models, warmup_models)
+
         config_model = self._filter_served(config_model, active_models)
+
+        if loaded_from_file:
+            config_model = self._derive_warmup(config_model, warmup_models)
 
         self._models: dict[str, ModelInfo] = {
             model_info.id: model_info for model_info in config_model.models
@@ -165,7 +179,6 @@ class YamlDataStorage(DataStorage):
             ssml_supported=model_data.get("ssml_supported", False),
             language_auto_detected=model_data.get("language_auto_detected", False),
             languages=[lang.strip() for lang in languages_raw],
-            warmup=model_data.get("warmup", False),
             hash_prefix=model_data.get("hash_prefix") or None,
             revision=model_data.get("revision") or None,
         )
@@ -320,12 +333,49 @@ class YamlDataStorage(DataStorage):
 
     @staticmethod
     def _check_active_models(config: PredefinedData, active_models: list[str] | None) -> None:
+        YamlDataStorage._check_declared_ids(config, active_models, "active_models")
+
+    @staticmethod
+    def _check_warmup_models(config: PredefinedData, warmup_models: list[str] | None) -> None:
+        YamlDataStorage._check_declared_ids(config, warmup_models, "warmup_models")
+
+    @staticmethod
+    def _check_declared_ids(
+        config: PredefinedData,
+        model_ids: list[str] | None,
+        setting_name: str,
+    ) -> None:
         declared_ids = {model_info.id for model_info in config.models}
-        unknown_ids = sorted(set(active_models or []) - declared_ids)
+        unknown_ids = sorted(set(model_ids or []) - declared_ids)
         if unknown_ids:
             raise ValueError(
-                f"active_models references unknown model id(s): {', '.join(unknown_ids)}"
+                f"{setting_name} references unknown model id(s): {', '.join(unknown_ids)}"
             )
+
+    @staticmethod
+    def _warn_inactive_warmup_ids(
+        config: PredefinedData,
+        active_models: list[str] | None,
+        warmup_models: list[str] | None,
+    ) -> None:
+        inactive_ids = sorted(set(warmup_models or []) - set(active_models or []))
+        if inactive_ids:
+            logger.warning(
+                "warmup_models lists model id(s) that are not in active_models and "
+                "cannot be served or warmed up: {model_ids}. Skipping them.",
+                model_ids=", ".join(inactive_ids),
+            )
+
+    @staticmethod
+    def _derive_warmup(config: PredefinedData, warmup_models: list[str] | None) -> PredefinedData:
+        warmup_ids = set(warmup_models or [])
+        return replace(
+            config,
+            models=[
+                replace(model_info, warmup=model_info.id in warmup_ids)
+                for model_info in config.models
+            ],
+        )
 
     @staticmethod
     def _filter_served(config: PredefinedData, active_models: list[str] | None) -> PredefinedData:

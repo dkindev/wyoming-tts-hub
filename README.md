@@ -111,7 +111,6 @@ models:
     engine_type: silero
     languages: [ru]
     ssml_supported: true
-    warmup: true
     voices:
       - name: aidar
       - name: eugene
@@ -137,7 +136,6 @@ Each key under `models:` (e.g. `v5_6_ru`) is the model's id, and names a **Model
 | `languages` | Yes | — | Non-empty list of language codes it can speak, e.g. `[ru]`. A request carrying any other language is refused |
 | `ssml_supported` | No | `false` | `true` when it accepts SSML. An SSML request against `false` is refused |
 | `language_auto_detected` | No | `false` | `true` when it may be asked to synthesize without a language |
-| `warmup` | No | `false` | `true` to preload at startup, up to `max_models` of them; otherwise loaded on the first request for it |
 | `hash_prefix` | No | — | SHA-256 prefix checked against the downloaded Silero model files |
 | `revision` | No | — | Upstream commit or tag to fetch a Qwen3-TTS checkpoint at. Omit to follow upstream |
 | `voices` | No | none | The voices this model speaks with |
@@ -146,13 +144,18 @@ A model is served only when it is listed in `active_models` in `config.yml`. Tha
 list is the sole switch: a model left out of it is not served, and neither are its
 voices. An absent or empty `active_models` serves nothing.
 
+`warmup_models` in `config.yml` lists the Model Infos to preload at startup, up to
+`max_models`; every other served model loads on the first request for it. An id
+must also be in `active_models` to be warmed: a declared but inactive id is
+skipped with a warning, and an id that names no declared Model Info fails startup.
+
 #### TTS Engine families
 
 `engine_type` names the TTS Engine family that builds the model. `silero` and
 `qwen3` are implemented on the `torch` backend. A model written as `openai` is
 read and served like any other, and then fails when its engine would be built —
-at startup for a model marked `warmup`, otherwise on the first request for it —
-with an error naming the family and the backend.
+at startup for a model listed in `warmup_models`, otherwise on the first request
+for it — with an error naming the family and the backend.
 
 #### Qwen3-TTS
 
@@ -193,7 +196,7 @@ This example declares one model of each family; the same entries ship in
 `data/data.yml`. Replace `data/reference/my_voice.wav` with a clip of the voice
 you want to clone. Neither model is downloaded until its id is added to
 `active_models` in `config.yml` (or `TTS_ACTIVE_MODELS`); it is then fetched on
-first use, or at startup when `warmup: true`.
+first use, or at startup when also listed in `warmup_models`.
 
 ```yaml
 models:
@@ -221,11 +224,14 @@ models:
    non-empty `languages` list.
 2. Add its `voices` under that entry.
 3. Add the model's id to `active_models` in `config.yml`, or it will not be served.
+4. Optionally add its id to `warmup_models` too, to preload it at startup rather
+   than on the first request.
 
 #### Disabling a model
 
 Remove the model's id from `active_models` in `config.yml`. The model and its
-voices are excluded from discovery.
+voices are excluded from discovery. If it is also listed in `warmup_models`,
+remove it there too; an inactive warmup id is skipped with a warning.
 
 ### Voices
 
