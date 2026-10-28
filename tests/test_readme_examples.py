@@ -390,7 +390,7 @@ class TestWarmupVoiceDocumentation:
         """The cache cap is stated with what happens to the evictee and the excess."""
         readme = " ".join(README.read_text().split())
 
-        assert "Maximum number of Voice Prompts to cache in memory" in readme
+        assert "maximum number of Voice Prompts to cache in memory" in readme
         assert "The least recently used Voice Prompt is evicted when limit reached" in readme
         assert "no more `warmup_voices` are warmed than the cache can keep" in readme
 
@@ -407,7 +407,7 @@ class TestWarmupVoiceDocumentation:
 
         shared_phrases = [
             "pre-build Voice Prompts for at startup, up to max_voice_prompts",
-            "Maximum number of Voice Prompts to cache in memory",
+            "Voice Prompts to cache in memory",
             "The least recently used Voice Prompt is evicted when limit reached",
         ]
 

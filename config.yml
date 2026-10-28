@@ -35,8 +35,8 @@ warmup_models: [silero_ru]
 # startup, up to max_voice_prompts, so the first request for a warmed voice skips
 # the prompt build. An unknown id fails startup naming every offender, and an id
 # whose Model Info is not in active_models is skipped with a warning.
-# CLI: --warmup_voices silero_ru-aidar --warmup_voices silero_ru-baya
-# Env: TTS_WARMUP_VOICES=["silero_ru"]
+# CLI: --warmup_voices qwen3_base-bandit
+# Env: TTS_WARMUP_VOICES=["qwen3_base-bandit"]
 warmup_voices: []
 
 # Maximum number of Voice Prompts to cache in memory.
