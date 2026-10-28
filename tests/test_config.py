@@ -240,6 +240,97 @@ class TestWarmupModels:
         assert Settings().warmup_models == ["a", "b"]
 
 
+class TestWarmupVoices:
+    def test_missing_warmup_voices_is_empty(self, monkeypatch, tmp_path):
+        """A config without warmup_voices starts with no voice to pre-warm."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("models_dir: models\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        assert Settings().warmup_voices == []
+
+    def test_empty_warmup_voices_is_allowed(self, monkeypatch, tmp_path):
+        """An empty warmup_voices list is read as no voice to pre-warm."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("warmup_voices: []\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        assert Settings().warmup_voices == []
+
+    def test_null_warmup_voices_is_empty(self, monkeypatch, tmp_path):
+        """An explicit null is read as no voice to pre-warm."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("warmup_voices: null\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        assert Settings().warmup_voices == []
+
+    def test_yaml_list_populates_warmup_voices(self, monkeypatch, tmp_path):
+        """warmup_voices: [a-b, a-c] in YAML populates the setting."""
+        cfg = tmp_path / "config.yml"
+        cfg.write_text("warmup_voices: [silero_ru-aidar, silero_ru-baya]\n")
+        monkeypatch.delenv("TTS_WARMUP_VOICES", raising=False)
+        monkeypatch.setattr("sys.argv", ["prog", "--config", str(cfg)])
+
+        settings = Settings()
+        assert settings.warmup_voices == ["silero_ru-aidar", "silero_ru-baya"]
+
+    def test_cli_repeated_flags_populate_warmup_voices(self, monkeypatch):
+        """Repeated --warmup_voices CLI flags populate the setting as a list."""
+        monkeypatch.setattr(
+            "sys.argv",
+            ["prog", "--warmup_voices", "a-b", "--warmup_voices", "a-c"],
+        )
+
+        settings = Settings()
+        assert settings.warmup_voices == ["a-b", "a-c"]
+
+    def test_env_json_populates_warmup_voices(self, monkeypatch):
+        """TTS_WARMUP_VOICES as a JSON array populates the setting."""
+        monkeypatch.setenv("TTS_WARMUP_VOICES", '["a-b", "a-c"]')
+
+        settings = Settings()
+        assert settings.warmup_voices == ["a-b", "a-c"]
+
+
+class TestMaxVoicePrompts:
+    def test_default_matches_the_hard_coded_prompt_cache_capacity(self):
+        """max_voice_prompts defaults to the capacity the engines hard-code today.
+
+        Asserted as a literal rather than read from an engine, so the default cannot
+        be "fixed" alongside the hard-coded value and left contradicting them both.
+        """
+        settings = Settings()
+        assert settings.max_voice_prompts == 8
+
+    def test_rejects_values_below_one_like_the_model_cache_cap(self, monkeypatch):
+        """A non-positive cap is a validation error, not a silently broken cache."""
+        monkeypatch.setenv("TTS_MAX_VOICE_PROMPTS", "0")
+        with pytest.raises(ValueError, match="greater than or equal to 1"):
+            Settings()
+
+    def test_env_var_populates(self, monkeypatch):
+        """TTS_MAX_VOICE_PROMPTS overrides the prompt-cache cap."""
+        monkeypatch.setenv("TTS_MAX_VOICE_PROMPTS", "12")
+        settings = Settings()
+        assert settings.max_voice_prompts == 12
+
+    def test_yaml_populates(self, monkeypatch, tmp_path):
+        """max_voice_prompts in the config file overrides the Python default."""
+        cfg = write_config(tmp_path, "max_voice_prompts: 3\n")
+        monkeypatch.setattr("sys.argv", ["prog", "--config", cfg])
+
+        settings = Settings()
+        assert settings.max_voice_prompts == 3
+
+    def test_cli_flag_populates(self, monkeypatch):
+        """--max_voice_prompts CLI flag populates the setting."""
+        monkeypatch.setattr("sys.argv", ["prog", "--max_voice_prompts", "10"])
+
+        settings = Settings()
+        assert settings.max_voice_prompts == 10
+
+
 class TestBackendType:
     def test_default_is_torch(self):
         """backend_type defaults to BackendType.TORCH."""
@@ -448,7 +539,11 @@ def test_env_example_carries_no_prompt_keys():
     The two files are both read at runtime and are held to each other by
     `test_env_example.py`; a prompt key added to the template would claim an
     environment variable that nothing reads.
-    """
-    template = (Path(__file__).resolve().parent.parent / ".env.example").read_text()
 
-    assert "PROMPTS" not in template.upper()
+    The spellings are checked directly rather than the word PROMPTS: the
+    Voice Prompt cache cap legitimately spells `MAX_VOICE_PROMPTS`.
+    """
+    template = (Path(__file__).resolve().parent.parent / ".env.example").read_text().upper()
+
+    assert "TTS_NORMALIZATION__TEXT__PROMPTS" not in template
+    assert "TTS_NORMALIZATION__SSML__PROMPTS" not in template

@@ -222,9 +222,20 @@ class Settings(BaseSettings):
     fails startup.
     """
 
-    @field_validator("active_models", "warmup_models", mode="before")
+    warmup_voices: list[str] = Field(
+        default_factory=list,
+        description="Voice ids in '<model id>-<voice name>' form to pre-build Voice Prompts for at startup, up to max_voice_prompts.",
+    )
+    """Voice ids in `<model id>-<voice name>` form to maximally warm at startup, up to
+    `max_voice_prompts`.
+
+    An id must also belong to a served Model Info; one that names no declared Voice
+    fails startup, and one whose Model Info is not active is skipped with a warning.
+    """
+
+    @field_validator("active_models", "warmup_models", "warmup_voices", mode="before")
     @classmethod
-    def coerce_model_lists_none(cls, v: object) -> object:
+    def coerce_id_lists_none(cls, v: object) -> object:
         if v is None:
             return []
         return v
@@ -261,6 +272,16 @@ class Settings(BaseSettings):
         description="Maximum number of models to cache in memory. Model with the lowest RPS rating is evicted when limit reached.",
     )
     """Maximum number of models to cache in memory. Model with the lowest RPS rating is evicted when limit reached."""
+
+    max_voice_prompts: int = Field(
+        default=8,
+        ge=1,
+        description="Maximum number of Voice Prompts to cache in memory. Least recently used is evicted when limit reached.",
+    )
+    """Maximum number of Voice Prompts to cache in memory per engine.
+
+    The least recently used Voice Prompt is evicted when limit reached.
+    """
 
     cache_half_life: int = Field(
         default=60,

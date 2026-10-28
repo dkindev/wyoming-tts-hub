@@ -31,6 +31,19 @@ active_models: [silero_ru]
 # Env: TTS_WARMUP_MODELS=["silero_ru"]
 warmup_models: [silero_ru]
 
+# Voice ids in '<model id>-<voice name>' form to pre-build Voice Prompts for at
+# startup, up to max_voice_prompts, so the first request for a warmed voice skips
+# the prompt build.
+# CLI: --warmup_voices silero_ru-aidar --warmup_voices silero_ru-baya
+# Env: TTS_WARMUP_VOICES=["silero_ru-aidar"]
+warmup_voices: []
+
+# Maximum number of Voice Prompts to cache in memory.
+# The least recently used Voice Prompt is evicted when limit reached.
+# CLI: --max_voice_prompts
+# Env: TTS_MAX_VOICE_PROMPTS
+max_voice_prompts: 8
+
 # Enable audio streaming.
 # CLI: --streaming / --no-streaming
 # Env: TTS_STREAMING
