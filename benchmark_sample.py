@@ -11,7 +11,7 @@ for one Sentence, and a **Frame** is the slice of a Chunk that goes to the clien
 Reporting all three is the point of this benchmark: they are different counts, and
 the gap between them is what tells you where the time went.
 
-    python benchmark_sample.py --voice v5_6_ru-aidar --repeat 3
+    python benchmark_sample.py --voice silero_ru-aidar --repeat 3
 """
 
 import argparse

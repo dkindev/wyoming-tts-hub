@@ -13,8 +13,20 @@ DOCKERFILE = REPO_ROOT / "Dockerfile"
 DATA_YML = REPO_ROOT / "data" / "data.yml"
 CONFIG_YML = REPO_ROOT / "config.yml"
 
-QWEN_BASE_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
-QWEN_CUSTOM_VOICE_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+SILERO_RU_MODEL = "silero_ru"
+SILERO_RU_UPSTREAM = "v5_6_ru"
+SILERO_EN_MODEL = "silero_en"
+SILERO_EN_UPSTREAM = "v3_en"
+
+SILERO_UPSTREAM_IDS = {
+    SILERO_RU_MODEL: SILERO_RU_UPSTREAM,
+    SILERO_EN_MODEL: SILERO_EN_UPSTREAM,
+}
+
+QWEN_BASE_MODEL = "qwen3_base"
+QWEN_BASE_UPSTREAM = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+QWEN_CUSTOM_VOICE_MODEL = "qwen3_custom_voice"
+QWEN_CUSTOM_VOICE_UPSTREAM = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
 
 MODELS_DIR = "models"
 """The directory the server caches models under, as the documentation names it."""
@@ -88,6 +100,22 @@ def load_example(tmp_path: Path, example: str, index: int) -> YamlDataStorage:
     return YamlDataStorage(config_path_or_model=path, active_models=model_ids)
 
 
+def assert_qwen_families(storage: YamlDataStorage) -> None:
+    """Both Qwen3-TTS families load under their local ids with their upstream artifacts."""
+    base = storage.get_model_info(QWEN_BASE_MODEL)
+    assert base is not None and base.engine_type is EngineType.QWEN3
+    assert base.upstream_id == QWEN_BASE_UPSTREAM
+    base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-bandit")
+    assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
+
+    custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)
+    assert custom is not None and custom.engine_type is EngineType.QWEN3
+    assert custom.upstream_id == QWEN_CUSTOM_VOICE_UPSTREAM
+    custom_voice = storage.get_voice(f"{QWEN_CUSTOM_VOICE_MODEL}-ryan")
+    assert custom_voice is not None and custom_voice.speaker == "Ryan"
+    assert custom_voice.instruct
+
+
 def shipped_active_models() -> list[str]:
     """The model ids the shipped config actually activates."""
     return list(yaml.safe_load(CONFIG_YML.read_text())["active_models"])
@@ -143,21 +171,30 @@ class TestWhatTheExamplesDeclare:
         for voice in storage.get_voices():
             assert voice.id == f"{voice.model_id}-{voice.name}"
 
+    def test_the_documented_silero_ids_map_to_their_upstream_artifacts(self, tmp_path):
+        """Each local id is served as itself while its checkpoint keeps its upstream name."""
+        storage = load_example(tmp_path, main_models_example(), 0)
+
+        for model_id, upstream_id in SILERO_UPSTREAM_IDS.items():
+            model_info = storage.get_model_info(model_id)
+            assert model_info is not None, f"{model_id} was not served at all"
+            assert model_info.upstream_id == upstream_id
+
     def test_the_documented_id_form_is_the_one_derived(self):
         """The prose must state the same form the code builds, or the reader is misled."""
         assert f"`{VOICE_ID_FORM}`" in README.read_text()
-        assert "ru_RU-v5_6_ru-aidar" not in README.read_text()
+        assert "ru_RU-silero_ru-aidar" not in README.read_text()
 
     def test_a_voice_normalization_example_is_read_as_written(self, tmp_path):
         """An override is read for the Voice, Language and Text Format it names."""
         example = normalization_example()
-        written = yaml.safe_load(example)["models"]["v5_6_ru"]["voices"][0]["normalization"]
+        written = yaml.safe_load(example)["models"][SILERO_RU_MODEL]["voices"][0]["normalization"]
         storage = load_example(tmp_path, example, 1)
 
         for language, formats in written.items():
             for text_format, declared in formats.items():
                 override = storage.get_voice_normalization(
-                    "v5_6_ru-aidar", TextFormat(text_format), language
+                    f"{SILERO_RU_MODEL}-aidar", TextFormat(text_format), language
                 )
 
                 assert (
@@ -170,7 +207,7 @@ class TestWhatTheExamplesDeclare:
         """A prompt the example references has to be there, or the reference is a lie."""
         example = normalization_example()
         written = yaml.safe_load(example)
-        declared = written["models"]["v5_6_ru"]["voices"][0]["normalization"]
+        declared = written["models"][SILERO_RU_MODEL]["voices"][0]["normalization"]
         prompt_id = declared["ru"]["text"]["prompt_id"]
         storage = load_example(tmp_path, example, 1)
 
@@ -194,18 +231,7 @@ class TestQwenDocumentation:
 
     def test_the_example_declares_a_base_clone_and_a_custom_voice_speaker(self, tmp_path):
         """The families survive loading with the fields each needs from a Voice."""
-        storage = load_example(tmp_path, qwen_models_example(), 0)
-
-        base = storage.get_model_info(QWEN_BASE_MODEL)
-        assert base is not None and base.engine_type is EngineType.QWEN3
-        base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-bandit")
-        assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
-
-        custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)
-        assert custom is not None and custom.engine_type is EngineType.QWEN3
-        custom_voice = storage.get_voice(f"{QWEN_CUSTOM_VOICE_MODEL}-ryan")
-        assert custom_voice is not None and custom_voice.speaker == "Ryan"
-        assert custom_voice.instruct
+        assert_qwen_families(load_example(tmp_path, qwen_models_example(), 0))
 
     def test_the_example_shows_an_optional_revision_pin(self, tmp_path):
         """A declared revision reaches the Model Info, and the field is documented."""
@@ -241,6 +267,17 @@ class TestQwenDocumentation:
         assert "language_auto_detected: true" in readme
 
 
+class TestShippedSileroExample:
+    def test_the_shipped_ids_map_to_their_upstream_artifacts(self):
+        """The data file serves the local ids while fetching their old upstream names."""
+        storage = YamlDataStorage(config_path_or_model=DATA_YML, active_models=declared_model_ids())
+
+        for model_id, upstream_id in SILERO_UPSTREAM_IDS.items():
+            model_info = storage.get_model_info(model_id)
+            assert model_info is not None, f"{model_id} was not served at all"
+            assert model_info.upstream_id == upstream_id
+
+
 class TestSileroDocumentation:
     def test_the_readme_says_how_a_silero_model_info_maps_to_its_registry_entry(self):
         """The operator is told which name the registry lookup and stored file use."""
@@ -269,16 +306,7 @@ class TestShippedQwenExample:
         """The same two families ship in the data file, not only in the README."""
         storage = YamlDataStorage(config_path_or_model=DATA_YML, active_models=declared_model_ids())
 
-        base = storage.get_model_info(QWEN_BASE_MODEL)
-        assert base is not None and base.engine_type is EngineType.QWEN3
-        base_voice = storage.get_voice(f"{QWEN_BASE_MODEL}-bandit")
-        assert base_voice is not None and base_voice.ref_audio and base_voice.ref_text
-
-        custom = storage.get_model_info(QWEN_CUSTOM_VOICE_MODEL)
-        assert custom is not None and custom.engine_type is EngineType.QWEN3
-        custom_voice = storage.get_voice(f"{QWEN_CUSTOM_VOICE_MODEL}-ryan")
-        assert custom_voice is not None and custom_voice.speaker == "Ryan"
-        assert custom_voice.instruct
+        assert_qwen_families(storage)
 
     def test_the_shipped_example_is_declared_but_not_activated(self):
         """Declaring a checkpoint must not download it on a fresh boot.
@@ -310,7 +338,7 @@ class TestShippedWarmup:
 
         warmed = [model_info.id for model_info in storage.get_model_infos() if model_info.warmup]
 
-        assert warmed == ["v5_6_ru"]
+        assert warmed == [SILERO_RU_MODEL]
 
 
 class TestDocumentedTypesExist:

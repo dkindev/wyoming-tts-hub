@@ -75,8 +75,8 @@ uv run --with "wyoming[http]" python -m wyoming.http.tts_server --uri tcp://127.
 
 What a client sees when it connects:
 
-- **Voices** are named `<model id>-<voice name>`, so the Model Info `v5_6_ru`
-  speaking as `aidar` is offered as `v5_6_ru-aidar`.
+- **Voices** are named `<model id>-<voice name>`, so the Model Info `silero_ru`
+  speaking as `aidar` is offered as `silero_ru-aidar`.
 - **Languages** come from the Model Info, not the Voice. Every Voice of a Model
   Info is advertised with that Model Info's declared Languages.
 - **Only Active Model Infos are offered** — a Model Info that is not listed in
@@ -107,20 +107,22 @@ Voice and model mappings are defined in `data/data.yml`. The file has two top-le
 
 ```yaml
 models:
-  v5_6_ru:
+  silero_ru:
     engine_type: silero
     languages: [ru]
     ssml_supported: true
+    upstream_id: v5_6_ru
     voices:
       - name: aidar
       - name: eugene
       - name: baya
       - name: kseniya
       - name: xenia
-  v3_en:
+  silero_en:
     engine_type: silero
     languages: [en]
     ssml_supported: true
+    upstream_id: v3_en
     voices:
       - name: henry
         speaker: en_2
@@ -128,7 +130,7 @@ models:
         speaker: en_3
 ```
 
-Each key under `models:` (e.g. `v5_6_ru`) is the model's id, and names a **Model Info**. Supported fields:
+Each key under `models:` (e.g. `silero_ru`) is the model's id, and names a **Model Info**. Supported fields:
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
@@ -162,8 +164,9 @@ for it — with an error naming the family and the backend.
 
 Silero is enabled with `engine_type: silero` on the `torch` backend. The engine
 looks its model up in the Silero `models.yml` registry and stores the downloaded
-checkpoint as `<models_dir>/silero/<section>/<upstream id>.pt` — for example
-`models/silero/en/v3_en.pt` — reused from there on later boots.
+checkpoint as `<models_dir>/silero/<section>/<upstream id>.pt`. The Model Info
+`silero_en` therefore fetches its upstream artifact `v3_en` and caches it at
+`models/silero/en/v3_en.pt`, reused from there on later boots.
 
 The registry entry and the stored file are named by the Model Info's **Upstream
 Id**: `upstream_id` when it names an artifact, and otherwise the Model Info's
@@ -191,8 +194,9 @@ VoiceDesign checkpoints are not supported: loading one fails with an error namin
 the two supported families, whether at warmup or on the first request.
 
 Checkpoints are fetched from the Model Info's **Upstream Id** into
-`<models_dir>/qwen3/<upstream id>` — for example
-`models/qwen3/Qwen/Qwen3-TTS-12Hz-1.7B-Base` — and reused from there on later
+`<models_dir>/qwen3/<upstream id>`. The Model Info `qwen3_base` therefore fetches
+its upstream artifact `Qwen/Qwen3-TTS-12Hz-1.7B-Base` and caches it at
+`models/qwen3/Qwen/Qwen3-TTS-12Hz-1.7B-Base`, reused from there on later
 boots. The Upstream Id is `upstream_id` when it names an artifact, and otherwise
 falls back to the Model Info's local `id`; an absent, null, empty, or
 whitespace-only `upstream_id` all mean the same fallback. The local `id` remains
@@ -217,18 +221,20 @@ first use, or at startup when also listed in `warmup_models`.
 
 ```yaml
 models:
-  Qwen/Qwen3-TTS-12Hz-1.7B-Base:
+  qwen3_base:
     engine_type: qwen3
     languages: [ru]
+    upstream_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
     # Optional: fetch this exact upstream commit instead of following upstream.
     revision: fd4b254389122332181a7c3db7f27e918eec64e3
     voices:
       - name: bandit
         ref_audio: data/reference/bandit.wav  # replace with your own clip
         ref_text: "Привет! Я твой новый голос. Я буду жить на этой странице донатов."
-  Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice:
+  qwen3_custom_voice:
     engine_type: qwen3
     languages: [en]
+    upstream_id: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
     voices:
       - name: ryan
         speaker: Ryan
@@ -262,7 +268,7 @@ Each voice entry has the following fields:
 | `ref_text` | No | — | The words spoken in the Reference Audio. Without it, cloning uses the speaker embedding alone and quality is reduced |
 | `instruct` | No | — | Instruction for a Qwen3-TTS CustomVoice Voice. Ignored with a warning by the 0.6B CustomVoice checkpoint |
 
-A voice is identified by its computed ID: `<model id>-<voice name>` (e.g. `v5_6_ru-aidar`).
+A voice is identified by its computed ID: `<model id>-<voice name>` (e.g. `silero_ru-aidar`).
 
 #### Adding or renaming voices
 
@@ -276,7 +282,7 @@ reference a custom LLM prompt.
 
 ```yaml
 models:
-  v5_6_ru:
+  silero_ru:
     engine_type: silero
     languages: [ru]
     voices:

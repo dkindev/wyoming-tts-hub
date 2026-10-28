@@ -1,18 +1,20 @@
 models:
-  v5_6_ru:
+  silero_ru:
     engine_type: silero
     languages: [ru]
     ssml_supported: true
+    upstream_id: v5_6_ru
     voices:
       - name: aidar
       - name: eugene
       - name: baya
       - name: kseniya
       - name: xenia
-  v3_en:
+  silero_en:
     engine_type: silero
     languages: [en]
     ssml_supported: true
+    upstream_id: v3_en
     voices:
       - name: henry
         speaker: en_2
@@ -23,18 +25,20 @@ models:
   # active_models, so a fresh boot serves nothing from them and downloads nothing.
   # Add a model id to active_models to activate it; its checkpoint is then fetched
   # into models/qwen3/.
-  Qwen/Qwen3-TTS-12Hz-1.7B-Base:
+  qwen3_base:
     engine_type: qwen3
     languages: [ru]
     revision: fd4b254389122332181a7c3db7f27e918eec64e3
+    upstream_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
     voices:
       - name: bandit
         # Replace with a clip of the voice you want to clone.
         ref_audio: data/reference/bandit.mp3
         ref_text: "Привет! Я твой новый голос. Я буду жить на этой странице донатов."
-  Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice:
+  qwen3_custom_voice:
     engine_type: qwen3
     languages: [en]
+    upstream_id: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
     voices:
       - name: ryan
         speaker: Ryan
