@@ -82,6 +82,30 @@ class TestEngineResolution:
         assert isinstance(engine, Qwen3TtsEngine)
         assert engine.model_info.id == MODEL_ID
 
+    def test_qwen3_engine_bounds_voice_prompts_by_max_voice_prompts(self, tmp_path, monkeypatch):
+        """The max_voice_prompts setting caps the Voice Prompts the engine keeps."""
+        monkeypatch.setenv("TTS_MAX_VOICE_PROMPTS", "3")
+
+        engine = build_engine(
+            tmp_path,
+            monkeypatch,
+            engine_type=EngineType.QWEN3,
+        )
+
+        assert engine._voice_prompt_cache.capacity == 3
+
+    def test_qwen3_engine_defaults_to_eight_voice_prompts_when_unset(self, tmp_path, monkeypatch):
+        """With max_voice_prompts unset, the engine keeps the default eight."""
+        monkeypatch.delenv("TTS_MAX_VOICE_PROMPTS", raising=False)
+
+        engine = build_engine(
+            tmp_path,
+            monkeypatch,
+            engine_type=EngineType.QWEN3,
+        )
+
+        assert engine._voice_prompt_cache.capacity == 8
+
     def test_declared_but_unimplemented_family_is_rejected(self, tmp_path, monkeypatch):
         """A family declared in the domain vocabulary with no engine behind it is rejected by name."""
         settings = make_settings(tmp_path, monkeypatch)

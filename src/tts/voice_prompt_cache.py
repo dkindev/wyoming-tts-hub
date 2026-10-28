@@ -42,6 +42,11 @@ class VoicePromptCache(Generic[_T]):
         with self._lock:
             return len(self._entries)
 
+    @property
+    def capacity(self) -> int:
+        """The most Voice Prompts this cache keeps at once."""
+        return self._capacity
+
     def get_or_create(
         self,
         voice: Voice,

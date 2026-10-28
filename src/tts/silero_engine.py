@@ -67,7 +67,9 @@ class SileroTtsEngine(TorchTtsEngine):
         del self._loaded_model
         super()._release_resources()
 
-    async def _warmup_on_device(self, device: torch.device) -> bool:
+    async def _warmup_on_device(
+        self, device: torch.device, voices: list[Voice] | None = None
+    ) -> bool:
         self._loaded_model = await asyncio.to_thread(
             self._warmup_on_device_sync, self._model_info, device
         )

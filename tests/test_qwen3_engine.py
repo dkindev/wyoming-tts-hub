@@ -8,6 +8,7 @@ import torch
 
 from src.tts.models import EngineType, ModelInfo, TextFormat, Voice
 from src.tts.qwen3_engine import Qwen3TtsEngine
+from src.tts.voice_prompt_cache import VoicePromptCache
 
 MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 VOICE_ID = f"{MODEL_ID}-clone"
@@ -51,6 +52,15 @@ class FakeQwenModel:
         return self.supported_languages
 
 
+class FailingPromptQwenModel(FakeQwenModel):
+    """A loaded Qwen3-TTS model that refuses to build one Voice's Voice Prompt."""
+
+    def create_voice_clone_prompt(self, **kwargs):
+        if kwargs["ref_audio"] == "bad.wav":
+            raise RuntimeError("bad reference audio")
+        return super().create_voice_clone_prompt(**kwargs)
+
+
 def make_engine(tmp_path, *, model_id=MODEL_ID, upstream_id=None, revision=None, device="cpu"):
     model_info = ModelInfo(
         id=model_id,
@@ -80,7 +90,7 @@ def write_checkpoint(model_type="base", model_size=None):
     return download
 
 
-async def warmup(engine, fake_model, model_type="base", model_size=None):
+async def warmup(engine, fake_model, model_type="base", model_size=None, voices=None):
     """Warm `engine` against a fake downloaded checkpoint and loaded model."""
     with (
         unittest.mock.patch(
@@ -92,14 +102,14 @@ async def warmup(engine, fake_model, model_type="base", model_size=None):
             return_value=fake_model,
         ) as from_pretrained,
     ):
-        await engine.warmup()
+        await engine.warmup(voices)
 
     return download, from_pretrained
 
 
-def make_voice(*, ref_audio="reference.wav", ref_text="Reference text"):
+def make_voice(*, voice_id=VOICE_ID, ref_audio="reference.wav", ref_text="Reference text"):
     return Voice(
-        id=VOICE_ID,
+        id=voice_id,
         name="clone",
         speaker="clone",
         model_id=MODEL_ID,
@@ -126,6 +136,68 @@ async def synthesize(engine, voice, *, text="Hello", language="en"):
 
 @pytest.mark.asyncio
 class TestWarmup:
+    async def test_warmup_with_voices_builds_their_voice_prompts(self, tmp_path):
+        """Voices handed to the warm-up call have their Voice Prompts built up front."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel()
+        voice = make_voice()
+
+        await warmup(engine, fake, voices=[voice])
+
+        assert fake.prompt_calls == [
+            {
+                "ref_audio": "reference.wav",
+                "ref_text": "Reference text",
+                "x_vector_only_mode": False,
+            }
+        ]
+
+    async def test_warmup_without_voices_builds_no_voice_prompts(self, tmp_path):
+        """A warm-up call without voices loads the model and builds no Voice Prompt."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel()
+
+        await warmup(engine, fake)
+
+        assert fake.prompt_calls == []
+
+    async def test_the_voice_list_is_bounded_by_the_prompt_cache_capacity(self, tmp_path):
+        """More warm-up voices than the cache keeps are dropped, before any build."""
+        engine = make_engine(tmp_path)
+        fake = FakeQwenModel()
+        voices = [
+            make_voice(ref_audio="first.wav", ref_text="First reference"),
+            make_voice(ref_audio="second.wav", ref_text="Second reference"),
+            make_voice(ref_audio="third.wav", ref_text="Third reference"),
+        ]
+        engine._voice_prompt_cache = VoicePromptCache(capacity=2)
+
+        with unittest.mock.patch("src.tts.qwen3_engine.logger.warning") as warning:
+            await warmup(engine, fake, voices=voices)
+
+        assert [call["ref_audio"] for call in fake.prompt_calls] == ["first.wav", "second.wav"]
+        warning.assert_called_once()
+        assert "capacity" in str(warning.call_args)
+
+    async def test_a_failed_voice_prompt_build_is_warned_and_the_rest_still_warm(self, tmp_path):
+        """A Voice whose build fails is skipped with a warning, but warm-up carries on."""
+        engine = make_engine(tmp_path)
+        fake = FailingPromptQwenModel()
+        voices = [
+            make_voice(voice_id=f"{MODEL_ID}-bad", ref_audio="bad.wav", ref_text="Bad reference"),
+            make_voice(
+                voice_id=f"{MODEL_ID}-good", ref_audio="good.wav", ref_text="Good reference"
+            ),
+        ]
+
+        with unittest.mock.patch("src.tts.qwen3_engine.logger.warning") as warning:
+            await warmup(engine, fake, voices=voices)
+
+        assert [call["ref_audio"] for call in fake.prompt_calls] == ["good.wav"]
+        warnings = " ".join(str(call) for call in warning.call_args_list)
+        assert f"{MODEL_ID}-bad" in warnings
+        assert "bad reference audio" in warnings
+
     async def test_downloads_the_checkpoint_into_the_qwen3_directory(self, tmp_path):
         """The upstream id is fetched into the configured Models directory under qwen3."""
         engine = make_engine(tmp_path)

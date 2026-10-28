@@ -86,6 +86,22 @@ async def synthesize_with(engine, model, text="hello", model_id="v5_6_ru"):
     return [result async for result in engine.synthesize_pcm(text, voice, TextFormat.TEXT)]
 
 
+@pytest.mark.asyncio
+class TestWarmupVoicesIgnored:
+    async def test_warmup_with_voices_loads_the_model_as_usual(self, tmp_path):
+        """Silero has no Reference Audio, so a warm-up carrying Voices ignores them."""
+        engine = make_engine(
+            tmp_path, registry_with_rates([48000]), {"ru": ["v5_6_ru"]}, model_id="v5_6_ru"
+        )
+        voice = make_voice(voice_id="ru_RU-v5_6_ru-aidar", name="aidar", model="v5_6_ru")
+
+        with loaded_silero_model() as model:
+            await engine.warmup([voice])
+
+        assert engine._loaded_model is model
+        assert engine._sample_rate == 48000
+
+
 class TestResolveModelSection:
     def test_single_language_model_info_resolves_from_declared_section(self, tmp_path):
         """A single-language Model Info whose id sits in its declared section resolves to it."""

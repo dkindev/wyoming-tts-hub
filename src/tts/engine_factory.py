@@ -23,6 +23,7 @@ class TtsEngineFactory:
                 model_info=model_info,
                 device=settings.torch.device,
                 models_dir=settings.models_dir,
+                voice_prompt_capacity=settings.max_voice_prompts,
             ),
         }
 

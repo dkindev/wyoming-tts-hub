@@ -181,8 +181,8 @@ class CountingTtsEngine(TtsEngine):
         """The device the wrapped engine synthesized on, when it declares one."""
         return getattr(self._engine, "device", None)
 
-    async def _warmup(self) -> bool:
-        await self._engine.warmup()
+    async def _warmup(self, voices: list[Voice] | None = None) -> bool:
+        await self._engine.warmup(voices)
 
         return True
 

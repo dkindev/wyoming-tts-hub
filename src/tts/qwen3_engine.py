@@ -2,7 +2,7 @@ import asyncio
 import functools
 import json
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any, cast
 
 import numpy as np
@@ -79,7 +79,9 @@ class Qwen3TtsEngine(TorchTtsEngine):
             capacity=voice_prompt_capacity
         )
 
-    async def _warmup_on_device(self, device: torch.device) -> bool:
+    async def _warmup_on_device(
+        self, device: torch.device, voices: list[Voice] | None = None
+    ) -> bool:
         loaded_model, checkpoint_family, checkpoint_size = await asyncio.to_thread(
             self._load_model_sync, self._model_info, device
         )
@@ -87,7 +89,43 @@ class Qwen3TtsEngine(TorchTtsEngine):
         self._loaded_model = loaded_model
         self._checkpoint_family = checkpoint_family
         self._checkpoint_size = checkpoint_size
+
+        if voices:
+            await self._prebuild_voice_prompts(loaded_model, voices)
+
         return True
+
+    async def _prebuild_voice_prompts(self, loaded_model: Any, voices: list[Voice]) -> None:
+        capacity = self._voice_prompt_cache.capacity
+        bounded = voices[:capacity]
+
+        if len(bounded) < len(voices):
+            logger.warning(
+                "Skipping {skipped} warm-up voice(s) for model '{model_id}': the prompt "
+                "cache keeps at most {capacity} Voice Prompt(s)",
+                skipped=len(voices) - len(bounded),
+                model_id=self._model_info.id,
+                capacity=capacity,
+            )
+
+        for voice in bounded:
+            try:
+                await asyncio.to_thread(self._prebuild_voice_prompt, loaded_model, voice)
+            except Exception as e:
+                logger.warning(
+                    "Failed to build the Voice Prompt for warm-up voice '{voice_id}' on "
+                    "model '{model_id}': {error}. Skipping it.",
+                    voice_id=voice.id,
+                    model_id=self._model_info.id,
+                    error=e,
+                )
+
+    def _prebuild_voice_prompt(self, loaded_model: Any, voice: Voice) -> None:
+        self._voice_prompt_cache.get_or_create(voice, self._voice_prompt_builder(loaded_model))
+
+    @classmethod
+    def _voice_prompt_builder(cls, loaded_model: Any) -> Callable[..., Any]:
+        return functools.partial(cls._build_voice_prompt, loaded_model)
 
     def _load_model_sync(
         self, model_info: ModelInfo, device: torch.device
@@ -238,7 +276,7 @@ class Qwen3TtsEngine(TorchTtsEngine):
         loaded_model = self._loaded_model
         assert loaded_model is not None
 
-        build_voice_prompt = functools.partial(self._build_voice_prompt, loaded_model)
+        build_voice_prompt = self._voice_prompt_builder(loaded_model)
         voice_prompt = self._voice_prompt_cache.get_or_create(voice, build_voice_prompt)
 
         return cast(

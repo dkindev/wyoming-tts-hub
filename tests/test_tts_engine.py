@@ -18,6 +18,29 @@ async def synthesize(engine, voice):
     return [chunk async for chunk in engine.synthesize_pcm("Привет", voice, TextFormat.TEXT)]
 
 
+class TestWarmupProtocol:
+    """The warm-up protocol carries the Voices a caller wants pre-built."""
+
+    async def test_synthesizing_a_cold_engine_warms_it_with_the_requested_voice(self):
+        """The first synthesis of a cold TTS Engine warms it for that Voice's Prompt."""
+        engine, voice = make_engine()
+
+        await synthesize(engine, voice)
+
+        assert engine.warmup_count == 1
+        assert engine.warmup_voices == [[voice]]
+
+    async def test_a_second_warmup_with_voices_does_not_load_the_model_again(self):
+        """Warm-up stays idempotent: a loaded TTS Engine is not loaded twice."""
+        engine, voice = make_engine()
+
+        await engine.warmup()
+        await engine.warmup([voice])
+
+        assert engine.warmup_count == 2
+        assert engine.load_count == 1
+
+
 class TestContiguousAudio:
     """Audio a TTS Engine yields is addressable as raw bytes, whatever layout it synthesized."""
 

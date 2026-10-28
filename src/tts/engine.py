@@ -38,12 +38,12 @@ class TtsEngine(ABC):
             raise ValueError(f"Unsupported voice: {voice.id}")
 
         if not self._loaded:
-            await self._warmup()
+            await self.warmup(voices=[voice])
 
         async for item in self._synthesize_pcm(text, voice, text_format, language):
             yield item
 
-    async def warmup(self) -> None:
+    async def warmup(self, voices: list[Voice] | None = None) -> None:
         if self._loaded:
             return
 
@@ -57,7 +57,7 @@ class TtsEngine(ABC):
             )
 
             try:
-                self._loaded = await self._warmup()
+                self._loaded = await self._warmup(voices)
                 logger.debug("Model '{model}' has been warmed up.", model=self._model_info.id)
             except Exception as e:
                 raise RuntimeError(f"Failed to warm up the model '{self._model_info.id}'") from e
@@ -70,7 +70,7 @@ class TtsEngine(ABC):
         return
 
     @abstractmethod
-    async def _warmup(self) -> bool:
+    async def _warmup(self, voices: list[Voice] | None = None) -> bool:
         ...
 
     @abstractmethod
@@ -95,7 +95,7 @@ class TorchTtsEngine(TtsEngine):
         self._target_device = device
         self._device: torch.device | None = None
 
-    async def _warmup(self) -> bool:
+    async def _warmup(self, voices: list[Voice] | None = None) -> bool:
         device = self._resolve_device()
 
         logger.debug(
@@ -104,7 +104,7 @@ class TorchTtsEngine(TtsEngine):
             device=device.type,
         )
 
-        result = await self._warmup_on_device(device)
+        result = await self._warmup_on_device(device, voices)
 
         if result:
             self._device = device
@@ -135,5 +135,7 @@ class TorchTtsEngine(TtsEngine):
         return device
 
     @abstractmethod
-    async def _warmup_on_device(self, device: torch.device) -> bool:
+    async def _warmup_on_device(
+        self, device: torch.device, voices: list[Voice] | None = None
+    ) -> bool:
         ...

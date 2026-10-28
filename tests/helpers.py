@@ -202,6 +202,8 @@ class FakeTtsEngine(TtsEngine):
         self.samples_per_sentence = samples_per_sentence
         self.warmup_error = warmup_error
         self.warmup_count = 0
+        self.warmup_voices: list[list[Voice]] = []
+        self.load_count = 0
         self.close_count = 0
         self.requests: list[tuple[str, Voice, TextFormat, str | None]] = []
         self.emitted_audio: list[np.ndarray] = []
@@ -253,17 +255,19 @@ class FakeTtsEngine(TtsEngine):
 
         return gapped[::2]
 
-    async def warmup(self) -> None:
+    async def warmup(self, voices: list[Voice] | None = None) -> None:
         self.warmup_count += 1
+        self.warmup_voices.append(list(voices or []))
         if self.warmup_error is not None:
             raise self.warmup_error
-        await super().warmup()
+        await super().warmup(voices)
 
     async def close(self) -> None:
         self.close_count += 1
         await super().close()
 
-    async def _warmup(self) -> bool:
+    async def _warmup(self, voices: list[Voice] | None = None) -> bool:
+        self.load_count += 1
         return True
 
     async def _synthesize_pcm(

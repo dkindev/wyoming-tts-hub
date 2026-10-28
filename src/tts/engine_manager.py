@@ -97,7 +97,7 @@ class ImmutableSharedTtsEngine(TtsEngine):
         self._inference_timeout = inference_timeout
         self._engine = engine
 
-    async def warmup(self) -> None:
+    async def warmup(self, voices: list[Voice] | None = None) -> None:
         raise RuntimeError("Manual warmup is forbidden.")
 
     async def close(self) -> None:
@@ -126,7 +126,7 @@ class ImmutableSharedTtsEngine(TtsEngine):
                     )
                     raise
 
-    async def _warmup(self) -> bool:
+    async def _warmup(self, voices: list[Voice] | None = None) -> bool:
         raise NotImplementedError()
 
     def _synthesize_pcm(
