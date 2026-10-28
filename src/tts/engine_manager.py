@@ -149,12 +149,14 @@ class TtsEngineManager:
         max_concurrent_sentences_per_model: int,
         engine_factory: TtsEngineFactory,
         data_storage: DataStorage,
+        max_voice_prompts: int = 8,
     ):
         self._closed = False
         self._backendType = backendType
         self._cache_capacity = cache_capacity
         self._inference_timeout = inference_timeout
         self._max_concurrent_sentences_per_model = max_concurrent_sentences_per_model
+        self._max_voice_prompts = max_voice_prompts
         self._engine_factory = engine_factory
         self._data_storage = data_storage
         self._global_lock = asyncio.Lock()
@@ -188,9 +190,11 @@ class TtsEngineManager:
 
             logger.debug("Models to warm up: {count}", count=len(to_warm))
 
+            warmup_voices = [voice for voice in self._data_storage.get_voices() if voice.warmup]
+
             for model_info in to_warm:
                 try:
-                    cached_engine = await self._warmup_engine(model_info)
+                    cached_engine = await self._warmup_engine(model_info, warmup_voices)
                 except Exception:
                     logger.exception(
                         "Failed to warm up model '{model_id}'. Skipping.", model_id=model_info.id
@@ -256,9 +260,16 @@ class TtsEngineManager:
                 if model_id in self._model_locks and not model_lock.locked():
                     del self._model_locks[model_id]
 
-    async def _warmup_engine(self, model_info: ModelInfo) -> CachedTtsEngine:
+    async def _warmup_engine(
+        self, model_info: ModelInfo, warmup_voices: list[Voice] | None = None
+    ) -> CachedTtsEngine:
         engine = self._engine_factory.create(model_info, self._backendType)
-        await engine.warmup()
+        # Prompt-cache capacity caps each model's Voices: a model's own flagged voices
+        # must not be displaced by another model's filling the slice.
+        model_voices = [voice for voice in warmup_voices or [] if voice.model_id == model_info.id][
+            : self._max_voice_prompts
+        ]
+        await engine.warmup(voices=model_voices)
 
         return CachedTtsEngine(
             engine=engine,

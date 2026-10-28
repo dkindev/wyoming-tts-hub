@@ -113,6 +113,7 @@ async def main():
         max_concurrent_sentences_per_model=settings.max_concurrent_sentences_per_model,
         engine_factory=TtsEngineFactory(settings=settings),
         data_storage=data_storage,
+        max_voice_prompts=settings.max_voice_prompts,
     )
 
     middlewares = [

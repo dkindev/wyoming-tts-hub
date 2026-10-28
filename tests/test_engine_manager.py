@@ -40,16 +40,18 @@ async def wait_for_cleaner_cycle():
 def make_manager(
     *,
     models=(),
+    voices=(),
     engines=None,
     cache_capacity=2,
     max_concurrent_sentences_per_model=1,
+    max_voice_prompts=8,
     half_life_seconds=600.0,
     inference_timeout=5.0,
 ):
     """Return a manager wired to fakes, plus the factory and storage behind it."""
     models = list(models) or [make_model_info(id=MODEL_ID, warmup=False)]
     factory = FakeEngineFactory(engines=engines)
-    storage = FakeDataStorage(models=models)
+    storage = FakeDataStorage(models=models, voices=list(voices))
 
     manager = TtsEngineManager(
         backendType=BackendType.TORCH,
@@ -57,6 +59,7 @@ def make_manager(
         cache_capacity=cache_capacity,
         inference_timeout=inference_timeout,
         max_concurrent_sentences_per_model=max_concurrent_sentences_per_model,
+        max_voice_prompts=max_voice_prompts,
         engine_factory=factory,
         data_storage=storage,
     )
@@ -108,6 +111,115 @@ class TestWarmup:
                 "broken": make_engine("broken", warmup_error=RuntimeError("no such model")),
                 "healthy": healthy_engine,
             },
+        )
+
+        await manager.warmup()
+        await manager.close()
+
+        assert healthy_engine.warmup_count == 1
+
+    async def test_warmup_passes_flagged_voices_of_their_own_model_to_engine_warmup(self):
+        """Each warmed engine receives its own warm-up-flagged Voices, and only those."""
+        eager = make_model_info(id="eager", warmup=True)
+        other = make_model_info(id="other", warmup=True)
+        eager_engine = make_engine("eager")
+        other_engine = make_engine("other")
+        voices = [
+            make_voice(voice_id="eager-anna", name="anna", model="eager", warmup=True),
+            make_voice(voice_id="eager-not-flagged", name="not_flagged", model="eager"),
+            make_voice(voice_id="other-boris", name="boris", model="other", warmup=True),
+        ]
+        manager, _, _ = make_manager(
+            models=[eager, other],
+            engines={"eager": eager_engine, "other": other_engine},
+            voices=voices,
+        )
+
+        await manager.warmup()
+        await manager.close()
+
+        assert [voice.id for voice in eager_engine.warmup_voices[0]] == ["eager-anna"]
+        assert [voice.id for voice in other_engine.warmup_voices[0]] == ["other-boris"]
+
+    async def test_warmup_slices_voices_to_prompt_cache_capacity(self):
+        """No more than `max_voice_prompts` Voices are passed for a model."""
+        engine = make_engine()
+        voices = [
+            make_voice(voice_id=f"eager-voice-{i}", name=f"voice_{i}", model="eager", warmup=True)
+            for i in range(3)
+        ]
+        manager, _, _ = make_manager(
+            models=[make_model_info(id="eager", warmup=True)],
+            engines={"eager": engine},
+            voices=voices,
+            max_voice_prompts=2,
+        )
+
+        await manager.warmup()
+        await manager.close()
+
+        assert [voice.id for voice in engine.warmup_voices[0]] == [
+            "eager-voice-0",
+            "eager-voice-1",
+        ]
+
+    async def test_warmup_slices_voices_per_model_to_prompt_cache_capacity(self):
+        """The prompt-cache capacity limits each model's Voices, not all models' pooled."""
+        # "second" comes before "first" in the warm-up order, so a pooled slice
+        # would hand "second" nothing and starve its engine.
+        second = make_model_info(id="second", warmup=True)
+        first = make_model_info(id="first", warmup=True)
+        second_engine = make_engine("second")
+        first_engine = make_engine("first")
+        voices = [
+            make_voice(voice_id=f"second-voice-{i}", name=f"s_{i}", model="second", warmup=True)
+            for i in range(2)
+        ] + [
+            make_voice(voice_id=f"first-voice-{i}", name=f"f_{i}", model="first", warmup=True)
+            for i in range(2)
+        ]
+        manager, _, _ = make_manager(
+            models=[second, first],
+            engines={"second": second_engine, "first": first_engine},
+            voices=voices,
+            max_voice_prompts=1,
+        )
+
+        await manager.warmup()
+        await manager.close()
+
+        assert [voice.id for voice in second_engine.warmup_voices[0]] == ["second-voice-0"]
+        assert [voice.id for voice in first_engine.warmup_voices[0]] == ["first-voice-0"]
+
+    async def test_warmup_sends_no_voices_when_none_are_flagged(self):
+        """A warmed engine with no warm-up-flagged Voices gets none."""
+        engine = make_engine()
+        manager, _, _ = make_manager(
+            models=[make_model_info(id=MODEL_ID, warmup=True)],
+            engines={MODEL_ID: engine},
+            voices=[make_voice_for(MODEL_ID)],
+        )
+
+        await manager.warmup()
+        await manager.close()
+
+        assert engine.warmup_voices == [[]]
+
+    async def test_warmup_engine_raising_on_voices_is_skipped_and_others_still_load(self):
+        """A warmed engine whose Voice Prompt builds fail does not stop the rest."""
+        broken = make_model_info(id="broken", warmup=True)
+        healthy = make_model_info(id="healthy", warmup=True)
+        healthy_engine = make_engine("healthy")
+        voices = [
+            make_voice(voice_id="broken-anna", name="anna", model="broken", warmup=True),
+        ]
+        manager, _, _ = make_manager(
+            models=[broken, healthy],
+            engines={
+                "broken": make_engine("broken", warmup_error=RuntimeError("bad voice")),
+                "healthy": healthy_engine,
+            },
+            voices=voices,
         )
 
         await manager.warmup()
