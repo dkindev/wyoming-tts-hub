@@ -66,6 +66,14 @@ stands in for that **Voice** during cloning synthesis. It is not an LLM **Prompt
 and carries no instruction text.
 _Avoid_: Prompt, clone prompt, voice embedding
 
+**Voice Prompt warm-up**:
+The pre-building of a **Voice**'s **Voice Prompt** at engine warm-up, before any
+request needs it, selected by naming the **Voice**'s id in `warmup_voices`. Only
+a **Voice** with **Reference Audio** has a **Voice Prompt** to warm, the warmed
+set is capped by `max_voice_prompts`, and a prompt build that fails is skipped
+without stopping warm-up.
+_Avoid_: voice preloading, prompt warmup
+
 **VoiceNormalization**:
 A per-**Voice**, per-**Text Format**, per-**Language** override of normalization
 settings, linking a **Voice** to a normalization type and optionally to a reusable
@@ -130,6 +138,9 @@ _Avoid_: Packet, block, window
   the **Model Info**
 - A cloning **TTS Engine** builds a **Voice Prompt** from a **Voice**'s
   **Reference Audio**
+- A **Voice** selected for **Voice Prompt warm-up** — by naming its id in
+  `warmup_voices` — has its **Voice Prompt** built when its engine warms; a
+  **Voice** without **Reference Audio** has no Voice Prompt to warm
 - A **Voice** has zero or more **VoiceNormalizations**; a **Prompt** is referenced
   by zero or more **VoiceNormalizations**
 - A **Model Info**'s declared **Languages** are the source of truth advertised

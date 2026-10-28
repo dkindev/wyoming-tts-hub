@@ -152,6 +152,23 @@ voices. An absent or empty `active_models` serves nothing.
 must also be in `active_models` to be warmed: a declared but inactive id is
 skipped with a warning, and an id that names no declared Model Info fails startup.
 
+`warmup_voices` in `config.yml` lists Voice ids in `<model id>-<voice name>` form
+to pre-build Voice Prompts for at startup, up to max_voice_prompts, so the first
+request for a warmed voice skips the prompt build. An id must name a declared
+Voice of a served model: an unknown id fails startup naming every offender, and
+an id whose Model Info is not in `active_models` is skipped with a warning. Only
+a Voice with Reference Audio — a Qwen3-TTS Base voice — has a Voice Prompt to
+build: engines that build none, such as Silero, ignore warm-up voices, and a
+warm-up id on a Voice without Reference Audio is skipped with a warning.
+For example, once `qwen3_base` is active, its documented clone voice is warmed
+with `warmup_voices: [qwen3_base-bandit]`. `warmup_voices` is empty by default.
+
+`max_voice_prompts` (default 8) is the Maximum number of Voice Prompts to cache
+in memory. The least recently used Voice Prompt is evicted when limit reached,
+and the same cap bounds warm-up: no more `warmup_voices` are warmed than the
+cache can keep, the excess are skipped with a warning, and a prompt build that
+fails is skipped with a warning without stopping startup.
+
 #### TTS Engine families
 
 `engine_type` names the TTS Engine family that builds the model. `silero` and

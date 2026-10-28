@@ -12,6 +12,7 @@ README = REPO_ROOT / "README.md"
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 DATA_YML = REPO_ROOT / "data" / "data.yml"
 CONFIG_YML = REPO_ROOT / "config.yml"
+GLOSSARY = REPO_ROOT / "GLOSSARY.md"
 
 SILERO_RU_MODEL = "silero_ru"
 SILERO_RU_UPSTREAM = "v5_6_ru"
@@ -339,6 +340,90 @@ class TestShippedWarmup:
         warmed = [model_info.id for model_info in storage.get_model_infos() if model_info.warmup]
 
         assert warmed == [SILERO_RU_MODEL]
+
+
+def warmup_voices_paragraph() -> str:
+    """The paragraph introducing `warmup_voices`, the one place prose explains it."""
+    paragraphs = README.read_text().split("\n\n")
+    return next(p for p in paragraphs if "`warmup_voices`" in p)
+
+
+def flattened(text: str) -> str:
+    """A document as one line, so a sample taken across wrapped lines is found."""
+    return " ".join(re.sub("#", " ", text).split())
+
+
+class TestWarmupVoiceDocumentation:
+    """The README and config.yml the operator is told the true warmup_voices story."""
+
+    def test_the_readme_documents_both_voice_warmup_settings(self):
+        """A setting with no effect the docs never mention is one an operator misses."""
+        readme = " ".join(README.read_text().split())
+
+        assert "`warmup_voices`" in readme
+        assert "`max_voice_prompts`" in readme
+
+    def test_the_readme_states_the_defaults(self):
+        """The defaults a reader is told are the defaults the server ships."""
+        from src.config import Settings
+
+        readme = " ".join(README.read_text().split())
+
+        assert "`warmup_voices` is empty by default" in readme
+        default_max_voice_prompts = Settings.model_fields["max_voice_prompts"].default
+        assert f"`max_voice_prompts` (default {default_max_voice_prompts})" in readme
+
+    def test_the_readme_states_the_warmup_voice_id_form(self):
+        """The id the warm-up list is keyed on is the one the code derives."""
+        paragraph = " ".join(warmup_voices_paragraph().split())
+
+        assert VOICE_ID_FORM in paragraph
+
+    def test_the_readme_documents_the_validation_story(self):
+        """The consequences of a warmup id are stated, not left to trial and error."""
+        paragraph = " ".join(warmup_voices_paragraph().split())
+
+        assert "fails startup" in paragraph
+        assert "skipped with a warning" in paragraph
+
+    def test_the_readme_documents_the_cap_behaviour(self):
+        """The cache cap is stated with what happens to the evictee and the excess."""
+        readme = " ".join(README.read_text().split())
+
+        assert "Maximum number of Voice Prompts to cache in memory" in readme
+        assert "The least recently used Voice Prompt is evicted when limit reached" in readme
+        assert "no more `warmup_voices` are warmed than the cache can keep" in readme
+
+    def test_the_readme_shows_a_working_example(self):
+        """An example the reader can copy names a Voice the docs declare."""
+        paragraph = " ".join(warmup_voices_paragraph().split())
+
+        assert "warmup_voices: [qwen3_base-bandit]" in paragraph
+
+    def test_the_config_yml_comments_match_the_readme_language(self):
+        """A phrase the config.yml comments make must say what the README says."""
+        readme = flattened(README.read_text())
+        config = flattened(CONFIG_YML.read_text())
+
+        shared_phrases = [
+            "pre-build Voice Prompts for at startup, up to max_voice_prompts",
+            "Maximum number of Voice Prompts to cache in memory",
+            "The least recently used Voice Prompt is evicted when limit reached",
+        ]
+
+        for phrase in shared_phrases:
+            assert phrase in readme
+            assert phrase in config
+
+    def test_the_glossary_records_the_voice_prompt_warmup_term(self):
+        """The settled term is there for future sessions, with what it avoids."""
+        glossary = GLOSSARY.read_text()
+
+        entry = glossary.split("**Voice Prompt warm-up**", 1)[1].split("\n**", 1)[0]
+
+        assert "_Avoid_:" in entry
+        assert "Reference Audio" in entry
+        assert "max_voice_prompts" in entry
 
 
 class TestDocumentedTypesExist:
