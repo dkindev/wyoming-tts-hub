@@ -17,6 +17,7 @@ touches no network: every download is blocked for the duration of the synthesis.
 
 import asyncio
 import contextlib
+import os
 import unittest.mock
 import urllib.request
 from dataclasses import dataclass
@@ -60,7 +61,8 @@ DATA_YML_PATH = REPO_ROOT / "data" / "data.yml"
 MODELS_DIR = REPO_ROOT / "models"
 REGISTRY_PATH = MODELS_DIR / "silero" / "models.yml"
 
-MODEL_ID = "v5_6_ru"
+MODEL_ID = "silero_ru"
+MODEL_UPSTREAM_ID = "v5_6_ru"
 LANGUAGE = "ru"
 VOICE_ID = f"{MODEL_ID}-aidar"
 TEXT = "Это проверка потоковой передачи аудио."
@@ -127,6 +129,7 @@ class StreamedRequest:
 
     synthesized: list[TtsResult]
     events: list
+    model_info: ModelInfo
 
     @property
     def synthesized_samples(self) -> int:
@@ -155,13 +158,18 @@ def published_sample_rates() -> list[int]:
         return []
 
     registry = yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
-    model = registry.get("tts_models", {}).get(LANGUAGE, {}).get(MODEL_ID, {})
+    model = registry.get("tts_models", {}).get(LANGUAGE, {}).get(MODEL_UPSTREAM_ID, {})
     return model.get("latest", {}).get("sample_rate", [])
+
+
+def expected_model_path() -> Path:
+    """Where the Model this check synthesizes with lives once cached."""
+    return MODELS_DIR / "silero" / LANGUAGE / f"{MODEL_UPSTREAM_ID}.pt"
 
 
 def cached_model_path() -> Path | None:
     """The cached Silero package for the Model this check synthesizes with, if there is one."""
-    path = MODELS_DIR / "silero" / LANGUAGE / f"{MODEL_ID}.pt"
+    path = expected_model_path()
     return path if path.is_file() else None
 
 
@@ -193,16 +201,28 @@ def blocking_downloads():
         yield {"urlretrieve": urlretrieve, "download_url_to_file": download_url_to_file}
 
 
-def make_settings() -> Settings:
-    """Settings for the check, pointing at the repository's cached Models."""
-    return Settings(
-        active_models=[MODEL_ID],
-        data_yml_path=str(DATA_YML_PATH),
-        models_dir=str(MODELS_DIR),
-        frame_duration=50,
-        inference_timeout=60,
-        silero=SileroSettings(sample_rate=CONFIGURED_SAMPLE_RATE),
-    )
+def make_settings(absent_config_path: Path) -> Settings:
+    """Settings for the check, pinned to the Model the check selects.
+
+    Every source Settings reads is pinned here — the environment, the dotenv file
+    and the config file — so a developer's checkout cannot decide which Model the
+    check serves.
+    """
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        for name in list(os.environ):
+            if name.startswith("TTS_"):
+                monkeypatch.delenv(name)
+        monkeypatch.setenv("TTS_CONFIG_PATH", str(absent_config_path))
+
+        return Settings(
+            active_models=[MODEL_ID],
+            _env_file=None,
+            data_yml_path=str(DATA_YML_PATH),
+            models_dir=str(MODELS_DIR),
+            frame_duration=50,
+            inference_timeout=60,
+            silero=SileroSettings(sample_rate=CONFIGURED_SAMPLE_RATE),
+        )
 
 
 async def synthesize_and_read(settings: Settings) -> StreamedRequest:
@@ -261,20 +281,27 @@ async def synthesize_and_read(settings: Settings) -> StreamedRequest:
         events += await client.send(handler, SynthesizeChunk(text=TEXT).event())
         events += await client.send(handler, SynthesizeStop().event())
 
+        assert factory.recordings, "expected the Model to be loaded for synthesis"
+        loaded_engine = factory.recordings[0]
         synthesized = [chunk for engine in factory.recordings for chunk in engine.synthesized]
-        return StreamedRequest(synthesized=synthesized, events=events)
+        return StreamedRequest(
+            synthesized=synthesized,
+            events=events,
+            model_info=loaded_engine.model_info,
+        )
     finally:
         await engine_manager.close()
 
 
 @pytest.fixture(scope="module")
-def streamed() -> StreamedRequest:
+def streamed(tmp_path_factory) -> StreamedRequest:
     """One real synthesis, captured once for every assertion in this module."""
     if cached_model_path() is None or not published_sample_rates():
-        pytest.skip(f"no cached Model at {MODELS_DIR / 'silero' / LANGUAGE / f'{MODEL_ID}.pt'}")
+        pytest.skip(f"no cached Model at {expected_model_path()}")
 
+    absent_config = tmp_path_factory.mktemp("settings") / "absent-config.yml"
     with blocking_downloads() as downloads:
-        result = asyncio.run(synthesize_and_read(make_settings()))
+        result = asyncio.run(synthesize_and_read(make_settings(absent_config)))
 
     reached_out = [name for name, patch in downloads.items() if patch.called]
     if reached_out:
@@ -285,6 +312,17 @@ def streamed() -> StreamedRequest:
 
 class TestRealModelStream:
     """A real Model's audio reaches a client unchanged."""
+
+    def test_the_check_activates_only_the_local_model_id(self, tmp_path):
+        """The local id is selected here, not inherited from a .env or config file."""
+        settings = make_settings(tmp_path / "absent-config.yml")
+
+        assert settings.active_models == [MODEL_ID]
+
+    def test_the_loaded_model_info_keeps_its_local_and_upstream_ids(self, streamed):
+        """The local id selects the Model Info; the upstream id still names its artifact."""
+        assert streamed.model_info.id == MODEL_ID
+        assert streamed.model_info.upstream_id == MODEL_UPSTREAM_ID
 
     def test_client_receives_the_audio_the_model_synthesized(self, streamed):
         """The bytes on the wire are the audio the Model produced, byte for byte."""
