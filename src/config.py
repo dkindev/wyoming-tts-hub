@@ -13,7 +13,7 @@ from pydantic_settings import (
 )
 
 from src import __metadata__
-from src.tts.models import NormalizationType
+from src.tts.models import BackendType, NormalizationType
 
 
 class TorchSettings(BaseModel):
@@ -55,51 +55,23 @@ class NormalizationPrompt(BaseModel):
     """System LLM model name for normalization."""
 
 
-class BaseNormalizationSettings(BaseModel):
-    type: NormalizationType = Field(
-        default=NormalizationType.SIMPLE, description="Normalizer type (simple, llm)."
-    )
-    """Normalizer type (simple, llm)."""
-
-    prompts: dict[str, NormalizationPrompt] | None = Field(
-        default_factory=dict, description="A dictionary of prompts indexed by locale."
-    )
-    """A dictionary of prompts indexed by locale."""
-
-
-class TextNormalizationSettings(BaseNormalizationSettings):
-    enabled: bool = Field(
-        default=True,
-        description="Enable plain text normalization.",
-    )
-    """Enable plain text normalization."""
-
-
-class SsmlNormalizationSettings(BaseNormalizationSettings):
+class TextFormatNormalizationSettings(BaseModel):
     enabled: bool = Field(
         default=False,
-        description="Enable SSML markup normalization.",
+        description="Enable normalization.",
     )
-    """Enable SSML markup normalization."""
+    """Enable normalization."""
 
-
-class NormalizationSettings(BaseModel):
-    timeout: float = Field(
-        default=5,
-        ge=1,
-        description="Timeout for input text normalization in seconds.",
+    type: NormalizationType = Field(
+        default=NormalizationType.SIMPLE, description="Normalizer type (simple, openai)."
     )
-    """Timeout for input text normalization in seconds."""
+    """Normalizer type (simple, openai)."""
 
-    max_concurrent_sentences_per_request: int = Field(
-        default=2,
-        ge=1,
-        description="Maximum concurrent sentences per request for normalization.",
+    prompts: dict[str, NormalizationPrompt] | None = Field(
+        default_factory=dict,
+        description="A dictionary of prompts indexed by the Language a Model Info declares.",
     )
-    """Maximum concurrent sentences per request for normalization."""
-
-    text: TextNormalizationSettings = Field(default_factory=TextNormalizationSettings)
-    ssml: SsmlNormalizationSettings = Field(default_factory=SsmlNormalizationSettings)
+    """A dictionary of prompts indexed by the Language a Model Info declares."""
 
 
 class OpenAiSettings(BaseModel):
@@ -132,7 +104,74 @@ class OpenAiSettings(BaseModel):
         return self
 
 
+class NormalizationSettings(BaseModel):
+    timeout: float = Field(
+        default=5,
+        ge=1,
+        description="Timeout for input text normalization in seconds.",
+    )
+    """Timeout for input text normalization in seconds."""
+
+    max_concurrent_sentences_per_request: int = Field(
+        default=2,
+        ge=1,
+        description="Maximum concurrent sentences per request for normalization.",
+    )
+    """Maximum concurrent sentences per request for normalization."""
+
+    text: TextFormatNormalizationSettings = Field(default_factory=TextFormatNormalizationSettings)
+    ssml: TextFormatNormalizationSettings = Field(default_factory=TextFormatNormalizationSettings)
+    openai: OpenAiSettings = Field(default_factory=OpenAiSettings)
+
+
+class SileroSettings(BaseModel):
+    sample_rate: Literal[8000, 16000, 24000, 48000] = Field(
+        default=48000,
+        description="Audio sample rate in Hz (8000, 16000, 24000, 48000).",
+    )
+    """Audio sample rate in Hz (8000, 16000, 24000, 48000)."""
+
+    @field_validator("sample_rate", mode="before")
+    @classmethod
+    def coerce_sample_rate(cls, v: object) -> object:
+        if isinstance(v, str):
+            return int(v)
+        return v
+
+    models_yml_url: HttpUrl = Field(
+        default="https://raw.githubusercontent.com/snakers4/silero-models/refs/heads/master/models.yml",
+        description="URL to the Silero models.yml registry file.",
+    )
+    """URL to the Silero models.yml registry file."""
+
+    models_yml_hash: str = Field(
+        default="",
+        description="SHA-256 hash of the Silero models.yml file for integrity verification. Set empty to skip validation.",
+    )
+    """SHA-256 hash of the Silero models.yml file for integrity verification. Set empty to skip validation."""
+
+    @field_validator("models_yml_hash")
+    @classmethod
+    def models_yml_hash_must_be_valid(cls, v: str) -> str:
+        if v and not v.strip():
+            return ""
+        if v:
+            import re
+
+            if not re.fullmatch(r"[a-f0-9]{64}", v.lower()):
+                raise ValueError(
+                    "models_yml_hash must be a 64-character hex string or empty to skip validation"
+                )
+        return v
+
+
 class Settings(BaseSettings):
+    app_name: str = Field(
+        default="Wyoming TTS Hub",
+        description="Application name. Used as a Wyoming service name.",
+    )
+    """Application name. Used as a Wyoming service name."""
+
     env_type: Literal["development", "production"] = Field(
         default="development",
         description="Application environment type. Controls error detail level and other environment-specific behavior.",
@@ -161,16 +200,57 @@ class Settings(BaseSettings):
         return value
 
     zeroconf: str = Field(
-        default="silero-tts",
-        description="Zeroconf discovery name. Empty string means disabled. Set to a name (e.g. 'silero-tts') to enable.",
+        default="wyoming-tts-hub",
+        description="Zeroconf discovery name. Empty string means disabled. Set to a name (e.g. 'kitchen-tts') to enable.",
     )
     """Zeroconf discovery name. Empty string means disabled. Set to a name (e.g. 'silero-tts') to enable."""
+
+    active_models: list[str] = Field(
+        default_factory=list,
+        description="Runtime allowlist of model ids this instance serves. Absent or empty serves nothing.",
+    )
+    """Runtime allowlist of model ids this instance serves. Absent or empty serves nothing."""
+
+    warmup_models: list[str] = Field(
+        default_factory=list,
+        description="Model ids to preload at startup, up to max_models. Each id must also be in active_models to be served.",
+    )
+    """Model ids to preload at startup, up to `max_models`.
+
+    An id must also be in `active_models` to be served; one that is declared but
+    inactive is skipped with a warning, and one that names no declared Model Info
+    fails startup.
+    """
+
+    warmup_voices: list[str] = Field(
+        default_factory=list,
+        description="Voice ids in '<model id>-<voice name>' form to pre-build Voice Prompts for at startup, up to max_voice_prompts.",
+    )
+    """Voice ids in `<model id>-<voice name>` form to maximally warm at startup, up to
+    `max_voice_prompts`.
+
+    An id must also belong to a served Model Info; one that names no declared Voice
+    fails startup, and one whose Model Info is not active is skipped with a warning.
+    """
+
+    @field_validator("active_models", "warmup_models", "warmup_voices", mode="before")
+    @classmethod
+    def coerce_id_lists_none(cls, v: object) -> object:
+        if v is None:
+            return []
+        return v
 
     streaming: bool = Field(
         default=True,
         description="Enable audio streaming.",
     )
     """Enable audio streaming."""
+
+    backend_type: BackendType = Field(
+        default=BackendType.TORCH,
+        description="TTS backend engine type.",
+    )
+    """TTS backend engine type."""
 
     inference_timeout: float = Field(
         default=5,
@@ -179,25 +259,12 @@ class Settings(BaseSettings):
     )
     """Timeout for inference of one sentence in seconds."""
 
-    frame_duration_ms: float = Field(
+    frame_duration: float = Field(
         default=50,
         ge=1,
         description="Frame duration in milliseconds",
     )
     """Frame duration in milliseconds"""
-
-    sample_rate: Literal[8000, 16000, 24000, 48000] = Field(
-        default=48000,
-        description="Audio sample rate in Hz for TTS output.",
-    )
-    """Audio sample rate in Hz for TTS output."""
-
-    @field_validator("sample_rate", mode="before")
-    @classmethod
-    def coerce_sample_rate(cls, v: object) -> object:
-        if isinstance(v, str):
-            return int(v)
-        return v
 
     max_models: int = Field(
         default=2,
@@ -205,6 +272,16 @@ class Settings(BaseSettings):
         description="Maximum number of models to cache in memory. Model with the lowest RPS rating is evicted when limit reached.",
     )
     """Maximum number of models to cache in memory. Model with the lowest RPS rating is evicted when limit reached."""
+
+    max_voice_prompts: int = Field(
+        default=8,
+        ge=1,
+        description="Maximum number of Voice Prompts to cache in memory. Least recently used is evicted when limit reached.",
+    )
+    """Maximum number of Voice Prompts to cache in memory per engine.
+
+    The least recently used Voice Prompt is evicted when limit reached.
+    """
 
     cache_half_life: int = Field(
         default=60,
@@ -233,48 +310,25 @@ class Settings(BaseSettings):
     """Local path to the voice/model mapping configuration file data.yml"""
 
     models_dir: str = Field(
-        default="models/silero",
-        description="Directory for downloaded Silero .pt model files.",
+        default="models",
+        description="Directory holding cached model files, parent of each engine's own layout",
     )
-    """Directory for downloaded Silero .pt model files."""
+    """Directory holding cached model files, parent of each engine's own layout.
 
-    models_yml_url: HttpUrl = Field(
-        default="https://raw.githubusercontent.com/snakers4/silero-models/refs/heads/master/models.yml",
-        description="URL to the Silero models.yml registry file.",
-    )
-    """URL to the Silero models.yml registry file."""
+    A TTS Engine lays its models out under a directory of its own inside this one —
+    Silero keeps its registry and weights under `silero/` — so this is the parent of
+    that directory, not the directory itself.
+    """
 
-    models_yml_hash: str = Field(
-        default="",
-        description="SHA-256 hash of the Silero models.yml file for integrity verification. Set empty to skip validation.",
-    )
-    """SHA-256 hash of the Silero models.yml file for integrity verification. Set empty to skip validation."""
-
-    @field_validator("models_yml_hash")
-    @classmethod
-    def models_yml_hash_must_be_valid(cls, v: str) -> str:
-        if v and not v.strip():
-            return ""
-        if v:
-            import re
-
-            if not re.fullmatch(r"[a-f0-9]{64}", v.lower()):
-                raise ValueError(
-                    "TTS_MODELS_YML_HASH must be a 64-character hex string or empty to skip validation"
-                )
-        return v
-
+    silero: SileroSettings = Field(default_factory=SileroSettings)
     normalization: NormalizationSettings = Field(
         default_factory=NormalizationSettings,
     )
-    openai: OpenAiSettings = Field(default_factory=OpenAiSettings)
     torch: TorchSettings = Field(default_factory=TorchSettings)
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        yaml_file="config.yml",
-        yaml_file_encoding="utf-8",
         env_prefix="TTS_",
         env_nested_delimiter="__",
         extra="ignore",
@@ -289,18 +343,31 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # CLI > ENV OS > config.yaml > Defaults
+        # CLI > ENV OS > config file > Defaults
         return (
             CliArgsSource(settings_cls),
             env_settings,
             dotenv_settings,
-            YamlConfigSettingsSource(settings_cls),
+            CustomYamlSource(settings_cls),
             init_settings,
         )
 
 
+class CustomYamlSource(YamlConfigSettingsSource):
+    def __init__(self, settings_cls: type[BaseSettings]):
+        env_prefix = settings_cls.model_config.get("env_prefix", "")
+
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument("--config", type=str, default=None)
+        args, _ = parser.parse_known_args()
+
+        config_path = args.config or os.environ.get(f"{env_prefix}CONFIG_PATH") or "config.yml"
+
+        super().__init__(settings_cls, yaml_file=config_path)
+
+
 class CliArgsSource(PydanticBaseSettingsSource):
-    _fields_to_skip = ["normalization"]
+    _fields_to_skip = ["normalization", "silero"]
 
     def get_field_value(self, field, field_name):
         return None
@@ -312,6 +379,10 @@ class CliArgsSource(PydanticBaseSettingsSource):
         parser = argparse.ArgumentParser(
             description=__metadata__["summary"],
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        )
+
+        parser.add_argument(
+            "--config", type=str, default=None, metavar="FILE_PATH", help="Path to config YML file"
         )
 
         schema = Settings.model_json_schema()
@@ -340,6 +411,10 @@ class CliArgsSource(PydanticBaseSettingsSource):
             elif "enum" in sub_info:
                 parser.add_argument(
                     f"--{cli_name}", type=str, choices=sub_info["enum"], help=help_text
+                )
+            elif type == "array":
+                parser.add_argument(
+                    f"--{cli_name}", action="append", metavar="ITEM", help=help_text
                 )
             else:
                 parser.add_argument(f"--{cli_name}", metavar=type, type=str, help=help_text)

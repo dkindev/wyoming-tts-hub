@@ -4,10 +4,10 @@ set -e
 
 if [ "$(id -u)" = "0" ]
 then
-    chown -R silero:silero /app
+    chown -R wthub:wthub /app
 
-    # restart script as silero user
-    exec gosu silero "$@"
+    # restart script as wthub user
+    exec gosu wthub "$@"
 fi
 
 exec "$@"

@@ -1,14 +1,57 @@
+import os
 import unittest.mock
 
 import pytest
 import torch
 
-from src.config import NormalizationSettings
-from src.tts.models import NormalizationOptions, TTSConfig
+from src.config import NormalizationSettings, Settings
 
 # ---------------------------------------------------------------------------
 # Fixtures — shared by all test files
 # ---------------------------------------------------------------------------
+
+# The prefix Settings reads the process environment under, taken from the setting
+# itself so a change to it cannot silently reopen the leak.
+SERVER_ENV_PREFIX = Settings.model_config["env_prefix"]
+
+# OpenAiSettings falls back to these unprefixed names, so they are leaks too.
+STANDARD_OPENAI_ENV_VARS = ("OPENAI_API_KEY", "OPENAI_BASE_URL")
+
+
+@pytest.fixture(autouse=True)
+def hermetic_environment(tmp_path, monkeypatch):
+    """Run every test with only the server environment it sets up for itself.
+
+    Settings are assembled from several sources at once: the process environment, a
+    local `.env` file, and a YAML config file. The last two are resolved relative to
+    the working directory, so a test that does not control them sees whatever the
+    machine it runs on has configured — which is how the suite ends up green in CI
+    and red on a configured workstation.
+
+    This clears the prefixed environment, points the YAML source at a per-test file,
+    and runs from that same per-test directory so no file of the developer's checkout
+    is an input. A test that wants a setting from the environment still sets it,
+    after this fixture runs.
+
+    The per-test config carries only an `active_models` allowlist, so the default
+    settings serve one model rather than nothing. A test that exercises the YAML
+    source points `--config` at its own file and therefore ignores this one.
+
+    The dotenv source is switched off outright rather than merely outvoted: outvoting
+    it means every test has to set whatever it expects to win, which is how a local
+    `.env` file ends up deciding what the suite asserts.
+    """
+    for name in [*os.environ, *STANDARD_OPENAI_ENV_VARS]:
+        if name.startswith(SERVER_ENV_PREFIX) or name in STANDARD_OPENAI_ENV_VARS:
+            monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+
+    config_path = tmp_path / "config.yml"
+    config_path.write_text("active_models: [test_model]\n")
+
+    monkeypatch.setenv(f"{SERVER_ENV_PREFIX}CONFIG_PATH", str(config_path))
+    monkeypatch.chdir(tmp_path)
 
 
 @pytest.fixture
@@ -27,46 +70,6 @@ def mock_importer(mock_model):
     imp = unittest.mock.MagicMock()
     imp.load_pickle.return_value = mock_model
     return imp
-
-
-@pytest.fixture
-def default_tts_config():
-    """Return a TTSConfig with sensible defaults for testing."""
-    return TTSConfig(
-        device="cpu",
-        inference_timeout=5,
-        frame_duration_ms=50,
-        sample_rate=48000,
-        max_models=2,
-        cache_half_life=60,
-        max_concurrent_sentences_per_model=2,
-        max_sentence_chars=48000,
-        models_dir=".models/silero",
-        models_yml_url="https://example.com/models.yml",
-        models_yml_hash="",
-    )
-
-
-@pytest.fixture
-def mock_package_importer(mock_importer):
-    """Patch torch.package.PackageImporter to return mock_importer."""
-    with unittest.mock.patch(
-        "src.tts.engine.torch.package.PackageImporter",
-        return_value=mock_importer,
-    ):
-        yield
-
-
-@pytest.fixture
-def normalization_options(mock_model):
-    """Return NormalizationOptions with a voice, model, and silero model."""
-    from tests.helpers import make_model, make_voice
-
-    return NormalizationOptions(
-        voice=make_voice(voice_id="test-voice", name="Test Voice"),
-        model=make_model(),
-        silero_model=mock_model,
-    )
 
 
 @pytest.fixture
@@ -91,7 +94,7 @@ def mock_openai_client():
 
 @pytest.fixture
 def mock_storage():
-    """Mock SileroTTSConfigStorage returning None for all lookups."""
+    """Mock DataStorage returning None for all normalization lookups."""
     storage = unittest.mock.MagicMock()
     storage.get_voice_normalization.return_value = None
     storage.get_prompt.return_value = None

@@ -3,10 +3,14 @@ from collections.abc import Callable
 from loguru import logger
 from openai import AsyncOpenAI
 
-from src.config import BaseNormalizationSettings, NormalizationSettings
-from src.tts.config_storage import SileroTTSConfigStorage
+from src.config import (
+    NormalizationPrompt,
+    NormalizationSettings,
+    TextFormatNormalizationSettings,
+)
+from src.tts.data_storage import DataStorage
 from src.tts.models import (
-    OpenAiNormalizationConfig,
+    Prompt,
     TextFormat,
     Voice,
     VoiceNormalization,
@@ -19,12 +23,43 @@ from src.tts.preprocessing import (
 )
 
 
+def unreachable_normalization_prompts(
+    settings: NormalizationSettings, storage: DataStorage
+) -> dict[str, set[str]]:
+    """Return the server-wide prompts no Model Info this instance serves declares.
+
+    Maps a Text Format to the Languages its prompts are keyed by that no served Model
+    Info declares. A prompt keyed any other way is written but never selected, because
+    a request's Language is always one a Model Info declared — so this is where a
+    spelling mistake surfaces, at startup, rather than as text that silently came
+    back unnormalized.
+
+    Only Model Infos the instance serves are consulted: a Language declared by one it
+    does not serve leaves its prompt unused until that Model Info is activated, which
+    is a staged configuration rather than a mistake.
+    """
+    declared = {
+        language for model_info in storage.get_model_infos() for language in model_info.languages
+    }
+
+    unreachable: dict[str, set[str]] = {}
+    for text_format, format_settings in (("text", settings.text), ("ssml", settings.ssml)):
+        if not format_settings.prompts:
+            continue
+
+        unreachable_languages = set(format_settings.prompts) - declared
+        if unreachable_languages:
+            unreachable[text_format] = unreachable_languages
+
+    return unreachable
+
+
 class TextNormalizerFactory:
     def __init__(
         self,
         openai_client: AsyncOpenAI,
         settings: NormalizationSettings,
-        storage: SileroTTSConfigStorage,
+        storage: DataStorage,
     ):
         self._settings = settings
         self._storage = storage
@@ -32,118 +67,87 @@ class TextNormalizerFactory:
 
         def _create_openai_normalizer(
             voice: Voice,
-            voice_normalization: VoiceNormalization,
-            settings: BaseNormalizationSettings,
-        ) -> TextNormalizer:
+            voice_normalization: VoiceNormalization | None,
+            settings: TextFormatNormalizationSettings,
+            language: str,
+        ) -> TextNormalizer | None:
             if self._openai_client is None:
                 return None
 
-            prompt = (
+            prompt: Prompt | NormalizationPrompt | None = (
                 self._storage.get_prompt(prompt_id=voice_normalization.prompt_id)
-                if voice_normalization is not None
+                if voice_normalization is not None and voice_normalization.prompt_id
                 else None
-            )
+            ) or self._prompt_for_language(settings=settings, language=language)
 
-            if prompt is not None:
-                prompt_text = prompt.text
-                prompt_model = prompt.model
-            else:
-                if settings.prompts is None:
-                    return None
-
-                default_prompt = settings.prompts.get(voice.locale)
-                if default_prompt is None:
-                    return None
-
-                prompt_text = default_prompt.text
-                prompt_model = default_prompt.model
+            if prompt is None:
+                return None
 
             return OpenAiTextNormalizer(
-                client=self._openai_client,
-                config=OpenAiNormalizationConfig(
-                    timeout=self._settings.timeout,
-                    max_concurrent_sentences_per_request=self._settings.max_concurrent_sentences_per_request,
-                    default_model=prompt_model,
-                    default_prompt=prompt_text,
-                ),
+                client=self._openai_client, model=prompt.model, promt=prompt.text
             )
 
         self._builders: dict[
-            str, Callable[[Voice, VoiceNormalization, BaseNormalizationSettings], TextNormalizer]
+            str,
+            Callable[
+                [Voice, VoiceNormalization | None, TextFormatNormalizationSettings, str],
+                TextNormalizer | None,
+            ],
         ] = {
-            # key: "{locale}__{text_format}__{normalization_type}"
-            "default__text__simple": lambda v, vn, s: PlainTextNormalizer(),
-            "default__ssml__simple": lambda v, vn, s: SsmlNormalizer(),
-            "default__text__llm": _create_openai_normalizer,
-            "default__ssml__llm": _create_openai_normalizer,
+            # key: "{text_format}__{normalization_type}"
+            "text__simple": lambda v, vn, s, language: PlainTextNormalizer(),
+            "ssml__simple": lambda v, vn, s, language: SsmlNormalizer(),
+            "text__openai": _create_openai_normalizer,
+            "ssml__openai": _create_openai_normalizer,
         }
 
-        self._factories: dict[str, Callable[[Voice, TextFormat], TextNormalizer]] = {
-            # key: "{locale}__{text_format}"
-            "default__text": self._create_text_normalizer_factory,
-            "default__ssml": self._create_ssml_normalizer_factory,
-        }
+    def _prompt_for_language(
+        self, settings: TextFormatNormalizationSettings, language: str
+    ) -> NormalizationPrompt | None:
+        """Return the server-wide Prompt written for a Language, if there is one.
 
-    def _create_text_normalizer_factory(self, voice: Voice, format: TextFormat) -> TextNormalizer:
-        settings = self._settings.text
-        return self._create_text_normalizer(
-            voice=voice,
-            format=format,
-            default_normalization_enabled=settings.enabled,
-            settings=settings,
-        )
+        Prompts are keyed by the Language a Model Info declares, which is the only
+        Language a request can resolve to — so this is an exact match on that
+        Language, and nothing else finds the Prompt. A key written any other way is
+        unreachable, which `unreachable_normalization_prompts` reports at startup.
+        """
+        if not settings.prompts:
+            return None
 
-    def _create_ssml_normalizer_factory(self, voice: Voice, format: TextFormat) -> TextNormalizer:
-        settings = self._settings.ssml
-        return self._create_text_normalizer(
-            voice=voice,
-            format=format,
-            default_normalization_enabled=settings.enabled,
-            settings=settings,
-        )
+        return settings.prompts.get(language)
 
-    def _create_text_normalizer(
-        self,
-        voice: Voice,
-        format: TextFormat,
-        default_normalization_enabled: bool,
-        settings: BaseNormalizationSettings,
-    ) -> TextNormalizer:
+    def create(self, voice: Voice, text_format: TextFormat, language: str) -> TextNormalizer | None:
+        if voice is None:
+            raise TypeError("voice cannot be None")
+
+        if language is None:
+            raise TypeError("language cannot be None")
+
+        settings = self._settings.text if text_format is TextFormat.TEXT else self._settings.ssml
+
         voice_normalization = self._storage.get_voice_normalization(
-            voice_id=voice.id, text_format=format
+            voice_id=voice.id, text_format=text_format, language=language
         )
         if voice_normalization is not None:
             if not voice_normalization.enabled:
                 return None
 
-            type = voice_normalization.type
+            normalization_type = voice_normalization.type
         else:
-            if not default_normalization_enabled:
+            if not settings.enabled:
                 return None
 
-            type = settings.type
+            normalization_type = settings.type
 
-        builder = self._builders.get(f"{voice.locale}__{format.value}__{type.value}")
-        if builder is None:
-            builder = self._builders.get(f"default__{format.value}__{type.value}")
-
+        builder = self._builders.get(f"{text_format.value}__{normalization_type.value}")
         if builder is None:
             logger.warning(
-                "Text normalizer not found in factory. Locale: {locale}. Format: {format}. Type: {type}",
-                locale=voice.locale,
-                format=format.value,
-                type=type.value,
+                "Text normalizer not found in factory. Language: {language}. "
+                "Format: {format}. Type: {type}",
+                language=language,
+                format=text_format.value,
+                type=normalization_type.value,
             )
             return None
 
-        return builder(voice, voice_normalization, settings)
-
-    def create_text_normalizer(self, voice: Voice, format: TextFormat) -> TextNormalizer:
-        if voice is None:
-            raise TypeError("voice cannot be None")
-
-        factory = self._factories.get(f"{voice.locale}__{format.value}")
-        if factory is None:
-            factory = self._factories.get(f"default__{format.value}")
-
-        return factory(voice, format)
+        return builder(voice, voice_normalization, settings, language)

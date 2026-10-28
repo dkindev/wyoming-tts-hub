@@ -1,0 +1,1753 @@
+import unittest.mock
+from pathlib import Path
+
+import pytest
+import yaml
+
+from src.tts.data_storage import YamlDataStorage
+from src.tts.models import (
+    EngineType,
+    ModelInfo,
+    NormalizationType,
+    PredefinedData,
+    TextFormat,
+    Voice,
+)
+from tests.helpers import make_model_info, make_voice
+
+
+def write_data_file(tmp_path: Path, contents: str, name: str = "data.yml") -> Path:
+    """Write a data file and hand back its path, ready to be read as written."""
+    path = tmp_path / name
+    path.write_text(contents)
+
+    return path
+
+
+def make_storage(config_path_or_model) -> YamlDataStorage:
+    """Load data with every declared Model Info active.
+
+    Tests that are about parsing should not also have to spell out the allowlist;
+    tests about which models are served construct the storage directly instead.
+    """
+    if isinstance(config_path_or_model, PredefinedData):
+        active_models = [model_info.id for model_info in config_path_or_model.models]
+    else:
+        try:
+            data = yaml.safe_load(Path(config_path_or_model).read_text()) or {}
+        except yaml.YAMLError:
+            data = {}
+        models = data.get("models") if isinstance(data, dict) else None
+        active_models = list(models) if isinstance(models, dict) else []
+
+    return YamlDataStorage(config_path_or_model, active_models=active_models)
+
+
+MODEL_WITH_VOICE = """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+
+
+class TestYamlDataStorageInit:
+    """Tests for SileroTTSYamlConfigStorage initialization."""
+
+    def test_init_accepts_config_model(self):
+        """Should accept TTSConfigModel and expose get_voice."""
+
+        config_model = PredefinedData(
+            models=[make_model_info()],
+            voices=[
+                Voice(
+                    id="v5_6_ru-aidar",
+                    name="aidar",
+                    speaker="aidar",
+                    model_id="v5_6_ru",
+                )
+            ],
+        )
+
+        storage = make_storage(config_model)
+
+        assert storage.get_voice("v5_6_ru-aidar").name == "aidar"
+
+
+class TestGetVoices:
+    """Tests for get_voices() method."""
+
+    def test_get_voices_returns_list(self):
+        """get_voices should return a list of Voice objects."""
+
+        config_model = PredefinedData(models=[], voices=[])
+        storage = make_storage(config_model)
+
+        result = storage.get_voices()
+        assert isinstance(result, list)
+
+    def test_get_voices_returns_voice_objects(self):
+        """get_voices should return list of Voice objects with id field."""
+
+        config_model = PredefinedData(
+            models=[make_model_info()],
+            voices=[
+                Voice(
+                    id="v5_6_ru-aidar",
+                    name="aidar",
+                    speaker="aidar",
+                    model_id="v5_6_ru",
+                )
+            ],
+        )
+        storage = make_storage(config_model)
+
+        result = storage.get_voices()
+        assert len(result) == 1
+        assert result[0].id == "v5_6_ru-aidar"
+        assert result[0].model_id == "v5_6_ru"
+
+    def test_get_voices_includes_all_voices(self):
+        """get_voices should include all voices."""
+
+        config_model = PredefinedData(
+            models=[make_model_info()],
+            voices=[
+                Voice(
+                    id="v5_6_ru-aidar",
+                    name="aidar",
+                    speaker="aidar",
+                    model_id="v5_6_ru",
+                ),
+                Voice(
+                    id="v5_6_ru-baya",
+                    name="baya",
+                    speaker="baya",
+                    model_id="v5_6_ru",
+                ),
+            ],
+        )
+        storage = make_storage(config_model)
+
+        result = storage.get_voices()
+        assert len(result) == 2
+        assert result[0].name == "aidar"
+        assert result[1].name == "baya"
+
+    def test_get_voices_from_all_models(self):
+        """get_voices should include voices from all models."""
+
+        config_model = PredefinedData(
+            models=[make_model_info(), make_model_info(id="v3_en")],
+            voices=[
+                Voice(
+                    id="v5_6_ru-aidar",
+                    name="aidar",
+                    speaker="aidar",
+                    model_id="v5_6_ru",
+                ),
+                Voice(
+                    id="v3_en-en_0",
+                    name="en_0",
+                    speaker="en_0",
+                    model_id="v3_en",
+                ),
+            ],
+        )
+        storage = make_storage(config_model)
+
+        result = storage.get_voices()
+        assert len(result) == 2
+
+
+class TestGetVoice:
+    """Tests for get_voice() method."""
+
+    def test_get_voice_returns_correct_config(self):
+        """get_voice should return Voice for the given voice_id."""
+
+        config_model = PredefinedData(
+            models=[make_model_info()],
+            voices=[
+                Voice(
+                    id="v5_6_ru-aidar",
+                    name="aidar",
+                    speaker="aidar",
+                    model_id="v5_6_ru",
+                )
+            ],
+        )
+        storage = make_storage(config_model)
+
+        voice = storage.get_voice("v5_6_ru-aidar")
+        assert voice.speaker == "aidar"
+        assert voice.model_id == "v5_6_ru"
+
+
+class TestYamlConstructor:
+    """Tests for constructing from a YAML file path."""
+
+    def test_loads_config_from_yaml_path(self, tmp_path):
+        """Should load config from a YAML file path with merged structure."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_6_ru
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        voice = storage.get_voice("v5_6_ru-aidar")
+        assert voice.name == "aidar"
+        assert voice.speaker == "aidar"
+        assert voice.model_id == "v5_6_ru"
+
+    def test_loaded_voices_have_voice_configs(self, tmp_path):
+        """get_voices should return Voice objects with computed id."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_6_ru
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        voices = storage.get_voices()
+        assert len(voices) == 1
+        assert voices[0].id == "v5_6_ru-aidar"
+        assert voices[0].model_id == "v5_6_ru"
+
+    def test_missing_speaker_defaults_to_voice_name(self, tmp_path):
+        """YAML without speaker field should default speaker to voice_name."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        model: v5_6_ru
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+        voice = storage.get_voice("v5_6_ru-aidar")
+        assert voice.speaker == "aidar"
+
+    def test_empty_speaker_defaults_to_voice_name(self, tmp_path):
+        """YAML with speaker: '' should default speaker to voice_name."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        speaker: ""
+        model: v5_6_ru
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+        voice = storage.get_voice("v5_6_ru-aidar")
+        assert voice.speaker == "aidar"
+
+
+class TestLocaleLessSchema:
+    """Tests for the new flat schema: voices live under models, IDs have no locale prefix."""
+
+    def test_loads_locale_less_voices_from_flat_schema(self, tmp_path):
+        """Loading a flat-schema YAML yields locale-less Voice objects with model-voice IDs."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+      - name: eugene
+  v3_en:
+    engine_type: silero
+    languages: [en]
+    voices:
+      - name: henry
+        speaker: en_2
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert [v.id for v in storage.get_voices()] == [
+            "v5_6_ru-aidar",
+            "v5_6_ru-eugene",
+            "v3_en-henry",
+        ]
+        assert not hasattr(storage.get_voice("v5_6_ru-aidar"), "locale")
+        assert storage.get_voice("v3_en-henry").speaker == "en_2"
+        assert storage.get_voice("v3_en-henry").name == "henry"
+
+    def test_voices_sharing_speaker_load_with_distinct_name_ids(self, tmp_path):
+        """Two voices sharing a speaker under one Model Info load with distinct name-based IDs."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar-soft
+        speaker: aidar
+      - name: aidar-loud
+        speaker: aidar
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert [v.id for v in storage.get_voices()] == [
+            "v5_6_ru-aidar-soft",
+            "v5_6_ru-aidar-loud",
+        ]
+        assert storage.get_voice("v5_6_ru-aidar-soft").speaker == "aidar"
+        assert storage.get_voice("v5_6_ru-aidar-loud").speaker == "aidar"
+
+    def test_duplicate_voice_name_in_one_model_info_raises_error(self, tmp_path):
+        """Two voices with the same name in one Model Info derive the same ID and fail loudly."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        speaker: aidar
+      - name: aidar
+        speaker: baya
+"""
+        )
+
+        with pytest.raises(ValueError, match="v5_6_ru-aidar"):
+            make_storage(str(config_yml))
+
+    def test_same_voice_name_in_different_models_loads(self, tmp_path):
+        """Same voice name under different models derives distinct IDs and loads fine."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+  v3_en:
+    engine_type: silero
+    languages: [en]
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert [v.id for v in storage.get_voices()] == ["v5_6_ru-aidar", "v3_en-aidar"]
+
+    def test_voice_yaml_entries_populate_reference_fields(self, tmp_path):
+        """ref_audio, ref_text, and instruct keys in a voice entry parse onto the Voice."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        ref_audio: /audio/aidar.wav
+        ref_text: "Hello world"
+        instruct: "Speak slowly"
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+        voice = storage.get_voice("v5_6_ru-aidar")
+
+        assert voice.ref_audio == "/audio/aidar.wav"
+        assert voice.ref_text == "Hello world"
+        assert voice.instruct == "Speak slowly"
+
+
+class TestEmptyData:
+    """Tests for empty/minimal configs."""
+
+    def test_empty_config(self):
+        """Should handle empty config with no locales or models."""
+
+        config_model = PredefinedData(models=[], voices=[])
+        storage = make_storage(config_model)
+
+        assert storage.get_voices() == []
+
+    def test_empty_config_from_yaml(self, tmp_path):
+        """Should load and handle empty YAML config."""
+
+        config_yml = tmp_path / "empty.yml"
+        config_yml.write_text("")
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_voices() == []
+
+
+class TestYamlEnabledField:
+    """The retired per-model enabled switch is inert when left in a data file."""
+
+    def test_enabled_false_does_not_stop_a_model_from_being_served(self, tmp_path):
+        """A value still written under enabled is not read, so it cannot hide a model."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    enabled: false
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_6_ru
+"""
+        )
+
+        storage = YamlDataStorage(str(config_yml), active_models=["v5_6_ru"])
+
+        assert len(storage.get_voices()) == 1
+
+
+class TestGetModelInfo:
+    """Tests for get_model_info() method."""
+
+    def test_get_model_info_returns_correct_model_info(self):
+        """get_model_info should return the Model Info for the given model id."""
+
+        config_model = PredefinedData(
+            models=[make_model_info()],
+            voices=[],
+        )
+        storage = make_storage(config_model)
+
+        model_info = storage.get_model_info("v5_6_ru")
+        assert model_info.id == "v5_6_ru"
+
+
+class TestGetModelInfos:
+    def test_get_model_infos_returns_all_served_models(self):
+        """get_model_infos() returns the list of all served Model Info objects."""
+
+        config_model = PredefinedData(
+            models=[
+                make_model_info(warmup=True),
+                make_model_info(id="v3_en"),
+            ],
+            voices=[
+                Voice(
+                    id="v5_6_ru-aidar",
+                    name="aidar",
+                    speaker="aidar",
+                    model_id="v5_6_ru",
+                )
+            ],
+        )
+
+        storage = make_storage(config_model)
+        result = storage.get_model_infos()
+
+        model_info1 = [model_info for model_info in result if model_info.id == "v5_6_ru"]
+        model_info2 = [model_info for model_info in result if model_info.id == "v3_en"]
+
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert model_info1 is not None
+        assert model_info2 is not None
+
+
+class TestModelInfoFromYaml:
+    """The data file is read into Model Info, the configuration a TTS Engine is built for."""
+
+    def test_yaml_entry_becomes_model_info(self, tmp_path):
+        """A YAML entry is handed back as a ModelInfo."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert type(storage.get_model_info("v5_6_ru")) is ModelInfo
+
+
+class TestYamlWarmupDerivation:
+    """Warmup is chosen by the instance configuration, not written in the data file."""
+
+    def test_a_listed_model_info_is_flagged_for_warmup(self, tmp_path):
+        """A served Model Info is warmed when its id is in warmup_models."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"], warmup_models=["v5_6_ru"])
+
+        assert storage.get_model_info("v5_6_ru").warmup is True
+
+    def test_an_unlisted_model_info_is_not_flagged_for_warmup(self, tmp_path):
+        """A served Model Info absent from warmup_models is loaded on first request."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"])
+
+        assert storage.get_model_info("v5_6_ru").warmup is False
+
+    def test_warmup_written_in_the_data_file_is_inert(self, tmp_path):
+        """A value left under warmup is not read, so it cannot preload a model."""
+
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    warmup: true
+    voices:
+      - name: aidar
+""",
+        )
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"])
+
+        assert storage.get_model_info("v5_6_ru").warmup is False
+
+    def test_an_unknown_warmup_id_fails_naming_every_offending_id(self, tmp_path):
+        """An id absent from the data file stops startup and names the unknown ids."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(
+                str(path),
+                active_models=["v5_6_ru"],
+                warmup_models=["ghost", "other"],
+            )
+
+        message = str(exc_info.value)
+        assert "ghost" in message
+        assert "other" in message
+
+    def test_a_declared_but_inactive_warmup_id_warns_and_is_skipped(self, tmp_path):
+        """A warmup id that cannot be served is reported, but does not fail startup."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        with unittest.mock.patch("src.tts.data_storage.logger.warning") as warning:
+            storage = YamlDataStorage(str(path), active_models=[], warmup_models=["v5_6_ru"])
+
+        warning.assert_called_once()
+        assert "v5_6_ru" in warning.call_args.kwargs["model_ids"]
+        assert storage.get_model_info("v5_6_ru") is None
+
+
+class TestDirectPredefinedDataWarmup:
+    """A supplied PredefinedData keeps its own warmup values."""
+
+    def test_the_config_warmup_list_does_not_override_them(self):
+        """Warmup already on the Model Infos survives, in both directions."""
+
+        data = PredefinedData(
+            models=[
+                make_model_info(id="warm", warmup=True),
+                make_model_info(id="lazy", warmup=False),
+            ],
+            voices=[],
+        )
+
+        storage = YamlDataStorage(
+            data,
+            active_models=["warm", "lazy"],
+            warmup_models=["lazy"],
+        )
+
+        assert storage.get_model_info("warm").warmup is True
+        assert storage.get_model_info("lazy").warmup is False
+
+    def test_the_warmup_list_is_inert_for_a_supplied_configuration(self):
+        """No id is validated or warned about, because the list is never applied."""
+        data = PredefinedData(models=[make_model_info(id="warm", warmup=True)], voices=[])
+
+        with unittest.mock.patch("src.tts.data_storage.logger.warning") as warning:
+            storage = YamlDataStorage(
+                data,
+                active_models=["warm"],
+                warmup_models=["ghost"],
+            )
+
+        warning.assert_not_called()
+        assert storage.get_model_info("warm").warmup is True
+
+
+class TestYamlWarmupVoiceDerivation:
+    """Voice warm-up is chosen by the instance configuration, not written in the data file."""
+
+    def test_a_listed_voice_is_flagged_for_warmup(self, tmp_path):
+        """A served Voice is warmed when its id is in warmup_voices."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(
+            str(path), active_models=["v5_6_ru"], warmup_voices=["v5_6_ru-aidar"]
+        )
+
+        assert storage.get_voice("v5_6_ru-aidar").warmup is True
+
+    def test_an_unlisted_voice_is_not_flagged_for_warmup(self, tmp_path):
+        """A served Voice absent from warmup_voices starts maximally unwarmed."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"])
+
+        assert storage.get_voice("v5_6_ru-aidar").warmup is False
+
+    def test_warmup_written_in_the_voice_entry_is_inert(self, tmp_path):
+        """A value left under warmup on a voice is not read, so it cannot preload one."""
+
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        warmup: true
+""",
+        )
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"])
+
+        assert storage.get_voice("v5_6_ru-aidar").warmup is False
+
+    def test_an_unknown_warmup_voice_id_fails_naming_every_offending_id(self, tmp_path):
+        """An id absent from the data file stops startup and names the unknown ids."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(
+                str(path),
+                active_models=["v5_6_ru"],
+                warmup_voices=["ghost-aidar", "other-baya"],
+            )
+
+        message = str(exc_info.value)
+        assert "ghost-aidar" in message
+        assert "other-baya" in message
+
+    def test_a_warmup_voice_id_on_an_inactive_model_warns_and_is_skipped(self, tmp_path):
+        """A warm-up voice whose model cannot be served is reported, but does not fail startup."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        with unittest.mock.patch("src.tts.data_storage.logger.warning") as warning:
+            storage = YamlDataStorage(str(path), active_models=[], warmup_voices=["v5_6_ru-aidar"])
+
+        warning.assert_called_once()
+        assert "v5_6_ru-aidar" in warning.call_args.kwargs["voice_ids"]
+        assert storage.get_voice("v5_6_ru-aidar") is None
+
+
+class TestDirectPredefinedDataWarmupVoices:
+    """A supplied PredefinedData keeps its own voice warmup values."""
+
+    def test_the_config_warmup_voice_list_does_not_override_them(self):
+        """Warm-up flags already on the Voices survive, in both directions."""
+
+        data = PredefinedData(
+            models=[make_model_info()],
+            voices=[
+                make_voice(voice_id="v5_6_ru-warm", name="warm", warmup=True),
+                make_voice(voice_id="v5_6_ru-lazy", name="lazy", warmup=False),
+            ],
+        )
+
+        storage = YamlDataStorage(
+            data,
+            active_models=["v5_6_ru"],
+            warmup_voices=["v5_6_ru-lazy"],
+        )
+
+        assert storage.get_voice("v5_6_ru-warm").warmup is True
+        assert storage.get_voice("v5_6_ru-lazy").warmup is False
+
+    def test_the_warmup_voice_list_is_inert_for_a_supplied_configuration(self):
+        """No id is validated or warned about, because the list is never applied."""
+        data = PredefinedData(
+            models=[make_model_info()],
+            voices=[make_voice(voice_id="v5_6_ru-warm", name="warm", warmup=True)],
+        )
+
+        with unittest.mock.patch("src.tts.data_storage.logger.warning") as warning:
+            storage = YamlDataStorage(
+                data,
+                active_models=["v5_6_ru"],
+                warmup_voices=["v5_6_ru-ghost"],
+            )
+
+        warning.assert_not_called()
+        assert storage.get_voice("v5_6_ru-warm").warmup is True
+
+
+class TestYamlHashPrefixField:
+    """Tests for parsing hash_prefix field from YAML config."""
+
+    def test_yaml_hash_prefix_sets_hash_prefix_on_model_info(self, tmp_path):
+        """YAML with hash_prefix should set hash_prefix on the Model Info."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    hash_prefix: "a1b2c3d4"
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_6_ru
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_model_info("v5_6_ru").hash_prefix == "a1b2c3d4"
+
+    def test_yaml_without_hash_prefix_defaults_to_none(self, tmp_path):
+        """YAML without hash_prefix should default to None."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_6_ru
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_model_info("v5_6_ru").hash_prefix is None
+
+    def test_yaml_empty_hash_prefix_defaults_to_none(self, tmp_path):
+        """YAML with empty hash_prefix should default to None."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    hash_prefix: ""
+    voices:
+      - name: aidar
+        speaker: aidar
+        model: v5_6_ru
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_model_info("v5_6_ru").hash_prefix is None
+
+
+class TestYamlRevisionField:
+    """Tests for parsing revision field from YAML config."""
+
+    def test_yaml_revision_sets_revision_on_model_info(self, tmp_path):
+        """YAML with revision should set revision on the Model Info."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  qwen3_tts:
+    engine_type: qwen3
+    languages: [en]
+    revision: "0123456789abcdef"
+    voices:
+      - name: clone
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_model_info("qwen3_tts").revision == "0123456789abcdef"
+
+    def test_yaml_without_revision_defaults_to_none(self, tmp_path):
+        """YAML without revision should default to None."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  qwen3_tts:
+    engine_type: qwen3
+    languages: [en]
+    voices:
+      - name: clone
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_model_info("qwen3_tts").revision is None
+
+    def test_yaml_empty_revision_defaults_to_none(self, tmp_path):
+        """YAML with empty revision should default to None."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  qwen3_tts:
+    engine_type: qwen3
+    languages: [en]
+    revision: ""
+    voices:
+      - name: clone
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_model_info("qwen3_tts").revision is None
+
+    def test_yaml_revision_and_hash_prefix_stay_separate(self, tmp_path):
+        """A revision pin and a checksum pin are read as the distinct guarantees they are."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  qwen3_tts:
+    engine_type: qwen3
+    languages: [en]
+    revision: "0123456789abcdef"
+    hash_prefix: "a1b2c3d4"
+    voices:
+      - name: clone
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+        model_info = storage.get_model_info("qwen3_tts")
+
+        assert model_info.revision == "0123456789abcdef"
+        assert model_info.hash_prefix == "a1b2c3d4"
+
+
+class TestYamlUpstreamIdField:
+    """Tests for parsing upstream_id from YAML config."""
+
+    def test_yaml_upstream_id_names_a_different_upstream_artifact(self, tmp_path):
+        """An explicit upstream_id is kept while the Model Info keeps its local id."""
+        config_yml = write_data_file(
+            tmp_path,
+            """
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: "owner/upstream-model"
+    voices:
+      - name: clone
+""",
+        )
+
+        model_info = make_storage(str(config_yml)).get_model_info("local_model")
+
+        assert model_info.id == "local_model"
+        assert model_info.upstream_id == "owner/upstream-model"
+
+    def test_yaml_upstream_id_is_trimmed(self, tmp_path):
+        """Surrounding whitespace is not part of the upstream artifact name."""
+        config_yml = write_data_file(
+            tmp_path,
+            """
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: "  owner/upstream-model  "
+    voices:
+      - name: clone
+""",
+        )
+
+        model_info = make_storage(str(config_yml)).get_model_info("local_model")
+
+        assert model_info.upstream_id == "owner/upstream-model"
+
+    @pytest.mark.parametrize(
+        "declared",
+        [
+            "",
+            "   ",
+            "null",
+            "~",
+        ],
+    )
+    def test_yaml_blank_upstream_id_falls_back_to_the_local_id(self, tmp_path, declared):
+        """An empty, whitespace-only or null upstream_id means the id is upstream."""
+        config_yml = write_data_file(
+            tmp_path,
+            f"""
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: {declared}
+    voices:
+      - name: clone
+""",
+        )
+
+        model_info = make_storage(str(config_yml)).get_model_info("local_model")
+
+        assert model_info.upstream_id == "local_model"
+
+    def test_yaml_without_upstream_id_falls_back_to_the_local_id(self, tmp_path):
+        """A Model Info that names no upstream artifact uses its own id."""
+        config_yml = write_data_file(
+            tmp_path,
+            """
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    voices:
+      - name: clone
+""",
+        )
+
+        model_info = make_storage(str(config_yml)).get_model_info("local_model")
+
+        assert model_info.upstream_id == "local_model"
+
+    @pytest.mark.parametrize("declared", ["123", "true", "[owner, model]", "{owner: model}"])
+    def test_yaml_non_string_upstream_id_is_refused_by_model_name(self, tmp_path, declared):
+        """A non-string upstream_id is refused with an error naming the Model Info."""
+        config_yml = write_data_file(
+            tmp_path,
+            f"""
+models:
+  local_model:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: {declared}
+    voices:
+      - name: clone
+""",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            make_storage(str(config_yml))
+
+        message = str(exc_info.value)
+        assert "local_model" in message
+        assert "upstream_id" in message
+
+
+class TestGetPrompt:
+    """Tests for get_prompt() method."""
+
+    def test_get_prompt_returns_prompt(self, tmp_path):
+        """get_prompt should return Prompt for the given prompt_id."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+prompts:
+  - id: p1
+    text: "Say hello nicely"
+    model: gpt-4
+models: {}
+voices: []
+"""
+        )
+        storage = make_storage(str(config_yml))
+        prompt = storage.get_prompt("p1")
+        assert prompt is not None
+        assert prompt.id == "p1"
+        assert prompt.text == "Say hello nicely"
+        assert prompt.model == "gpt-4"
+
+    def test_get_prompt_returns_none_for_missing_id(self, tmp_path):
+        """get_prompt should return None for unknown prompt_id."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+prompts:
+  - id: p1
+    text: "Say hello nicely"
+    model: gpt-4
+models: {}
+voices: []
+"""
+        )
+        storage = make_storage(str(config_yml))
+        assert storage.get_prompt("unknown") is None
+
+    def test_get_prompt_from_empty_prompts(self, tmp_path):
+        """get_prompt should return None when prompts list is empty."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+prompts: []
+models: {}
+voices: []
+"""
+        )
+        storage = make_storage(str(config_yml))
+        assert storage.get_prompt("p1") is None
+
+    def test_get_prompt_from_missing_prompts_key(self, tmp_path):
+        """get_prompt should return None when prompts key is absent."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models: {}
+voices: []
+"""
+        )
+        storage = make_storage(str(config_yml))
+        assert storage.get_prompt("p1") is None
+
+
+class TestGetVoiceNormalization:
+    """Tests for get_voice_normalization() method."""
+
+    def test_get_voice_normalization_returns_normalization(self, tmp_path):
+        """get_voice_normalization returns VoiceNormalization for voice + text_format + language."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: p1
+"""
+        )
+        storage = make_storage(str(config_yml))
+        vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
+        assert vn is not None
+        assert vn.voice_id == "v5_6_ru-aidar"
+        assert vn.text_format == TextFormat.TEXT
+        assert vn.language == "ru"
+        assert vn.type == NormalizationType.OPENAI
+        assert vn.enabled is True
+        assert vn.prompt_id == "p1"
+
+    def test_get_voice_normalization_mismatched_language_returns_none(self, tmp_path):
+        """get_voice_normalization returns None for a language with no override."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: p1
+"""
+        )
+        storage = make_storage(str(config_yml))
+        assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "en") is None
+
+    def test_get_voice_normalization_multiple_languages(self, tmp_path):
+        """get_voice_normalization distinguishes overrides for different languages."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: p1
+          en:
+            text:
+              enabled: false
+              type: simple
+"""
+        )
+        storage = make_storage(str(config_yml))
+        ru_vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
+        en_vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "en")
+        assert ru_vn.language == "ru"
+        assert ru_vn.enabled is True
+        assert en_vn.language == "en"
+        assert en_vn.enabled is False
+
+    def test_get_voice_normalization_lenient_defaults(self, tmp_path):
+        """enabled defaults to true, type defaults to simple, invalid format keys skipped."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              prompt_id: p1
+            bogus_format:
+              enabled: false
+"""
+        )
+        storage = make_storage(str(config_yml))
+        vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
+        assert vn is not None
+        assert vn.enabled is True
+        assert vn.type == NormalizationType.SIMPLE
+        assert vn.prompt_id == "p1"
+
+    def test_get_voice_normalization_returns_none_for_unknown_voice(self, tmp_path):
+        """get_voice_normalization returns None for unknown voice_id."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+"""
+        )
+        storage = make_storage(str(config_yml))
+        assert storage.get_voice_normalization("unknown-voice", TextFormat.TEXT, "ru") is None
+
+    def test_get_voice_normalization_returns_none_for_unknown_format(self, tmp_path):
+        """get_voice_normalization returns None for text_format not in normalization."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+"""
+        )
+        storage = make_storage(str(config_yml))
+        assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.SSML, "ru") is None
+
+    def test_get_voice_normalization_voice_without_normalization(self, tmp_path):
+        """get_voice_normalization returns None when voice has no normalization section."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+        storage = make_storage(str(config_yml))
+        assert storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru") is None
+
+    def test_get_voice_normalization_disabled_entry(self, tmp_path):
+        """get_voice_normalization returns entry even if enabled=False."""
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: false
+              type: simple
+"""
+        )
+        storage = make_storage(str(config_yml))
+        vn = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
+        assert vn is not None
+        assert vn.enabled is False
+        assert vn.type == NormalizationType.SIMPLE
+
+
+class TestModelInfoCapabilities:
+    """Tests for parsing and validating Model Info capability fields from YAML."""
+
+    def test_missing_languages_raises_value_error(self, tmp_path):
+        """A Model Info without a languages list fails fast at load."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError, match="languages"):
+            make_storage(str(config_yml))
+
+    @pytest.mark.parametrize(
+        ("yaml_value", "expected"),
+        [
+            ("silero", EngineType.SILERO),
+            ("qwen3", EngineType.QWEN3),
+            ("openai", EngineType.OPENAI),
+        ],
+    )
+    def test_engine_type_maps_to_enum(self, tmp_path, yaml_value, expected):
+        """engine_type maps the YAML name to the EngineType member."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            f"""
+models:
+  v5_6_ru:
+    engine_type: {yaml_value}
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_model_info("v5_6_ru").engine_type is expected
+
+    def test_missing_engine_type_raises_value_error(self, tmp_path):
+        """A Model Info without engine_type fails fast at load."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError, match="engine_type"):
+            make_storage(str(config_yml))
+
+    def test_unknown_engine_type_raises_value_error(self, tmp_path):
+        """An unrecognized engine_type value fails fast at load."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: klingon
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError, match="engine_type"):
+            make_storage(str(config_yml))
+
+    def test_the_old_qwen_spelling_is_rejected_with_the_valid_families_named(self, tmp_path):
+        """`qwen` is no longer a family, and the error says which families are."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: qwen
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            make_storage(str(config_yml))
+
+        message = str(exc_info.value)
+        assert "qwen3" in message
+        assert "silero" in message
+        assert "openai" in message
+
+    def test_languages_parse_as_trimmed_list(self, tmp_path):
+        """languages parses into a list with each entry whitespace-trimmed."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages:
+      - " ru "
+      - "  en"
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+
+        assert storage.get_model_info("v5_6_ru").languages == ["ru", "en"]
+
+    def test_empty_languages_raises_value_error(self, tmp_path):
+        """An explicitly empty languages list fails fast at load."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: []
+    voices:
+      - name: aidar
+"""
+        )
+
+        with pytest.raises(ValueError, match="languages"):
+            make_storage(str(config_yml))
+
+    def test_ssml_supported_and_language_auto_detected_default_to_false(self, tmp_path):
+        """Omitted ssml_supported and language_auto_detected default to false."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+        model_info = storage.get_model_info("v5_6_ru")
+
+        assert model_info.ssml_supported is False
+        assert model_info.language_auto_detected is False
+
+    def test_ssml_supported_and_language_auto_detected_parse_true(self, tmp_path):
+        """Declared true ssml_supported and language_auto_detected parse as true."""
+
+        config_yml = tmp_path / "config.yml"
+        config_yml.write_text(
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    ssml_supported: true
+    language_auto_detected: true
+    voices:
+      - name: aidar
+"""
+        )
+
+        storage = make_storage(str(config_yml))
+        model_info = storage.get_model_info("v5_6_ru")
+
+        assert model_info.ssml_supported is True
+        assert model_info.language_auto_detected is True
+
+
+def make_config_model() -> PredefinedData:
+    """Two Model Infos, each with one Voice, so serving can be observed per model."""
+    return PredefinedData(
+        models=[
+            make_model_info(),
+            make_model_info(id="v3_en"),
+        ],
+        voices=[
+            Voice(id="v5_6_ru-aidar", name="aidar", speaker="aidar", model_id="v5_6_ru"),
+            Voice(id="v3_en-en_0", name="en_0", speaker="en_0", model_id="v3_en"),
+        ],
+    )
+
+
+class TestActiveModelsSoleServingSwitch:
+    """active_models alone decides which Model Infos and Voices are served."""
+
+    def test_active_model_is_served_and_unlisted_models_are_dropped(self):
+        """A model listed in active_models is served; an unlisted model is not."""
+        storage = YamlDataStorage(make_config_model(), active_models=["v5_6_ru"])
+
+        assert storage.get_model_info("v5_6_ru") is not None
+        assert storage.get_model_info("v3_en") is None
+        assert not any(v.model_id == "v3_en" for v in storage.get_voices())
+
+    def test_absent_active_models_serves_no_models_and_no_voices(self):
+        """With no allowlist at all, nothing is served."""
+        storage = YamlDataStorage(make_config_model(), active_models=None)
+
+        assert storage.get_model_infos() == []
+        assert storage.get_voices() == []
+
+    def test_empty_active_models_serves_no_models_and_no_voices(self):
+        """An empty allowlist serves nothing, just like an absent one."""
+        storage = YamlDataStorage(make_config_model(), active_models=[])
+
+        assert storage.get_model_infos() == []
+        assert storage.get_voices() == []
+
+    def test_unknown_active_model_fails_naming_every_offending_id(self):
+        """An id absent from the data file stops startup and names the unknown ids."""
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(make_config_model(), active_models=["ghost", "other"])
+
+        message = str(exc_info.value)
+        assert "ghost" in message
+        assert "other" in message
+
+
+class TestInputsTheShapesAllow:
+    """Inputs a Model Info or a Voice can carry, which were rejected on the way in."""
+
+    def test_a_path_is_read_as_written(self, tmp_path):
+        """The storage invites a Path in its signature, and used to raise on one.
+
+        Passing a string worked, which is why nothing caught it: every other test hands
+        over a string too.
+        """
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = make_storage(path)
+
+        assert storage.get_voice("v5_6_ru-aidar").name == "aidar"
+
+    def test_a_null_speaker_falls_back_to_the_voice_name(self, tmp_path):
+        """An explicit null means the same as leaving the speaker out.
+
+        The fallback exists for an absent speaker; written as null it used to raise
+        instead, because the fallback reached strip() on None.
+        """
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        speaker: null
+""",
+        )
+
+        storage = make_storage(path)
+
+        assert storage.get_voice("v5_6_ru-aidar").speaker == "aidar"
+
+    @pytest.mark.parametrize("section", ["models", "prompts"])
+    def test_an_empty_section_is_read_as_absent(self, tmp_path, section):
+        """A section written as null is a section with nothing in it, not a crash."""
+        contents = (
+            MODEL_WITH_VOICE if section == "models" else f"{MODEL_WITH_VOICE}\n{section}: null\n"
+        )
+        path = write_data_file(tmp_path, contents)
+
+        storage = make_storage(path)
+
+        assert storage.get_model_infos() if section == "models" else storage.get_voices()
+
+    def test_null_voices_are_no_voices(self, tmp_path):
+        """A Model Info may carry no voices at all, and saying so explicitly is allowed."""
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices: null
+""",
+        )
+
+        storage = make_storage(path)
+
+        assert storage.get_voice("v5_6_ru-aidar") is None
+        assert storage.get_model_info("v5_6_ru") is not None
+
+    def test_a_voice_without_a_name_is_refused_by_name(self, tmp_path):
+        """A name is required, so it is refused — but by something a reader can act on."""
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - speaker: aidar
+""",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            make_storage(path)
+
+        assert "v5_6_ru" in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        ("contents", "expected"),
+        [
+            pytest.param("models:\n  v5_6_ru:\n", "v5_6_ru", id="model-with-no-body"),
+            pytest.param(
+                "models:\n  v5_6_ru:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - null\n",
+                "v5_6_ru",
+                id="voice-entry-that-is-null",
+            ),
+            pytest.param(
+                "models:\n  v5_6_ru:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - aidar\n",
+                "v5_6_ru",
+                id="voice-entry-that-is-not-a-mapping",
+            ),
+        ],
+    )
+    def test_a_wrong_shape_inside_a_model_is_refused_by_name(self, tmp_path, contents, expected):
+        """A mistyped entry is refused with something a reader can act on.
+
+        All three used to raise a bare AttributeError or TypeError from inside the
+        parser, naming nothing about the file that was wrong.
+        """
+        path = write_data_file(tmp_path, contents)
+
+        with pytest.raises(ValueError) as exc_info:
+            make_storage(path)
+
+        assert expected in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        "contents",
+        [
+            pytest.param("- one\n- two\n", id="a-list"),
+            pytest.param("models: v5_6_ru\n", id="models-is-not-a-mapping"),
+            pytest.param("prompts:\n  id: ru_text\n", id="prompts-is-not-a-list"),
+        ],
+    )
+    def test_a_data_file_of_the_wrong_shape_is_refused_by_name(self, tmp_path, contents):
+        """The document itself has to be a mapping of the sections the parser reads."""
+        path = write_data_file(tmp_path, contents)
+
+        with pytest.raises(ValueError) as exc_info:
+            make_storage(path)
+
+        assert "data.yml" in str(exc_info.value), "the error must name the file that was wrong"
+
+    @pytest.mark.parametrize(
+        ("contents", "expected"),
+        [
+            pytest.param("prompts:\n  - text: hi\n    model: m\n", "id", id="prompt-without-an-id"),
+            pytest.param("prompts:\n  - null\n", "prompts", id="prompt-that-is-null"),
+            pytest.param("prompts:\n  - a string\n", "prompts", id="prompt-that-is-a-string"),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - name: aidar\n        normalization: ru\n",
+                "normalization",
+                id="normalization-that-is-not-a-mapping",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - name: aidar\n        normalization:\n"
+                "          ru:\n            text: simple\n",
+                "normalization",
+                id="normalization-without-a-mapping-per-language",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: ru\n",
+                "languages",
+                id="languages-written-as-a-string",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [1]\n",
+                "languages",
+                id="language-that-is-not-a-string",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      - name: null\n",
+                "name",
+                id="voice-name-that-is-null",
+            ),
+            pytest.param(
+                "models:\n  m:\n    engine_type: silero\n    languages: [ru]\n"
+                "    voices:\n      aidar: {}\n",
+                "voices",
+                id="voices-that-are-not-a-list",
+            ),
+        ],
+    )
+    def test_a_shape_the_data_file_does_not_allow_is_refused_by_name(
+        self, tmp_path, contents, expected
+    ):
+        """A value written in the wrong shape is refused, not read into nothing.
+
+        Each of these used to raise a bare KeyError, TypeError or AttributeError from
+        inside the parser, or to be silently dropped: a mistyped data file should say
+        what is wrong with it, in terms the reader wrote it in.
+        """
+        path = write_data_file(tmp_path, contents)
+
+        with pytest.raises(ValueError) as exc_info:
+            make_storage(path)
+
+        assert expected in str(exc_info.value)
+
+    def test_a_language_list_of_strings_is_read_as_written(self, tmp_path):
+        """The shape the parser accepts is the shape it reads, unchanged."""
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru, en]
+""",
+        )
+
+        storage = make_storage(path)
+
+        assert storage.get_model_info("v5_6_ru").languages == ["ru", "en"]
+
+    def test_a_normalization_block_written_as_documented_is_read(self, tmp_path):
+        """A correctly shaped override survives; only the malformed ones are refused."""
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: ru_text
+prompts:
+  - id: ru_text
+    text: "Normalize Russian text"
+    model: qwen3.5:4b
+""",
+        )
+
+        storage = make_storage(path)
+
+        override = storage.get_voice_normalization("v5_6_ru-aidar", TextFormat.TEXT, "ru")
+
+        assert override.type.value == "openai"
+        assert override.enabled is True
+        assert storage.get_prompt("ru_text").model == "qwen3.5:4b"

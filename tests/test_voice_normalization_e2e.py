@@ -1,5 +1,5 @@
-from src.config import NormalizationSettings
-from src.tts.config_storage import SileroTTSYamlConfigStorage
+from src.config import NormalizationSettings, TextFormatNormalizationSettings
+from src.tts.data_storage import YamlDataStorage
 from src.tts.models import TextFormat
 from src.tts.preprocessing import (
     OpenAiTextNormalizer,
@@ -10,17 +10,17 @@ from tests.helpers import make_voice
 
 YAML_WITH_LLM_NORMALIZATION = """
 models:
-  v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            normalization:
-              text:
-                enabled: true
-                type: llm
-                prompt_id: ru_text
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: ru_text
 
 prompts:
   - id: ru_text
@@ -30,17 +30,17 @@ prompts:
 
 YAML_WITH_DISABLED_NORMALIZATION = """
 models:
-  v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            normalization:
-              text:
-                enabled: false
-                type: llm
-                prompt_id: ru_text
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: false
+              type: openai
+              prompt_id: ru_text
 
 prompts:
   - id: ru_text
@@ -50,12 +50,11 @@ prompts:
 
 YAML_WITHOUT_NORMALIZATION = """
 models:
-  v5_5_ru:
-    language: ru
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
 """
 
 
@@ -66,7 +65,7 @@ class TestE2EVoiceNormalizationLLM:
         config_yml = tmp_path / "data.yml"
         config_yml.write_text(YAML_WITH_LLM_NORMALIZATION)
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client,
             settings=NormalizationSettings(),
@@ -74,11 +73,10 @@ class TestE2EVoiceNormalizationLLM:
         )
 
         voice = make_voice(
-            voice_id="ru_RU-v5_5_ru-aidar",
+            voice_id="v5_6_ru-aidar",
             name="aidar",
-            locale="ru_RU",
         )
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
 
         assert isinstance(result, OpenAiTextNormalizer)
 
@@ -90,7 +88,7 @@ class TestE2EVoiceNormalizationDisabled:
         config_yml = tmp_path / "data.yml"
         config_yml.write_text(YAML_WITH_DISABLED_NORMALIZATION)
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client,
             settings=NormalizationSettings(),
@@ -98,11 +96,10 @@ class TestE2EVoiceNormalizationDisabled:
         )
 
         voice = make_voice(
-            voice_id="ru_RU-v5_5_ru-aidar",
+            voice_id="v5_6_ru-aidar",
             name="aidar",
-            locale="ru_RU",
         )
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
 
         assert result is None
 
@@ -114,18 +111,20 @@ class TestE2ENoVoiceNormalizationFallsThrough:
         config_yml = tmp_path / "data.yml"
         config_yml.write_text(YAML_WITHOUT_NORMALIZATION)
 
-        storage = SileroTTSYamlConfigStorage(str(config_yml))
+        storage = YamlDataStorage(str(config_yml))
+        settings = NormalizationSettings(
+            text=TextFormatNormalizationSettings(enabled=True),
+        )
         factory = TextNormalizerFactory(
             openai_client=mock_openai_client,
-            settings=NormalizationSettings(),
+            settings=settings,
             storage=storage,
         )
 
         voice = make_voice(
-            voice_id="ru_RU-v5_5_ru-aidar",
+            voice_id="v5_6_ru-aidar",
             name="aidar",
-            locale="ru_RU",
         )
-        result = factory.create_text_normalizer(voice=voice, format=TextFormat.TEXT)
+        result = factory.create(voice=voice, text_format=TextFormat.TEXT, language="ru")
 
         assert isinstance(result, PlainTextNormalizer)

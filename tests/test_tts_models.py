@@ -1,98 +1,260 @@
 from dataclasses import FrozenInstanceError
 
+import numpy as np
 import pytest
 
-from src.config import Settings
-from src.tts.exceptions import TTSEngineError
 from src.tts.models import (
-    Model,
+    ENGINE_REPO_URLS,
+    EngineType,
+    ModelInfo,
     NormalizationType,
+    PredefinedData,
     Prompt,
     TextFormat,
-    TTSConfig,
-    TTSConfigModel,
-    TTSResult,
+    TtsResult,
     Voice,
     VoiceNormalization,
 )
+from tests import helpers
 
 
-class TestModel:
-    def test_model_has_name_and_language_fields(self):
-        """Model dataclass has name and language fields."""
-        model = Model(name="test_model", language="en")
-        assert model.name == "test_model"
-        assert model.language == "en"
+class TestEngineType:
+    def test_engine_type_has_silero_qwen3_openai_values(self):
+        """EngineType exposes SILERO, QWEN3, and OPENAI members with expected values."""
+        assert EngineType.SILERO.value == "silero"
+        assert EngineType.QWEN3.value == "qwen3"
+        assert EngineType.OPENAI.value == "openai"
+        assert not hasattr(EngineType, "QWEN")
 
-    def test_model_warmup_defaults_to_false(self):
-        """Model.warmup defaults to False."""
-        model = Model(name="test_model", language="en")
-        assert model.warmup is False
 
-    def test_model_warmup_can_be_set_to_true(self):
-        """Model(language, warmup=True) sets warmup to True."""
-        model = Model(name="test_model", language="en", warmup=True)
-        assert model.warmup is True
+class TestModelInfo:
+    def test_model_info_requires_engine_type(self):
+        """ModelInfo.engine_type is required — constructing without it raises TypeError."""
+        with pytest.raises(TypeError):
+            ModelInfo(id="test_model")
 
-    def test_model_hash_prefix_defaults_to_none(self):
-        """Model.hash_prefix defaults to None."""
-        model = Model(name="test_model", language="en")
-        assert model.hash_prefix is None
+    def test_model_info_stores_engine_type(self):
+        """ModelInfo stores the given engine_type."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.engine_type is EngineType.SILERO
 
-    def test_model_hash_prefix_can_be_set(self):
-        """Model(name, language, hash_prefix=...) stores the value."""
-        model = Model(name="test_model", language="en", hash_prefix="a1b2c3")
-        assert model.hash_prefix == "a1b2c3"
+    def test_model_info_accepts_any_engine_type(self):
+        """ModelInfo accepts each EngineType member."""
+        for engine_type in EngineType:
+            model_info = ModelInfo(id="test_model", engine_type=engine_type)
+            assert model_info.engine_type is engine_type
 
-    def test_model_is_frozen(self):
-        """Model dataclass is immutable (frozen)."""
-        model = Model(name="test_model", language="en")
+    def test_model_info_ssml_supported_defaults_to_false(self):
+        """ModelInfo.ssml_supported defaults to False."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.ssml_supported is False
+
+    def test_model_info_ssml_supported_can_be_set_to_true(self):
+        """ModelInfo(ssml_supported=True) sets ssml_supported to True."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO, ssml_supported=True)
+        assert model_info.ssml_supported is True
+
+    def test_model_info_language_auto_detected_defaults_to_false(self):
+        """ModelInfo.language_auto_detected defaults to False."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.language_auto_detected is False
+
+    def test_model_info_language_auto_detected_can_be_set_to_true(self):
+        """ModelInfo(language_auto_detected=True) sets language_auto_detected to True."""
+        model_info = ModelInfo(
+            id="test_model", engine_type=EngineType.SILERO, language_auto_detected=True
+        )
+        assert model_info.language_auto_detected is True
+
+    def test_model_info_languages_defaults_to_empty_list(self):
+        """ModelInfo.languages defaults to an empty list."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.languages == []
+
+    def test_model_info_languages_stores_declared_languages(self):
+        """ModelInfo stores the declared list of languages."""
+        model_info = ModelInfo(
+            id="test_model", engine_type=EngineType.SILERO, languages=["ru", "en"]
+        )
+        assert model_info.languages == ["ru", "en"]
+
+    def test_model_info_warmup_defaults_to_false(self):
+        """ModelInfo.warmup defaults to False."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.warmup is False
+
+    def test_model_info_warmup_can_be_set_to_true(self):
+        """ModelInfo(warmup=True) sets warmup to True."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO, warmup=True)
+        assert model_info.warmup is True
+
+    def test_model_info_hash_prefix_defaults_to_none(self):
+        """ModelInfo.hash_prefix defaults to None."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.hash_prefix is None
+
+    def test_model_info_hash_prefix_can_be_set(self):
+        """ModelInfo(hash_prefix=...) stores the value."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO, hash_prefix="a1b2c3")
+        assert model_info.hash_prefix == "a1b2c3"
+
+    def test_model_info_upstream_id_defaults_to_none(self):
+        """ModelInfo.upstream_id defaults to None, meaning the id is used upstream."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.upstream_id is None
+
+    def test_model_info_keeps_its_existing_positional_field_order(self):
+        """A third positional argument still means ssml_supported, not upstream_id."""
+        model_info = ModelInfo("test_model", EngineType.SILERO, True)
+        assert model_info.ssml_supported is True
+        assert model_info.upstream_id is None
+
+    def test_model_info_upstream_id_can_be_set(self):
+        """ModelInfo(upstream_id=...) stores the different upstream artifact name."""
+        model_info = ModelInfo(
+            id="local-model",
+            engine_type=EngineType.QWEN3,
+            upstream_id="owner/upstream-model",
+        )
+        assert model_info.upstream_id == "owner/upstream-model"
+
+    def test_model_info_revision_defaults_to_none(self):
+        """ModelInfo.revision defaults to None."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
+        assert model_info.revision is None
+
+    def test_model_info_revision_can_be_set(self):
+        """ModelInfo(revision=...) stores the value, separately from hash_prefix."""
+        model_info = ModelInfo(
+            id="test_model",
+            engine_type=EngineType.QWEN3,
+            revision="0123456789abcdef",
+            hash_prefix="a1b2c3",
+        )
+        assert model_info.revision == "0123456789abcdef"
+        assert model_info.hash_prefix == "a1b2c3"
+
+    def test_model_info_does_not_carry_enabled(self):
+        """The retired serving switch is not part of the domain model."""
+        assert "enabled" not in ModelInfo.__dataclass_fields__
+
+    def test_model_info_is_frozen(self):
+        """ModelInfo dataclass is immutable (frozen)."""
+        model_info = ModelInfo(id="test_model", engine_type=EngineType.SILERO)
         with pytest.raises(FrozenInstanceError):
-            model.language = "fr"
+            model_info.engine_type = EngineType.QWEN3
+
+
+class TestOldModelNamesAreGone:
+    """The old names for the entity are not importable, reachable, or callable."""
+
+    def test_the_model_alias_is_no_longer_importable(self):
+        """Importing the old class name fails."""
+        with pytest.raises(ImportError):
+            from src.tts.models import Model  # noqa: F401
+
+    def test_the_engine_no_longer_answers_to_model(self):
+        """A TTS Engine answers to model_info only."""
+        engine = helpers.FakeTtsEngine(helpers.make_model_info(id="v5_6_ru"))
+
+        assert engine.model_info.id == "v5_6_ru"
+        assert not hasattr(engine, "model")
+
+    def test_the_old_builder_name_is_gone(self):
+        """The helpers expose make_model_info only."""
+        assert not hasattr(helpers, "make_model")
+
+    def test_the_builder_maps_every_declared_field(self):
+        """make_model_info carries each declared field onto the value it is given."""
+        model_info = helpers.make_model_info(
+            id="v3_en",
+            engine_type=EngineType.QWEN3,
+            upstream_id="owner/upstream-model",
+            languages=["en", "ru"],
+            language_auto_detected=True,
+            ssml_supported=True,
+            warmup=True,
+        )
+
+        assert model_info == ModelInfo(
+            id="v3_en",
+            engine_type=EngineType.QWEN3,
+            upstream_id="owner/upstream-model",
+            languages=["en", "ru"],
+            language_auto_detected=True,
+            ssml_supported=True,
+            warmup=True,
+        )
 
 
 class TestVoice:
     def test_voice_has_all_fields(self):
-        """Voice dataclass has id, name, speaker, model, locale fields."""
+        """Voice dataclass has id, name, speaker, model_id fields."""
         voice = Voice(
-            id="en_US-v3_en-en_0",
-            name="en_0",
-            speaker="en_0",
-            model="v3_en",
-            locale="en_US",
+            id="v5_6_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_6_ru",
         )
-        assert voice.id == "en_US-v3_en-en_0"
-        assert voice.name == "en_0"
-        assert voice.speaker == "en_0"
-        assert voice.model == "v3_en"
-        assert voice.locale == "en_US"
+        assert voice.id == "v5_6_ru-aidar"
+        assert voice.name == "aidar"
+        assert voice.speaker == "aidar"
+        assert voice.model_id == "v5_6_ru"
 
-    def test_voice_can_be_created_without_gender(self):
-        """Voice can be constructed with only the 5 essential fields — no gender required."""
+    def test_voice_has_optional_reference_fields(self):
+        """Voice can be constructed with reference audio/text and instruct fields."""
         voice = Voice(
-            id="en_US-v3_en-en_0",
-            name="en_0",
-            speaker="en_0",
-            model="v3_en",
-            locale="en_US",
+            id="v5_6_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_6_ru",
+            ref_audio="path/to/ref.wav",
+            ref_text="reference text",
+            instruct="instructive prompt",
         )
-        assert voice.id == "en_US-v3_en-en_0"
-        assert voice.name == "en_0"
-        assert voice.speaker == "en_0"
-        assert voice.model == "v3_en"
-        assert voice.locale == "en_US"
+        assert voice.ref_audio == "path/to/ref.wav"
+        assert voice.ref_text == "reference text"
+        assert voice.instruct == "instructive prompt"
+
+    def test_voice_can_be_created_with_only_required_fields(self):
+        """Voice can be constructed with only the 4 essential fields."""
+        voice = Voice(
+            id="v5_6_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_6_ru",
+        )
+        assert voice.id == "v5_6_ru-aidar"
+        assert voice.name == "aidar"
+        assert voice.speaker == "aidar"
+        assert voice.model_id == "v5_6_ru"
+
+    def test_voice_warmup_defaults_to_false(self):
+        """Voice.warmup defaults to False."""
+        voice = Voice(id="v5_6_ru-aidar", name="aidar", speaker="aidar", model_id="v5_6_ru")
+        assert voice.warmup is False
+
+    def test_voice_warmup_can_be_set_to_true(self):
+        """Voice(warmup=True) sets warmup to True."""
+        voice = Voice(
+            id="v5_6_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_6_ru",
+            warmup=True,
+        )
+        assert voice.warmup is True
 
     def test_voice_is_frozen(self):
         """Voice dataclass is immutable (frozen)."""
         voice = Voice(
-            id="en_US-v3_en-en_0",
-            name="en_0",
-            speaker="en_0",
-            model="v3_en",
-            locale="en_US",
+            id="v5_6_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_6_ru",
         )
         with pytest.raises(FrozenInstanceError):
-            voice.speaker = "en_1"
+            voice.speaker = "baya"
 
 
 class TestPrompt:
@@ -112,17 +274,19 @@ class TestPrompt:
 
 class TestVoiceNormalization:
     def test_voice_normalization_has_all_fields(self):
-        """VoiceNormalization dataclass has voice_id, text_format, type, enabled, prompt_id."""
+        """VoiceNormalization dataclass has voice_id, text_format, language, type, enabled, prompt_id."""
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
-            type=NormalizationType.LLM,
+            language="ru",
+            type=NormalizationType.OPENAI,
             enabled=True,
             prompt_id="p1",
         )
         assert vn.voice_id == "v1"
         assert vn.text_format == TextFormat.TEXT
-        assert vn.type == NormalizationType.LLM
+        assert vn.language == "ru"
+        assert vn.type == NormalizationType.OPENAI
         assert vn.enabled is True
         assert vn.prompt_id == "p1"
 
@@ -131,6 +295,7 @@ class TestVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.SIMPLE,
             enabled=False,
         )
@@ -141,6 +306,7 @@ class TestVoiceNormalization:
         vn = VoiceNormalization(
             voice_id="v1",
             text_format=TextFormat.TEXT,
+            language="ru",
             type=NormalizationType.SIMPLE,
             enabled=True,
         )
@@ -148,119 +314,105 @@ class TestVoiceNormalization:
             vn.enabled = False
 
 
-class TestTTSConfigModel:
-    def test_tts_config_model_has_models_and_voices(self):
-        """TTSConfigModel dataclass has models list and voices list."""
-        models = [Model(name="v3_en", language="en")]
+class TestPredefinedData:
+    def test_predefined_data_has_models_and_voices(self):
+        """PredefinedData dataclass has models list and voices list."""
+        models = [ModelInfo(id="v3_en", engine_type=EngineType.SILERO)]
         voices = [
             Voice(
                 id="en_US-v3_en-en_0",
                 name="en_0",
                 speaker="en_0",
-                model="v3_en",
-                locale="en_US",
+                model_id="v3_en",
             )
         ]
-        config = TTSConfigModel(models=models, voices=voices)
-        assert config.models == models
-        assert config.voices == voices
+        data = PredefinedData(models=models, voices=voices)
+        assert data.models == models
+        assert data.voices == voices
 
-    def test_tts_config_model_is_frozen(self):
-        """TTSConfigModel dataclass is immutable (frozen)."""
-        config = TTSConfigModel(models=[], voices=[])
+    def test_predefined_data_is_frozen(self):
+        """PredefinedData dataclass is immutable (frozen)."""
+        data = PredefinedData(models=[], voices=[])
         with pytest.raises(FrozenInstanceError):
-            config.models = []
-
-
-class TestTTSConfig:
-    def test_tts_config_has_max_models_field(self):
-        """TTSConfig dataclass has max_models field."""
-        config = TTSConfig(
-            device="cpu",
-            inference_timeout=5,
-            frame_duration_ms=50,
-            sample_rate=48000,
-            max_models=5,
-            cache_half_life=60,
-            max_concurrent_sentences_per_model=2,
-            max_sentence_chars=48000,
-            models_dir=".models/silero",
-            models_yml_url="https://example.com/models.yml",
-            models_yml_hash=None,
-        )
-        assert config.max_models == 5
-
-    def test_tts_config_accepts_models_yml_url_and_hash(self):
-        """TTSConfig accepts models_yml_url and models_yml_hash."""
-        settings = Settings()
-        config = TTSConfig(
-            device="cpu",
-            inference_timeout=5,
-            frame_duration_ms=50,
-            sample_rate=48000,
-            max_models=2,
-            cache_half_life=60,
-            max_concurrent_sentences_per_model=2,
-            max_sentence_chars=48000,
-            models_dir=".models/silero",
-            models_yml_url=str(settings.models_yml_url),
-            models_yml_hash=settings.models_yml_hash,
-        )
-        assert str(config.models_yml_url) == str(settings.models_yml_url)
-        assert config.models_yml_hash == settings.models_yml_hash
-
-    def test_tts_config_models_yml_hash_accepts_none(self):
-        """TTSConfig.models_yml_hash accepts None (skip validation)."""
-        config = TTSConfig(
-            device="cpu",
-            inference_timeout=5,
-            frame_duration_ms=50,
-            sample_rate=48000,
-            max_models=2,
-            cache_half_life=60,
-            max_concurrent_sentences_per_model=2,
-            max_sentence_chars=48000,
-            models_dir=".models/silero",
-            models_yml_url="https://example.com/models.yml",
-            models_yml_hash=None,
-        )
-        assert config.models_yml_hash is None
-
-    def test_tts_config_is_frozen(self):
-        """TTSConfig dataclass is immutable (frozen)."""
-        config = TTSConfig(
-            device="cpu",
-            inference_timeout=5,
-            frame_duration_ms=50,
-            sample_rate=48000,
-            max_models=2,
-            cache_half_life=60,
-            max_concurrent_sentences_per_model=2,
-            max_sentence_chars=48000,
-            models_dir=".models/silero",
-            models_yml_url="https://example.com/models.yml",
-            models_yml_hash=None,
-        )
-        with pytest.raises(FrozenInstanceError):
-            config.max_models = 3
-
-
-class TestExceptions:
-    def test_tts_engine_error_message_only(self):
-        """TTSEngineError accepts only message — no locale/voice/status_code."""
-        err = TTSEngineError("test error")
-        assert str(err) == "test error"
-        assert not hasattr(err, "locale")
-        assert not hasattr(err, "voice")
-        assert not hasattr(err, "status_code")
+            data.models = []
 
 
 class TestTTSResult:
     def test_tts_result_has_all_fields(self):
-        """TTSResult dataclass has audio, sample_rate, bytes_per_sample, channels."""
-        audio = b"\x00\x00\x00\x00"
-        result = TTSResult(audio=audio, sample_rate=48000, bytes_per_sample=2, channels=1)
-        assert result.audio == audio
+        """TTSResult dataclass has audio (np.ndarray), sample_rate, bytes_per_sample, channels."""
+        audio = np.array([0, 1, 2, 3], dtype=np.int16)
+        result = TtsResult(audio=audio, sample_rate=48000, bytes_per_sample=2, channels=1)
+        assert isinstance(result.audio, np.ndarray)
+        assert np.array_equal(result.audio, audio)
         assert result.sample_rate == 48000
         assert result.bytes_per_sample == 2
         assert result.channels == 1
+
+
+class TestContiguousAudio:
+    """A Chunk's audio can be addressed as raw bytes, without a copy on the way."""
+
+    def test_strided_audio_becomes_contiguous(self):
+        """Audio with gaps between its samples reaches the caller as one run of samples."""
+        strided = np.zeros(8, dtype=np.int16)[::2]
+        assert not strided.flags["C_CONTIGUOUS"]
+
+        result = TtsResult(audio=strided, sample_rate=48000, bytes_per_sample=2, channels=1)
+
+        assert result.audio.flags["C_CONTIGUOUS"]
+        assert np.array_equal(result.audio, strided)
+
+    def test_contiguous_audio_is_not_copied(self):
+        """Audio already contiguous is handed straight over, so no copy is paid for."""
+        audio = np.zeros(8, dtype=np.int16)
+
+        result = TtsResult(audio=audio, sample_rate=48000, bytes_per_sample=2, channels=1)
+
+        assert result.audio is audio
+
+
+class TestSampleAxis:
+    """Audio needs a sample axis, because the TTS Engine Hub frames audio by slicing one."""
+
+    def test_audio_without_a_sample_axis_is_rejected(self):
+        """Audio carrying a single sample and no sample axis is refused where it arrives."""
+        with pytest.raises(ValueError, match="sample"):
+            TtsResult(
+                audio=np.zeros((), dtype=np.int16),
+                sample_rate=48000,
+                bytes_per_sample=2,
+                channels=1,
+            )
+
+    def test_empty_audio_is_accepted(self):
+        """Audio with no samples at all is silence, which a Chunk is allowed to carry."""
+        result = TtsResult(
+            audio=np.zeros(0, dtype=np.int16), sample_rate=48000, bytes_per_sample=2, channels=1
+        )
+
+        assert result.audio.shape == (0,)
+
+
+class TestEngineTypeRepoUrls:
+    """Every TTS Engine family says where it comes from."""
+
+    def test_every_family_carries_the_url_of_its_project(self):
+        """A family declared without a URL could only ever be advertised uncredited."""
+        assert set(ENGINE_REPO_URLS) == set(EngineType)
+
+    @pytest.mark.parametrize(
+        ("engine_type", "expected_url"),
+        [
+            (EngineType.SILERO, "https://github.com/snakers4/silero-models"),
+            (EngineType.QWEN3, "https://github.com/QwenLM/Qwen3-TTS"),
+            (EngineType.OPENAI, "https://openai.com"),
+        ],
+    )
+    def test_a_family_points_at_its_own_project(self, engine_type, expected_url):
+        """Pins what each URL *is*, not merely that one was written down.
+
+        Without this the tests comparing a credit against `ENGINE_REPO_URLS` prove only
+        that the handler reads the mapping: swapping one family's URL for another's
+        would leave them green, and every client would follow the wrong link.
+        """
+        assert ENGINE_REPO_URLS[engine_type] == expected_url

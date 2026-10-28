@@ -4,15 +4,15 @@
 
 | Label | Meaning | Next State |
 |-------|---------|------------|
-| `needs-triage` | Maintainer needs to evaluate | `needs-info` or `ready-for-agent` or `ready-for-human` or `wontfix` |
+| `needs-triage` | Maintainer needs to evaluate | `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix` |
 | `needs-info` | Waiting on reporter for more info | `needs-triage` or `wontfix` |
 | `ready-for-agent` | Fully specified, AFK-ready | `ready-for-human` (after implementation) |
 | `ready-for-human` | Needs human implementation | (closed when resolved) |
-| `wontfix` | Will not be actioned | (terminal state) |
+| `wontfix` | Will not be actioned | (terminal) |
 
 ## Usage
 
-When using the `triage` skill, update the `labels` array in the issue's frontmatter to move it through the state machine.
+When using the `triage` skill, update the `labels:` array in the issue file's frontmatter to move it through the state machine.
 
 ## Defaults
 

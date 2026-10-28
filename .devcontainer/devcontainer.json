@@ -1,6 +1,6 @@
 {
 	// For quick reference: https://containers.dev/implementors/json_reference/
-	"name": "Silero server",
+	"name": "Wyoming TTS Hub",
 	// "image": "python:3.14-bookworm",
 	"build": {
 		"context": "..",
@@ -46,6 +46,9 @@
 		},
 		"ghcr.io/devcontainers/features/docker-in-docker:3": {
 			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/node:2": {
+			"version": "lts"
 		}
 	},
 

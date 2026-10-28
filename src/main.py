@@ -2,84 +2,52 @@ import asyncio
 import signal
 from functools import partial
 
-import torch
 from loguru import logger
 from openai import AsyncOpenAI
 from wyoming.server import AsyncServer, AsyncTcpServer
 
-from src.config import Settings, get_settings
-from src.handler import SileroEventHandler
+from src.config import NormalizationSettings, OpenAiSettings, Settings, get_settings
+from src.handler import TtsEngineHubEventHandler
 from src.logger import setup_logging
-from src.tts.config_storage import SileroTTSConfigStorage, SileroTTSYamlConfigStorage
-from src.tts.engine import SileroTTSEngine
-from src.tts.models import TTSConfig
-from src.tts.preprocessing import TextNormalizerFactory, TextSentenizerFactory
+from src.tts.data_storage import YamlDataStorage
+from src.tts.engine_factory import TtsEngineFactory
+from src.tts.engine_hub import TtsEngineHub
+from src.tts.engine_manager import TtsEngineManager
+from src.tts.middleware import (
+    NormalizeTextMiddleware,
+    ResolveLanguageMiddleware,
+    SplitSentencesMiddleware,
+)
+from src.tts.models import BackendType
+from src.tts.preprocessing import (
+    TextNormalizerFactory,
+    TextSentencizerFactory,
+    unreachable_normalization_prompts,
+)
 
 setup_logging()
 
 
-def create_storage(settings: Settings) -> SileroTTSConfigStorage:
-    return SileroTTSYamlConfigStorage(settings.data_yml_path)
+def setup_backend(settings: Settings):
+    if settings.backend_type is BackendType.TORCH:
+        import torch
+
+        torch.set_num_threads(settings.torch.num_threads)
+        torch.set_num_interop_threads(settings.torch.num_interop_threads)
+        if settings.torch.flush_denormal and hasattr(torch, "set_flush_denormal"):
+            torch.set_flush_denormal(True)
 
 
-def create_text_sentenizer_factory() -> TextSentenizerFactory:
-    return TextSentenizerFactory()
-
-
-def create_text_normalizer_factory(
-    openai_client: AsyncOpenAI, settings: Settings, storage: SileroTTSConfigStorage
-) -> TextNormalizerFactory:
-    return TextNormalizerFactory(
-        openai_client=openai_client,
-        settings=settings.normalization,
-        storage=storage,
-    )
-
-
-def create_engine(
-    settings: Settings,
-    storage: SileroTTSConfigStorage,
-    text_sentenizer_factory: TextSentenizerFactory,
-    text_normalizer_factory: TextNormalizerFactory,
-) -> SileroTTSEngine:
-    torch.set_num_threads(settings.torch.num_threads)
-    torch.set_num_interop_threads(settings.torch.num_interop_threads)
-    if settings.torch.flush_denormal and hasattr(torch, "set_flush_denormal"):
-        torch.set_flush_denormal(True)
-
-    config = TTSConfig(
-        device=settings.torch.device,
-        inference_timeout=settings.inference_timeout,
-        frame_duration_ms=settings.frame_duration_ms,
-        sample_rate=settings.sample_rate,
-        max_models=settings.max_models,
-        cache_half_life=settings.cache_half_life,
-        max_concurrent_sentences_per_model=settings.max_concurrent_sentences_per_model,
-        max_sentence_chars=settings.max_sentence_chars,
-        models_dir=settings.models_dir,
-        models_yml_url=settings.models_yml_url,
-        models_yml_hash=settings.models_yml_hash,
-    )
-
-    return SileroTTSEngine(
-        config=config,
-        storage=storage,
-        text_sentenizer_factory=text_sentenizer_factory,
-        text_normalizer_factory=text_normalizer_factory,
-    )
-
-
-def create_openai_client(settings: Settings) -> AsyncOpenAI:
-    config = settings.openai
-    if config is None:
+def create_openai_client(settings: OpenAiSettings) -> AsyncOpenAI:
+    if settings is None:
         return None
 
-    if not config.base_url or not config.api_key:
+    if not settings.base_url or not settings.api_key:
         return None
 
     openai_client = AsyncOpenAI(
-        base_url=config.base_url,
-        api_key=config.api_key,
+        base_url=settings.base_url,
+        api_key=settings.api_key,
     )
 
     return openai_client
@@ -101,27 +69,87 @@ async def register_zeroconf_server(name: str, for_server: AsyncServer):
     logger.debug("Zeroconf discovery enabled")
 
 
+def warn_unreachable_prompts(settings: NormalizationSettings, data_storage: YamlDataStorage):
+    """Say which configured normalization prompts can never be selected.
+
+    Reported rather than refused: an unreachable prompt is inert, so the server still
+    synthesizes, and a prompt for a Language no served Model Info declares yet is a
+    staged configuration rather than a mistake. What it must not be is silent — the
+    symptom otherwise is text that quietly comes back unnormalized.
+    """
+    unreachable = unreachable_normalization_prompts(settings, data_storage)
+    for text_format, languages in unreachable.items():
+        logger.warning(
+            "Normalization prompts for {languages} under '{text_format}' are keyed by a "
+            "Language no Model Info this instance serves declares, so they are never "
+            "selected. Prompts are keyed by the Language itself, not by a locale with a "
+            "region suffix.",
+            languages=", ".join(sorted(languages)),
+            text_format=text_format,
+        )
+
+
 async def main():
     settings = get_settings()
     logger.debug(settings)
 
+    setup_backend(settings)
+
     server = AsyncServer.from_uri(settings.uri)
 
-    openai_client = create_openai_client(settings)
+    normalization_client = create_openai_client(settings.normalization.openai)
+    data_storage = YamlDataStorage(
+        config_path_or_model=settings.data_yml_path,
+        active_models=settings.active_models,
+        warmup_models=settings.warmup_models,
+        warmup_voices=settings.warmup_voices,
+    )
+    warn_unreachable_prompts(settings.normalization, data_storage)
+    engine_manager = TtsEngineManager(
+        backendType=settings.backend_type,
+        cache_half_life_seconds=settings.cache_half_life,
+        cache_capacity=settings.max_models,
+        inference_timeout=settings.inference_timeout,
+        max_concurrent_sentences_per_model=settings.max_concurrent_sentences_per_model,
+        engine_factory=TtsEngineFactory(settings=settings),
+        data_storage=data_storage,
+        max_voice_prompts=settings.max_voice_prompts,
+    )
 
-    storage = create_storage(settings)
-    text_sentenizer_factory = create_text_sentenizer_factory()
-    text_normalizer_factory = create_text_normalizer_factory(openai_client, settings, storage)
-    engine = create_engine(settings, storage, text_sentenizer_factory, text_normalizer_factory)
+    middlewares = [
+        ResolveLanguageMiddleware().invoke,
+        SplitSentencesMiddleware(
+            max_sentence_chars=settings.max_sentence_chars,
+            text_sentencizer_factory=TextSentencizerFactory(),
+        ).invoke,
+        NormalizeTextMiddleware(
+            timeout=settings.normalization.timeout,
+            max_concurrent_sentences=settings.normalization.max_concurrent_sentences_per_request,
+            text_normalizer_factory=TextNormalizerFactory(
+                openai_client=normalization_client,
+                settings=settings.normalization,
+                storage=data_storage,
+            ),
+        ).invoke,
+    ]
+
+    engine_hub = TtsEngineHub(
+        frame_duration=settings.frame_duration,
+        middlewares=middlewares,
+        engine_manager=engine_manager,
+        data_storage=data_storage,
+    )
 
     logger.info(f"Starting server on {settings.uri}")
 
     tasks = [
-        engine.warmup(),
+        engine_manager.warmup(),
         server.run(
             partial(
-                SileroEventHandler,
-                engine,
+                TtsEngineHubEventHandler,
+                engine_hub,
+                data_storage,
+                settings.app_name,
                 settings.streaming,
                 settings.env_type == "development",
             )
@@ -142,17 +170,26 @@ async def main():
     except asyncio.CancelledError:
         logger.info("Server stopped")
     finally:
-        await engine.shutdown()
+        await engine_manager.close()
 
-        if openai_client is not None:
-            await openai_client.close()
+        if normalization_client is not None:
+            await normalization_client.close()
 
         loop.remove_signal_handler(signal.SIGINT)
         loop.remove_signal_handler(signal.SIGTERM)
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Start the server, and stop it without a traceback on Ctrl-C.
+
+    This is what the installed command and `python -m src.main` both call, so the two
+    ways in start the server identically.
+    """
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+
+
+if __name__ == "__main__":
+    run()

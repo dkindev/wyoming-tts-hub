@@ -1,27 +1,52 @@
-# Issue Tracker
+# Issue tracker: Local Markdown
 
-**Type:** Local markdown
+Issues and specs for this repo live as markdown files in `.scratch/`.
 
-## Overview
+## Conventions
 
-Issues are tracked as markdown files under `.scratch/` in the repository root.
+- One feature per directory: `.scratch/<feature-slug>/`
+- The spec is `.scratch/<feature-slug>/spec.md`
+- Implementation issues are one file per ticket, numbered from `01`: `.scratch/<feature-slug>/NN-<slug>.md`
+- Triage state is recorded in the `labels:` frontmatter array (role strings from `triage-labels.md`)
 
-## Workflow
+## Issue file shape
 
-- Create issues as `.scratch/<feature>/<issue-title>.md`
-- Use frontmatter for metadata:
-  ```yaml
-  ---
-  title: "Issue title"
-  labels:
-    - needs-triage
-  created: 2026-05-09
-  ---
-  ```
-- Update the `labels` array to reflect issue state transitions
+```yaml
+---
+title: "Issue title"
+labels:
+  - ready-for-agent
+created: 2026-05-09
+---
 
-## Skills that use this
+## What to build
 
-- `to-issues` — creates new issues from plans/specs
-- `triage` — moves issues through the state machine
-- `to-prd` — creates PRDs as issues
+...
+
+## Acceptance criteria
+
+- [ ] ...
+
+## Blocked by
+
+- NN-<slug>.md
+```
+
+## When a skill says "publish to the issue tracker"
+
+Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+
+## When a skill says "fetch the relevant ticket"
+
+Read the file at the referenced path. The user will normally pass the path or the issue number directly.
+
+## Wayfinding operations
+
+Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
+
+- **Map**: `.scratch/<effort>/map.md` (Notes / Decisions-so-far / Fog body).
+- **Child ticket**: `.scratch/<effort>/NN-<slug>.md`, numbered from `01`, with the question in the body.
+- **Blocking**: a `Blocked by:` section listing ticket numbers. A ticket is unblocked when every file it lists is `resolved`.
+- **Frontier**: scan `.scratch/<effort>/` for tickets that are open, unblocked, and unclaimed; first by number wins.
+- **Claim**: set `labels: [claimed]` and save before any work.
+- **Resolve**: append the answer under `## Answer`, record `resolved` in `labels`, then append a gist + link to the map's Decisions-so-far.

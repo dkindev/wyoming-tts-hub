@@ -1,8 +1,32 @@
+import asyncio
 import hashlib
+import io
+import os
+import unittest.mock
+from typing import NamedTuple
 
+import numpy as np
+import torch
 import yaml
+from wyoming.audio import AudioChunk, AudioStart
+from wyoming.event import Event, read_event
 
-from src.tts.models import Model, TextFormat, Voice
+from src.tts.data_storage import DataStorage
+from src.tts.engine import TtsEngine
+from src.tts.engine_hub import TtsEngineHub
+from src.tts.models import (
+    BackendType,
+    EngineType,
+    ModelInfo,
+    Prompt,
+    TextFormat,
+    TtsResult,
+    Voice,
+    VoiceNormalization,
+)
+
+SAMPLE_DTYPES = {2: np.int16, 4: np.int32}
+"""Array dtype holding one sample, keyed by the bytes per sample an engine declares."""
 
 
 def hash_models_yml(yml_path: str) -> str:
@@ -14,23 +38,55 @@ def hash_models_yml(yml_path: str) -> str:
     return hasher.hexdigest().lower()
 
 
-def make_models_dir(tmp_path, sample_rates=None, model_name="v5_5_ru", language="ru"):
-    """Create a models directory with pre-populated models.yml and .pt files."""
+def models_yml_path(models_dir: str) -> str:
+    """Return the path to models.yml within the silero subdirectory."""
+    return os.path.join(models_dir, "silero", "models.yml")
+
+
+def make_models_dir(
+    tmp_path,
+    sample_rates=None,
+    model_name="v5_6_ru",
+    language="ru",
+    yml_content=None,
+    pt_content=b"fake model",
+):
+    """Create a models directory with pre-populated models.yml and .pt files.
+
+    Args:
+        tmp_path: Temporary path root (from pytest tmp_path fixture).
+        sample_rates: List of sample rates for the model. Defaults to [48000].
+        model_name: Name of the model. Defaults to "v5_6_ru".
+        language: Language code. Defaults to "ru".
+        yml_content: Optional custom models.yml content as bytes. When provided,
+            replaces the auto-generated YAML with this content and uses the
+            default model_name/language in the path.
+        pt_content: Optional model .pt file content. Defaults to b"fake model".
+
+    Returns:
+        The models_dir path (str), with models.yml at {models_dir}/silero/models.yml
+        and the model .pt file at {models_dir}/silero/{language}/{model_name}.pt.
+    """
     if sample_rates is None:
         sample_rates = [48000]
     rates_str = ", ".join(str(r) for r in sample_rates)
     models_dir = tmp_path / "models"
     models_dir.mkdir()
-    yml = (
-        f"tts_models:\n  {language}:\n    {model_name}:\n"
-        f"      latest:\n"
-        f"        package: 'http://x'\n"
-        f"        sample_rate: [{rates_str}]\n"
-    )
-    (models_dir / "models.yml").write_text(yml)
-    lang_dir = models_dir / language
+    silero_dir = models_dir / "silero"
+    silero_dir.mkdir()
+    if yml_content is not None:
+        (silero_dir / "models.yml").write_bytes(yml_content)
+    else:
+        yml = (
+            f"tts_models:\n  {language}:\n    {model_name}:\n"
+            f"      latest:\n"
+            f"        package: 'http://x'\n"
+            f"        sample_rate: [{rates_str}]\n"
+        )
+        (silero_dir / "models.yml").write_text(yml)
+    lang_dir = silero_dir / language
     lang_dir.mkdir()
-    (lang_dir / f"{model_name}.pt").write_bytes(b"fake model")
+    (lang_dir / f"{model_name}.pt").write_bytes(pt_content)
     return str(models_dir)
 
 
@@ -42,18 +98,34 @@ def make_config_file(tmp_path, models=None):
     return str(config_yml)
 
 
-def make_voice(*, voice_id, name, speaker=None, model="v5_5_ru", locale="ru_RU"):
+def make_voice(*, voice_id, name, speaker=None, model="v5_6_ru", warmup=False):
     return Voice(
         id=voice_id,
         name=name,
         speaker=speaker or name,
-        model=model,
-        locale=locale,
+        model_id=model,
+        warmup=warmup,
     )
 
 
-def make_model(name="v5_5_ru", language="ru", warmup=False, enabled=True):
-    return Model(name=name, language=language, warmup=warmup, enabled=enabled)
+def make_model_info(
+    id="v5_6_ru",
+    engine_type=EngineType.SILERO,
+    upstream_id=None,
+    languages=None,
+    language_auto_detected=False,
+    ssml_supported=False,
+    warmup=False,
+):
+    return ModelInfo(
+        id=id,
+        engine_type=engine_type,
+        upstream_id=upstream_id,
+        languages=languages if languages is not None else [],
+        language_auto_detected=language_auto_detected,
+        ssml_supported=ssml_supported,
+        warmup=warmup,
+    )
 
 
 def make_merged_yaml(tmp_path, models_data: dict) -> str:
@@ -63,6 +135,357 @@ def make_merged_yaml(tmp_path, models_data: dict) -> str:
     return str(config_yml)
 
 
-async def collect_sentences(engine, text, voice_id, input_type=TextFormat.TEXT):
-    """Collect all sentences from synthesize_pcm_chunks into a list."""
-    return [chunk async for chunk in engine.synthesize_pcm_chunks(text, voice_id, input_type)]
+async def collect_hub_sentences(hub, text, voice_id, input_type=TextFormat.TEXT, language=None):
+    """Collect all TtsResult chunks yielded by the Engine Hub's synthesize_pcm_chunks."""
+    return [
+        chunk async for chunk in hub.synthesize_pcm_chunks(text, voice_id, input_type, language)
+    ]
+
+
+class CapturedSileroModel:
+    """Stand-in for a loaded Silero package that records the rates it was asked for.
+
+    `apply_tts` returns one second of audio at the requested rate, so a caller can
+    check both the rate the TTS Engine selected and that audio of that rate came back.
+    """
+
+    def __init__(self):
+        self.requested_rates: list[int] = []
+        self.requested_devices: list[torch.device] = []
+
+    def apply_tts(self, *, text, speaker, sample_rate):
+        self.requested_rates.append(sample_rate)
+        return torch.zeros(1, sample_rate)
+
+    def to(self, device):
+        self.requested_devices.append(device)
+        return self
+
+
+def make_captured_silero_model() -> CapturedSileroModel:
+    """Return a CapturedSileroModel plus a PackageImporter patch that yields it."""
+    model = CapturedSileroModel()
+
+    importer = unittest.mock.MagicMock()
+    importer.load_pickle.return_value = model
+
+    return model, importer
+
+
+class FakeTtsEngine(TtsEngine):
+    """A TTS Engine that yields canned audio instead of inferring it.
+
+    Every synthesized sentence produces one chunk of `samples_per_sentence` audio,
+    so callers can ask the fake what it emitted rather than restating the numbers.
+    Counts warmups and closes so lifecycle tests can assert on them. When `hold` is
+    given, synthesis blocks on it, letting a test observe concurrency from outside.
+    When `strided_audio` is given, the audio it emits has gaps between its samples,
+    so tests can hand a TTS Engine a layout it did not choose. `emitted_audio` holds
+    the array each synthesis handed over, so callers can ask what was emitted rather
+    than inferring it from the result.
+    """
+
+    def __init__(
+        self,
+        model_info: ModelInfo,
+        *,
+        sample_rate: int = 48000,
+        samples_per_sentence: int = 48000,
+        warmup_error: Exception | None = None,
+        hold: asyncio.Event | None = None,
+        strided_audio: bool = False,
+        bytes_per_sample: int = 2,
+        channels: int = 1,
+    ):
+        super().__init__(model_info)
+        self.sample_rate = sample_rate
+        self.samples_per_sentence = samples_per_sentence
+        self.warmup_error = warmup_error
+        self.warmup_count = 0
+        self.warmup_voices: list[list[Voice]] = []
+        self.load_count = 0
+        self.close_count = 0
+        self.requests: list[tuple[str, Voice, TextFormat, str | None]] = []
+        self.emitted_audio: list[np.ndarray] = []
+        self.active_syntheses = 0
+        self.peak_syntheses = 0
+        self.bytes_per_sample = bytes_per_sample
+        self.channels = channels
+        self._hold = hold
+        self._strided_audio = strided_audio
+
+    @property
+    def synthesized_texts(self) -> list[str]:
+        """The text of every sentence this engine was asked to synthesize."""
+        return [text for text, _, _, _ in self.requests]
+
+    @property
+    def languages(self) -> list[str | None]:
+        """The Language of every request this engine was asked to synthesize."""
+        return [language for _, _, _, language in self.requests]
+
+    @property
+    def text_formats(self) -> list[TextFormat]:
+        """The Text Format of every request this engine was asked to synthesize."""
+        return [text_format for _, _, text_format, _ in self.requests]
+
+    @property
+    def audio_size_bytes(self) -> int:
+        """Total audio bytes this engine emits per sentence, at the format it declares."""
+        return self.samples_per_sentence * self.bytes_per_sample * self.channels
+
+    @property
+    def sample_dtype(self) -> type:
+        """The array dtype holding one sample at the width this engine declares."""
+        return SAMPLE_DTYPES[self.bytes_per_sample]
+
+    def _audio(self) -> np.ndarray:
+        """The audio this engine emits, with gaps between samples when asked for.
+
+        One sample is emitted per channel, so a Chunk declaring more than one channel
+        carries more samples than `samples_per_sentence` names.
+        """
+        samples = self.samples_per_sentence * self.channels
+        dtype = self.sample_dtype
+        if not self._strided_audio:
+            return np.zeros(samples, dtype=dtype)
+
+        gapped = np.empty(samples * 2, dtype=dtype)
+        gapped[::2] = sample_index_audio(samples, dtype)
+
+        return gapped[::2]
+
+    async def warmup(self, voices: list[Voice] | None = None) -> None:
+        self.warmup_count += 1
+        self.warmup_voices.append(list(voices or []))
+        if self.warmup_error is not None:
+            raise self.warmup_error
+        await super().warmup(voices)
+
+    async def close(self) -> None:
+        self.close_count += 1
+        await super().close()
+
+    async def _warmup(self, voices: list[Voice] | None = None) -> bool:
+        self.load_count += 1
+        return True
+
+    async def _synthesize_pcm(
+        self,
+        text: str,
+        voice: Voice,
+        text_format: TextFormat,
+        language: str | None = None,
+    ):
+        self.requests.append((text, voice, text_format, language))
+        self.active_syntheses += 1
+        self.peak_syntheses = max(self.peak_syntheses, self.active_syntheses)
+        try:
+            if self._hold is not None:
+                await self._hold.wait()
+            audio = self._audio()
+            self.emitted_audio.append(audio)
+            yield TtsResult(
+                audio=audio,
+                sample_rate=self.sample_rate,
+                bytes_per_sample=self.bytes_per_sample,
+                channels=self.channels,
+            )
+        finally:
+            self.active_syntheses -= 1
+
+
+class FakeEngineFactory:
+    """An Engine Factory that builds FakeTtsEngines and records what it was asked for.
+
+    `engines` maps a model id to the engine to hand back, so a test can watch one
+    engine through its lifecycle. Model ids absent from it get a fresh FakeTtsEngine.
+    """
+
+    def __init__(self, engines: dict[str, FakeTtsEngine] | None = None):
+        self._engines = dict(engines or {})
+        self.requested_model_ids: list[str] = []
+
+    def create(self, model_info: ModelInfo, backend_type: BackendType) -> TtsEngine:
+        self.requested_model_ids.append(model_info.id)
+        if model_info.id not in self._engines:
+            self._engines[model_info.id] = FakeTtsEngine(model_info)
+        return self._engines[model_info.id]
+
+
+class _MemoryTransport(asyncio.WriteTransport):
+    """A write transport that keeps every byte written to it instead of sending it."""
+
+    def __init__(self):
+        super().__init__()
+        self.data = bytearray()
+        self._closing = False
+
+    def write(self, data: bytes | bytearray | memoryview) -> None:
+        self.data.extend(data)
+
+    def close(self) -> None:
+        self._closing = True
+
+    def is_closing(self) -> bool:
+        return bool(self._closing)
+
+
+class WyomingClient:
+    """A Wyoming client talking to an event handler over an in-memory socket.
+
+    `reader` and `writer` are the two ends the handler is constructed with;
+    `written_events` parses back the bytes the handler wrote, the way a real
+    client would read them off the wire. Must be built inside a running loop.
+    """
+
+    def __init__(self):
+        self.reader = asyncio.StreamReader()
+        self._transport = _MemoryTransport()
+        self.writer = asyncio.StreamWriter(
+            self._transport, asyncio.streams.FlowControlMixin(), None, asyncio.get_running_loop()
+        )
+        self._consumed = 0
+
+    async def send(self, handler, *events: Event) -> list[Event]:
+        """Hand each event to `handler`, then return the events it wrote back."""
+        for event in events:
+            assert await handler.handle_event(event)
+
+        return self.written_events()
+
+    def written_events(self) -> list[Event]:
+        """Parse every event written so far that has not been read back yet."""
+        stream = io.BytesIO(bytes(self._transport.data))
+        stream.seek(self._consumed)
+
+        events = []
+        while (event := read_event(stream)) is not None:
+            events.append(event)
+
+        self._consumed = stream.tell()
+        return events
+
+
+class FakeDataStorage(DataStorage):
+    """A DataStorage that returns exactly the Model Infos and Voices it is given.
+
+    Unlike YamlDataStorage it does not filter a Voice away when its Model Info is
+    absent, so Hub-side guards for that case can be exercised.
+    """
+
+    def __init__(self, models=None, voices=None, voice_normalizations=None, prompts=None):
+        self._models = {model_info.id: model_info for model_info in models or []}
+        self._voices = {voice.id: voice for voice in voices or []}
+        self._prompts = {prompt.id: prompt for prompt in prompts or []}
+        self._voice_normalizations = {
+            f"{vn.voice_id}__{vn.text_format.value}__{vn.language}": vn
+            for vn in voice_normalizations or []
+        }
+
+    def get_voices(self) -> list[Voice]:
+        return list(self._voices.values())
+
+    def get_voice(self, voice_id: str) -> Voice | None:
+        return self._voices.get(voice_id)
+
+    def get_model_info(self, model_id: str) -> ModelInfo | None:
+        return self._models.get(model_id)
+
+    def get_model_infos(self) -> list[ModelInfo]:
+        return list(self._models.values())
+
+    def get_prompt(self, prompt_id: str) -> Prompt | None:
+        return self._prompts.get(prompt_id)
+
+    def get_voice_normalization(
+        self, voice_id: str, text_format: TextFormat, language: str
+    ) -> VoiceNormalization | None:
+        return self._voice_normalizations.get(f"{voice_id}__{text_format.value}__{language}")
+
+
+def make_hub(*, engine, middlewares, storage, frame_duration=50, engine_manager=None):
+    """Return a TTS Engine Hub wired to fakes around the given engine."""
+    return TtsEngineHub(
+        frame_duration=frame_duration,
+        middlewares=list(middlewares),
+        engine_manager=(
+            engine_manager
+            if engine_manager is not None
+            else FakeEngineManager({engine.model_info.id: engine})
+        ),
+        data_storage=storage,
+    )
+
+
+class ReusableEngineContext:
+    """A reentrant async context manager yielding one engine.
+
+    The Hub enters the engine context once per sentence, and several sentences are
+    in flight concurrently, so the context must support overlapping entries. A
+    one-shot `@asynccontextmanager` cannot, hence this class.
+    """
+
+    def __init__(self, engine: TtsEngine):
+        self._engine = engine
+
+    async def __aenter__(self) -> TtsEngine:
+        return self._engine
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+        return False
+
+
+class FakeEngineManager:
+    """An Engine Manager that hands out pre-built engines keyed by model id."""
+
+    def __init__(self, engines: dict[str, TtsEngine] | None = None):
+        self._engines = engines or {}
+        self.requested_model_ids: list[str] = []
+
+    async def get_context(self, model_id: str) -> ReusableEngineContext | None:
+        self.requested_model_ids.append(model_id)
+        engine = self._engines.get(model_id)
+        return ReusableEngineContext(engine) if engine is not None else None
+
+
+class AudioFormat(NamedTuple):
+    """The rate, width and channels an audio response announces and carries."""
+
+    rate: int
+    width: int
+    channels: int
+
+
+def announced_audio_format(events: list[Event]) -> AudioFormat:
+    """The format the handler announced in `AudioStart`."""
+    start = AudioStart.from_event(next(event for event in events if AudioStart.is_type(event.type)))
+    return AudioFormat(start.rate, start.width, start.channels)
+
+
+def audio_formats(events: list[Event]) -> set[AudioFormat]:
+    """The format of every `AudioChunk` in a response."""
+    formats = set()
+    for event in events:
+        if AudioChunk.is_type(event.type):
+            chunk = AudioChunk.from_event(event)
+            formats.add(AudioFormat(chunk.rate, chunk.width, chunk.channels))
+
+    return formats
+
+
+def streamed_audio_bytes(events: list[Event]) -> bytes:
+    """The PCM payload of every `AudioChunk`, in the order a client read them."""
+    return b"".join(
+        AudioChunk.from_event(event).audio for event in events if AudioChunk.is_type(event.type)
+    )
+
+
+def sample_index_audio(samples: int, dtype: type) -> np.ndarray:
+    """The sample values a TTS Engine asked for strided audio carries, one per sample.
+
+    A strided TTS Engine lays its samples out with a gap after each one, so a test can
+    tell a sample from its neighbour by the value in it. The gaps are dropped when the
+    audio is made contiguous; this is what the samples are worth.
+    """
+    return np.arange(samples, dtype=dtype)

@@ -1,6 +1,15 @@
-# Wyoming Silero TTS
+# Wyoming TTS Hub
 
-[Wyoming protocol](https://github.com/OHF-Voice/wyoming) server wrapping [Silero TTS models](https://github.com/snakers4/silero-models). Supports Home Assistant integration, streaming audio, and optional per-voice LLM normalization.
+A [Wyoming protocol](https://github.com/OHF-Voice/wyoming) server built around a
+TTS Engine Hub: it aggregates TTS Engines and routes each synthesis request to
+the engine that owns the requested Model Info. Supports Home Assistant
+integration, streaming audio, and optional per-voice LLM normalization.
+
+Two TTS Engine families are implemented on the `torch` backend: [Silero](https://github.com/snakers4/silero-models) and
+[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS). Qwen3-TTS serves its **Base** checkpoint family, which clones a Voice
+from Reference Audio, and its **CustomVoice** checkpoint family, which speaks
+with a preset Speaker and optional instruction. Its third family, VoiceDesign, is
+not supported. The OpenAI-compatible family is declared but not implemented.
 
 ## Quick Start
 
@@ -8,8 +17,8 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/dkindev/silero-server.git
-   cd silero-server
+   git clone https://github.com/dkindev/wyoming-tts-hub.git
+   cd wyoming-tts-hub
    ```
 
 2. **Create a virtual environment**
@@ -25,40 +34,66 @@
 
 4. **Run the application**
    ```bash
-   python -m src.main
+   wyoming-tts-hub
    ```
 
    The server listens on `tcp://127.0.0.1:10200` by default.
 
-5. **Test with HTTP server**
-    ```bash
-    uv run --with "wyoming[http]" python -m wyoming.http.tts_server --uri tcp://127.0.0.1:10200
-    ```
+   The command can be run from anywhere. The configuration it reads is found relative
+   to where you run it, though — `data/data.yml` and `models/` both resolve against
+   the working directory — so from somewhere else, point it at a configuration file:
+
+   ```bash
+   wyoming-tts-hub --config /path/to/config.yml
+   ```
 
 ### Docker
 
 1. **Build the image**
    ```bash
-   docker build -t silero-server:latest .
+   docker build -t wyoming-tts-hub:latest .
    ```
 
 2. **Run the container**
    ```bash
    docker run -p 10200:10200 \
-     -e TTS_ENV_TYPE=production \
      -v ./data:/app/data \
      -v ./models:/app/models \
-     silero-server:latest
+     wyoming-tts-hub:latest
    ```
 
    The server exposes port `10200` for Wyoming TCP connections.
+
+### Connecting a client
+
+Point any Wyoming client at the server's URI. To try one out, run a test HTTP
+server in front of it:
+
+```bash
+uv run --with "wyoming[http]" python -m wyoming.http.tts_server --uri tcp://127.0.0.1:10200
+```
+
+What a client sees when it connects:
+
+- **Voices** are named `<model id>-<voice name>`, so the Model Info `silero_ru`
+  speaking as `aidar` is offered as `silero_ru-aidar`.
+- **Languages** come from the Model Info, not the Voice. Every Voice of a Model
+  Info is advertised with that Model Info's declared Languages.
+- **Only Active Model Infos are offered** — a Model Info that is not listed in
+  `active_models` contributes no Voices at all.
+- **Discovery** is advertised over zeroconf as `wyoming-tts-hub`. Set `zeroconf`
+  to an empty string to turn it off.
+- **Errors** reach the client in full when `env_type` is `development`, and as a
+  bare "Internal Server Error" when it is `production`. Run in `development` while
+  you are setting things up.
 
 ## Configuration
 
 Configuration is resolved with the following priority (highest first):
 
-1. **CLI arguments** — `--uri`, `--torch_device`, `--sample_rate`, etc.
-2. **Environment variables** — `TTS_URI`, `TTS_TORCH__DEVICE`, `TTS_SAMPLE_RATE`, etc.
+1. **CLI arguments** — `--uri`, `--torch_device`, `--frame_duration`, etc. The `silero`
+   and `normalization` sections are environment-only.
+2. **Environment variables** — `TTS_URI`, `TTS_TORCH__DEVICE`, `TTS_SILERO__SAMPLE_RATE`, etc.
 3. **config.yml** — YAML file at the project root
 4. **Defaults** — Default values in code
 
@@ -72,46 +107,172 @@ Voice and model mappings are defined in `data/data.yml`. The file has two top-le
 
 ```yaml
 models:
-  v5_5_ru:
-    language: ru
-    warmup: true
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-          - name: eugene
-          - name: baya
-          - name: kseniya
-          - name: xenia
-  v3_en:
-    language: en
-    locales:
-      en_US:
-        voices:
-          - name: henry
-            speaker: en_2
-          - name: sophia
-            speaker: en_3
+  silero_ru:
+    engine_type: silero
+    languages: [ru]
+    ssml_supported: true
+    upstream_id: v5_6_ru
+    voices:
+      - name: aidar
+      - name: eugene
+      - name: baya
+      - name: kseniya
+      - name: xenia
+  silero_en:
+    engine_type: silero
+    languages: [en]
+    ssml_supported: true
+    upstream_id: v3_en
+    voices:
+      - name: henry
+        speaker: en_2
+      - name: sophia
+        speaker: en_3
 ```
 
-Each model key (e.g., `v5_5_ru`) is the model name. Supported fields:
+Each key under `models:` (e.g. `silero_ru`) is the model's id, and names a **Model Info**. Supported fields:
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `language` | Yes | — | Silero language identifier (`ru`, `en`, etc.) |
-| `enabled` | No | `true` | `false` to disable the model and exclude its voices |
-| `warmup` | No | `false` | `true` to preload at startup; `false` for lazy loading |
-| `hash_prefix` | No | — | SHA-256 hash prefix for download integrity verification |
-| `locales` | Yes | — | Map of locale codes to voice lists |
+| `engine_type` | Yes | — | Which TTS Engine family builds it: `silero`, `qwen3`, `openai` |
+| `languages` | Yes | — | Non-empty list of language codes it can speak, e.g. `[ru]`. A request carrying any other language is refused |
+| `ssml_supported` | No | `false` | `true` when it accepts SSML. An SSML request against `false` is refused |
+| `language_auto_detected` | No | `false` | `true` when it may be asked to synthesize without a language |
+| `hash_prefix` | No | — | SHA-256 prefix checked against the downloaded Silero model files |
+| `revision` | No | — | Upstream commit or tag to fetch a Qwen3-TTS checkpoint at. Omit to follow upstream |
+| `upstream_id` | No | the model's id | Artifact to fetch when it differs from the id clients use. Qwen3-TTS fetches this checkpoint repository and caches it under this name; Silero resolves this `models.yml` registry entry and stores it as `<upstream id>.pt` |
+| `voices` | No | none | The voices this model speaks with |
+
+A model is served only when it is listed in `active_models` in `config.yml`. That
+list is the sole switch: a model left out of it is not served, and neither are its
+voices. An absent or empty `active_models` serves nothing.
+
+`warmup_models` in `config.yml` lists the Model Infos to preload at startup, up to
+`max_models`; every other served model loads on the first request for it. An id
+must also be in `active_models` to be warmed: a declared but inactive id is
+skipped with a warning, and an id that names no declared Model Info fails startup.
+
+`warmup_voices` in `config.yml` lists Voice ids in `<model id>-<voice name>` form
+to pre-build Voice Prompts for at startup, up to max_voice_prompts, so the first
+request for a warmed voice skips the prompt build. An id must name a declared
+Voice of a served model: an unknown id fails startup naming every offender, and
+an id whose Model Info is not in `active_models` is skipped with a warning. Only
+a Voice with Reference Audio — a Qwen3-TTS Base voice — has a Voice Prompt to
+build: engines that build none, such as Silero, ignore warm-up voices, and a
+warm-up id on a Voice with a Speaker instead of Reference Audio fails its prompt
+build and is skipped with a warning.
+For example, once `qwen3_base` is active, its documented clone voice is warmed
+with `warmup_voices: [qwen3_base-bandit]`. `warmup_voices` is empty by default.
+
+`max_voice_prompts` (default 8) is the maximum number of Voice Prompts to cache
+in memory. The least recently used Voice Prompt is evicted when limit reached,
+and the same cap bounds warm-up: no more `warmup_voices` are warmed than the
+cache can keep, the excess are skipped with a warning, and a prompt build that
+fails is skipped with a warning without stopping startup.
+
+#### TTS Engine families
+
+`engine_type` names the TTS Engine family that builds the model. `silero` and
+`qwen3` are implemented on the `torch` backend. A model written as `openai` is
+read and served like any other, and then fails when its engine would be built —
+at startup for a model listed in `warmup_models`, otherwise on the first request
+for it — with an error naming the family and the backend.
+
+#### Silero
+
+Silero is enabled with `engine_type: silero` on the `torch` backend. The engine
+looks its model up in the Silero `models.yml` registry and stores the downloaded
+checkpoint as `<models_dir>/silero/<section>/<upstream id>.pt`. The Model Info
+`silero_en` therefore fetches its upstream artifact `v3_en` and caches it at
+`models/silero/en/v3_en.pt`, reused from there on later boots.
+
+The registry entry and the stored file are named by the Model Info's **Upstream
+Id**: `upstream_id` when it names an artifact, and otherwise the Model Info's
+local `id`; an absent, null, empty, or whitespace-only `upstream_id` all mean the
+same fallback. The local `id` remains the identity clients, `active_models`,
+`warmup_models`, logs, and operator-facing errors use.
+
+#### Qwen3-TTS
+
+Qwen3-TTS is enabled with `engine_type: qwen3` on the `torch` backend. The engine
+reads the checkpoint's own `config.json` before loading it, so one engine serves
+both supported families:
+
+- **Base** checkpoints clone a Voice from its **Reference Audio**. Set `ref_audio`
+  to a local path or URL. Add `ref_text` with the words spoken in it; without it
+  the Voice is cloned from the speaker embedding alone and quality is reduced. A
+  Base Voice without `ref_audio` is rejected when it is first synthesized.
+- **CustomVoice** checkpoints synthesize from a preset **Speaker**. Set `speaker`
+  to one of the checkpoint's speakers — `Vivian`, `Serena`, `Uncle_Fu`, `Dylan`,
+  `Eric`, `Ryan`, `Aiden`, `Ono_Anna` or `Sohee` — and optionally `instruct`. No
+  Reference Audio or Voice Prompt is involved. The 0.6B CustomVoice checkpoint
+  ignores instructions, so an `instruct` there is dropped with a warning.
+
+VoiceDesign checkpoints are not supported: loading one fails with an error naming
+the two supported families, whether at warmup or on the first request.
+
+Checkpoints are fetched from the Model Info's **Upstream Id** into
+`<models_dir>/qwen3/<upstream id>`. The Model Info `qwen3_base` therefore fetches
+its upstream artifact `Qwen/Qwen3-TTS-12Hz-1.7B-Base` and caches it at
+`models/qwen3/Qwen/Qwen3-TTS-12Hz-1.7B-Base`, reused from there on later
+boots. The Upstream Id is `upstream_id` when it names an artifact, and otherwise
+falls back to the Model Info's local `id`; an absent, null, empty, or
+whitespace-only `upstream_id` all mean the same fallback. The local `id` remains
+the identity clients, `active_models`, `warmup_models`, logs, and operator-facing
+errors use. Set `revision` on the Model Info to fetch a named commit or tag
+instead of following upstream. This is separate from `hash_prefix`, which applies
+to Silero checkpoints and verifies the bytes of a downloaded file locally.
+
+The checkpoint maps project Language codes (`zh`, `en`, ...) onto its own
+language names. On a Base checkpoint an unrecognised code falls back to automatic
+detection with a warning; on a CustomVoice checkpoint it is refused. The two
+dialect Speakers, `Dylan` (Beijing) and `Eric` (Sichuan), only use their dialect
+when the Language is Chinese or the checkpoint is in automatic-detection mode. If
+a client may omit the Language, declare `language_auto_detected: true`; with any
+other Language those Speakers speak that Language in their own timbre.
+
+This example declares one model of each family; the same entries ship in
+`data/data.yml`. Replace `data/reference/my_voice.wav` with a clip of the voice
+you want to clone. Neither model is downloaded until its id is added to
+`active_models` in `config.yml` (or `TTS_ACTIVE_MODELS`); it is then fetched on
+first use, or at startup when also listed in `warmup_models`.
+
+```yaml
+models:
+  qwen3_base:
+    engine_type: qwen3
+    languages: [ru]
+    upstream_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
+    # Optional: fetch this exact upstream commit instead of following upstream.
+    revision: fd4b254389122332181a7c3db7f27e918eec64e3
+    voices:
+      - name: bandit
+        ref_audio: data/reference/bandit.wav  # replace with your own clip
+        ref_text: "Привет! Я твой новый голос. Я буду жить на этой странице донатов."
+  qwen3_custom_voice:
+    engine_type: qwen3
+    languages: [en]
+    upstream_id: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+    voices:
+      - name: ryan
+        speaker: Ryan
+        instruct: "Speak calmly and clearly."
+```
 
 #### Adding a new model
 
-1. Add a model entry under `models:` in `data/data.yml` with the Silero language identifier.
-2. Add locales with voices referencing the new model.
+1. Add an entry under `models:` in `data/data.yml` with its `engine_type` and a
+   non-empty `languages` list.
+2. Add its `voices` under that entry.
+3. Add the model's id to `active_models` in `config.yml`, or it will not be served.
+4. Optionally add its id to `warmup_models` too, to preload it at startup rather
+   than on the first request.
 
 #### Disabling a model
 
-Set `enabled: false` on the model entry. Its voices are automatically excluded from discovery.
+Remove the model's id from `active_models` in `config.yml`. The model and its
+voices are excluded from discovery. If it is also listed in `warmup_models`,
+remove it there too; an inactive warmup id is skipped with a warning.
 
 ### Voices
 
@@ -119,44 +280,54 @@ Each voice entry has the following fields:
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `name` | Yes | — | Voice name |
-| `speaker` | No | voice name | Silero's native speaker identifier |
-| `model` | No | parent model | Explicit model reference (usually inherited from parent) |
-| `normalization.text.enabled` | No | `true` | Override text normalization enabled state |
-| `normalization.text.type` | No | `simple` | Override normalization type (`simple`, `llm`) |
-| `normalization.text.prompt_id` | No | — | Reference a custom LLM prompt from `prompts` |
-| `normalization.ssml.enabled` | No | `false` | Override SSML normalization enabled state |
-| `normalization.ssml.type` | No | `simple` | Override SSML normalization type |
-| `normalization.ssml.prompt_id` | No | — | Reference a custom LLM prompt for SSML |
+| `name` | Yes | — | Voice name, and the second half of the voice id |
+| `speaker` | No | the voice name | The preset Speaker a Silero or Qwen3-TTS CustomVoice model selects |
+| `ref_audio` | No | — | Reference Audio for a Qwen3-TTS Base Voice — a local path or URL. Synthesis fails without it |
+| `ref_text` | No | — | The words spoken in the Reference Audio. Without it, cloning uses the speaker embedding alone and quality is reduced |
+| `instruct` | No | — | Instruction for a Qwen3-TTS CustomVoice Voice. Ignored with a warning by the 0.6B CustomVoice checkpoint |
 
-Voices are identified by their computed ID: `{locale}-{model}-{name}` (e.g., `ru_RU-v5_5_ru-aidar`).
+A voice is identified by its computed ID: `<model id>-<voice name>` (e.g. `silero_ru-aidar`).
 
 #### Adding or renaming voices
 
-Add or edit entries under `locales.*.voices` in `data/data.yml`. Set `speaker` to the Silero native speaker name only if it differs from the voice name.
+Add or edit entries under `models.<model id>.voices` in `data/data.yml`. Set `speaker` to the engine's native speaker name only if it differs from the voice name.
 
 #### Voice normalization
 
-Per-voice override of the server-wide normalization settings (defined in `config.yml`). Override the normalization type, disable it entirely, or reference a custom LLM prompt.
+Per-voice override of the server-wide normalization settings (defined in `config.yml`), keyed
+by language and then by text format. Override the normalization type, disable it entirely, or
+reference a custom LLM prompt.
 
 ```yaml
 models:
-  v5_5_ru:
-    locales:
-      ru_RU:
-        voices:
-          - name: aidar
-            normalization:
-              text:
-                enabled: true
-                type: llm
-                prompt_id: ru_text
+  silero_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        normalization:
+          ru:
+            text:
+              enabled: true
+              type: openai
+              prompt_id: ru_text
 
 prompts:
   - id: ru_text
     text: "Normalize Russian text for TTS..."
     model: qwen3.5:4b
 ```
+
+Each override is per voice, per text format, per language:
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `normalization.<language>.text.enabled` | No | `true` | Override whether normalization runs for that language and text format |
+| `normalization.<language>.text.type` | No | `simple` | Normalizer for plain text: `simple`, `openai` |
+| `normalization.<language>.text.prompt_id` | No | — | Prompt from `prompts` to use for LLM-based normalization |
+| `normalization.<language>.ssml.enabled` | No | `true` | Override whether normalization runs for that language and text format |
+| `normalization.<language>.ssml.type` | No | `simple` | Normalizer for SSML: `simple`, `openai` |
+| `normalization.<language>.ssml.prompt_id` | No | — | Prompt from `prompts` to use for LLM-based normalization |
 
 Without a `normalization` block on a voice, the server-wide defaults from `config.yml` apply.
 
@@ -180,7 +351,10 @@ Reusable LLM prompt definitions referenced by `prompt_id` in voice normalization
 ### Audio Output
 
 - Format: raw PCM (WAV-compatible)
-- Sample rate: configurable (8000, 16000, 24000, 48000 Hz)
+- Sample rate: announced per model, not configured per client. For Silero,
+  `silero.sample_rate` is the rate you ask for; the server emits the nearest rate
+  that model supports (8000, 16000, 24000 or 48000 Hz). Qwen3-TTS emits at the
+  checkpoint's own sample rate. Either way the client is told the rate used
 - Bit depth: 16-bit signed integer
 - Channels: mono (1 channel)
 

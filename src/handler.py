@@ -1,5 +1,3 @@
-import re
-
 from loguru import logger
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.error import Error
@@ -15,32 +13,31 @@ from wyoming.tts import (
     SynthesizeTextFormat,
 )
 
-from src import __metadata__, __project_urls__
-from src.tts.engine import SileroTTSEngine
-from src.tts.models import TextFormat
+from src import PROJECT_NAME, __metadata__, __project_urls__
+from src.tts.data_storage import DataStorage
+from src.tts.engine_hub import TtsEngineHub
+from src.tts.models import ENGINE_REPO_URLS, TextFormat
 
 
-def _get_language_from_locale_string(locale_str: str) -> str | None:
-    if not locale_str:
-        return None
-    parts = re.split(r"[_.-]", locale_str)
-    return parts[0] if parts else None
-
-
-def _create_wyoming_info(engine: SileroTTSEngine, streaming: bool) -> Info:
-    storage = engine.get_storage()
+def _create_wyoming_info(data_storage: DataStorage, service_name: str, streaming: bool) -> Info:
     voices = []
-    for voice in storage.get_voices():
+    for voice in data_storage.get_voices():
+        model_info = data_storage.get_model_info(voice.model_id)
+        if model_info is None:
+            raise ValueError(f"Voice '{voice.id}' has no Model Info '{voice.model_id}'")
+
+        engine_type = model_info.engine_type
+
         voices.append(
             TtsVoice(
                 name=voice.id,
                 description=voice.name,
                 attribution=Attribution(
-                    name="silero",
-                    url="https://github.com/snakers4/silero-models",
+                    name=engine_type.value,
+                    url=ENGINE_REPO_URLS[engine_type],
                 ),
                 installed=True,
-                languages=[_get_language_from_locale_string(voice.locale)],
+                languages=model_info.languages,
                 version=None,
             )
         )
@@ -50,10 +47,10 @@ def _create_wyoming_info(engine: SileroTTSEngine, streaming: bool) -> Info:
     return Info(
         tts=[
             TtsProgram(
-                name=__metadata__["name"],
+                name=service_name,
                 description=__metadata__["summary"],
                 attribution=Attribution(
-                    name=__metadata__["name"],
+                    name=PROJECT_NAME,
                     url=__project_urls__["Homepage"],
                 ),
                 installed=True,
@@ -65,10 +62,27 @@ def _create_wyoming_info(engine: SileroTTSEngine, streaming: bool) -> Info:
     )
 
 
-class SileroEventHandler(AsyncEventHandler):
+def _language_from_voice(event: Event) -> str | None:
+    """Return the Language a client sent beside the Voice, if any.
+
+    Read from the raw event payload rather than the parsed dataclass: the `wyoming`
+    library drops `SynthesizeVoice.language` whenever `name` is present, so a Voice
+    named on the wire and a Language beside it never both survive parsing.
+    """
+    voice = event.data.get("voice")
+    if not isinstance(voice, dict):
+        return None
+
+    language = voice.get("language")
+    return language if isinstance(language, str) else None
+
+
+class TtsEngineHubEventHandler(AsyncEventHandler):
     def __init__(
         self,
-        engine: SileroTTSEngine,
+        engine: TtsEngineHub,
+        data_storage: DataStorage,
+        wyoming_service_name: str,
         supports_synthesize_streaming: bool,
         throw_detailed_errors: bool,
         *args,
@@ -76,10 +90,13 @@ class SileroEventHandler(AsyncEventHandler):
     ):
         super().__init__(*args, **kwargs)
         self._engine = engine
+        self._data_storage = data_storage
+        self._wyoming_service_name = wyoming_service_name
         self._supports_synthesize_streaming = supports_synthesize_streaming
         self._throw_detailed_errors = throw_detailed_errors
         self._is_streaming: bool = False
         self._synthesize: Synthesize | None = None
+        self._language: str | None = None
 
     async def handle_event(self, event: Event) -> bool:
         try:
@@ -126,7 +143,7 @@ class SileroEventHandler(AsyncEventHandler):
 
     async def _handle_synthesize(self, event: Event) -> bool:
         synthesize = Synthesize.from_event(event)
-        state = await self._synthesize_pcm_chunks(synthesize)
+        state = await self._synthesize_pcm_chunks(synthesize, _language_from_voice(event))
         return state
 
     async def _handle_synthesize_start(self, event: Event) -> bool:
@@ -135,6 +152,7 @@ class SileroEventHandler(AsyncEventHandler):
         self._synthesize = Synthesize(
             text="", voice=stream_start.voice, text_format=stream_start.text_format
         )
+        self._language = _language_from_voice(event)
         logger.debug("Text stream started: voice='{voice}'", voice=stream_start.voice)
         return True
 
@@ -142,7 +160,7 @@ class SileroEventHandler(AsyncEventHandler):
         assert self._synthesize is not None
         stream_chunk = SynthesizeChunk.from_event(event)
         self._synthesize.text = stream_chunk.text
-        state = await self._synthesize_pcm_chunks(self._synthesize)
+        state = await self._synthesize_pcm_chunks(self._synthesize, self._language)
         logger.debug("Text stream processed.")
         return state
 
@@ -151,17 +169,18 @@ class SileroEventHandler(AsyncEventHandler):
         await self.write_event(SynthesizeStopped().event())
         self._is_streaming = False
         self._synthesize = None
+        self._language = None
         logger.debug("Text stream stopped")
         return True
 
     async def _handle_describe(self, event: Event) -> bool:
         wyoming_info_event = _create_wyoming_info(
-            self._engine, self._supports_synthesize_streaming
+            self._data_storage, self._wyoming_service_name, self._supports_synthesize_streaming
         ).event()
         await self.write_event(wyoming_info_event)
         return True
 
-    async def _synthesize_pcm_chunks(self, synthesize: Synthesize) -> bool:
+    async def _synthesize_pcm_chunks(self, synthesize: Synthesize, language: str | None) -> bool:
         text = synthesize.text.strip()
         if not text:
             await self.write_event(Error(text="Text is empty or whitespace").event())
@@ -172,7 +191,7 @@ class SileroEventHandler(AsyncEventHandler):
             await self.write_event(Error(text="No voice specified in Synthesize event").event())
             return True
 
-        if not self._engine.get_storage().get_voice(voice_id):
+        if not self._data_storage.get_voice(voice_id):
             await self.write_event(Error(text=f"Unsupported voice: {voice_id}").event())
             return True
 
@@ -184,7 +203,9 @@ class SileroEventHandler(AsyncEventHandler):
             return True
 
         send_start = True
-        async for chunk in self._engine.synthesize_pcm_chunks(text, voice_id, text_format):
+        async for chunk in self._engine.synthesize_pcm_chunks(
+            text, voice_id, text_format, language
+        ):
             if send_start:
                 await self.write_event(
                     AudioStart(
@@ -195,12 +216,19 @@ class SileroEventHandler(AsyncEventHandler):
                 )
                 send_start = False
 
+            # A Frame is a view over its Chunk's audio, and Wyoming's writer
+            # hands the payload straight to the stream, so a byte view of the frame
+            # goes out without being copied. It is cast to bytes because Wyoming
+            # announces the payload's length before writing it, and a view of the
+            # samples would announce that length in samples. Wyoming annotates its
+            # audio event as taking bytes, which is narrower than what its writer
+            # accepts.
             await self.write_event(
                 AudioChunk(
                     rate=chunk.sample_rate,
                     width=chunk.bytes_per_sample,
                     channels=chunk.channels,
-                    audio=chunk.audio,
+                    audio=memoryview(chunk.audio).cast("B"),  # type: ignore[arg-type]
                 ).event()
             )
 
@@ -220,11 +248,9 @@ class SileroEventHandler(AsyncEventHandler):
         if not req_text_format:
             return text_format
 
-        supported_formats = [
-            supported_format.value for supported_format in self._engine.get_supported_text_formats()
-        ]
-
-        if req_text_format in supported_formats:
+        try:
             return TextFormat(req_text_format)
+        except ValueError:
+            pass
 
         return None

@@ -22,12 +22,16 @@ ARG UID=1000
 ARG GID=1000
 
 RUN set -eux; \
-    groupadd -r --gid $GID silero; \
-    useradd -r --gid silero --uid $UID --home-dir /app --shell /bin/bash silero
+    groupadd -r --gid $GID wthub; \
+    useradd -r --gid wthub --uid $UID --home-dir /app --shell /bin/bash wthub
 
 RUN set -eux; \
     apt-get update; \
 	apt-get install -y --no-install-recommends \
+        # qwen-tts imports its audio tokenizer eagerly, and the sox Python package
+        # shells out to the SoX binary for audio conversion.
+        sox \
+        libsox-fmt-all \
         # grab gosu for easy step-down from root
         gosu \
     ; \
@@ -40,14 +44,17 @@ COPY data/ ./data
 COPY config.yml .
 COPY src/ ./src
 
-RUN chown -R silero:silero .
+RUN chown -R wthub:wthub .
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
+
+# Fail the image build if the audio engine's SoX binary or the Qwen3-TTS runtime is missing.
+RUN sox --version && python -c "import qwen_tts, sox; assert not sox.NO_SOX"
 
 EXPOSE 10200
 
 COPY --chmod=555 docker-entrypoint.sh /usr/local/bin
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-CMD ["python", "-m", "src.main"]
+CMD ["wyoming-tts-hub"]
