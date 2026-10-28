@@ -221,7 +221,10 @@ class TestQwenDocumentation:
         readme = " ".join(README.read_text().split())
 
         assert "The Silero TTS Engine is the one implemented today" not in readme
-        assert "Silero and Qwen3-TTS" in readme
+        assert (
+            "[Silero](https://github.com/snakers4/silero-models) and [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)"
+            in readme
+        )
 
     def test_the_readme_names_both_supported_qwen_checkpoint_families(self):
         """The Qwen section names Base and CustomVoice, not just the engine family."""

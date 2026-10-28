@@ -5,8 +5,8 @@ TTS Engine Hub: it aggregates TTS Engines and routes each synthesis request to
 the engine that owns the requested Model Info. Supports Home Assistant
 integration, streaming audio, and optional per-voice LLM normalization.
 
-Two TTS Engine families are implemented on the `torch` backend: Silero and
-Qwen3-TTS. Qwen3-TTS serves its **Base** checkpoint family, which clones a Voice
+Two TTS Engine families are implemented on the `torch` backend: [Silero](https://github.com/snakers4/silero-models) and
+[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS). Qwen3-TTS serves its **Base** checkpoint family, which clones a Voice
 from Reference Audio, and its **CustomVoice** checkpoint family, which speaks
 with a preset Speaker and optional instruction. Its third family, VoiceDesign, is
 not supported. The OpenAI-compatible family is declared but not implemented.
