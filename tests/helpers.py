@@ -98,12 +98,13 @@ def make_config_file(tmp_path, models=None):
     return str(config_yml)
 
 
-def make_voice(*, voice_id, name, speaker=None, model="v5_6_ru"):
+def make_voice(*, voice_id, name, speaker=None, model="v5_6_ru", warmup=False):
     return Voice(
         id=voice_id,
         name=name,
         speaker=speaker or name,
         model_id=model,
+        warmup=warmup,
     )
 
 

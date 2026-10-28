@@ -13,7 +13,7 @@ from src.tts.models import (
     TextFormat,
     Voice,
 )
-from tests.helpers import make_model_info
+from tests.helpers import make_model_info, make_voice
 
 
 def write_data_file(tmp_path: Path, contents: str, name: str = "data.yml") -> Path:
@@ -635,6 +635,119 @@ class TestDirectPredefinedDataWarmup:
 
         warning.assert_not_called()
         assert storage.get_model_info("warm").warmup is True
+
+
+class TestYamlWarmupVoiceDerivation:
+    """Voice warm-up is chosen by the instance configuration, not written in the data file."""
+
+    def test_a_listed_voice_is_flagged_for_warmup(self, tmp_path):
+        """A served Voice is warmed when its id is in warmup_voices."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(
+            str(path), active_models=["v5_6_ru"], warmup_voices=["v5_6_ru-aidar"]
+        )
+
+        assert storage.get_voice("v5_6_ru-aidar").warmup is True
+
+    def test_an_unlisted_voice_is_not_flagged_for_warmup(self, tmp_path):
+        """A served Voice absent from warmup_voices starts maximally unwarmed."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"])
+
+        assert storage.get_voice("v5_6_ru-aidar").warmup is False
+
+    def test_warmup_written_in_the_voice_entry_is_inert(self, tmp_path):
+        """A value left under warmup on a voice is not read, so it cannot preload one."""
+
+        path = write_data_file(
+            tmp_path,
+            """
+models:
+  v5_6_ru:
+    engine_type: silero
+    languages: [ru]
+    voices:
+      - name: aidar
+        warmup: true
+""",
+        )
+
+        storage = YamlDataStorage(str(path), active_models=["v5_6_ru"])
+
+        assert storage.get_voice("v5_6_ru-aidar").warmup is False
+
+    def test_an_unknown_warmup_voice_id_fails_naming_every_offending_id(self, tmp_path):
+        """An id absent from the data file stops startup and names the unknown ids."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        with pytest.raises(ValueError) as exc_info:
+            YamlDataStorage(
+                str(path),
+                active_models=["v5_6_ru"],
+                warmup_voices=["ghost-aidar", "other-baya"],
+            )
+
+        message = str(exc_info.value)
+        assert "ghost-aidar" in message
+        assert "other-baya" in message
+
+    def test_a_warmup_voice_id_on_an_inactive_model_warns_and_is_skipped(self, tmp_path):
+        """A warm-up voice whose model cannot be served is reported, but does not fail startup."""
+
+        path = write_data_file(tmp_path, MODEL_WITH_VOICE)
+
+        with unittest.mock.patch("src.tts.data_storage.logger.warning") as warning:
+            storage = YamlDataStorage(str(path), active_models=[], warmup_voices=["v5_6_ru-aidar"])
+
+        warning.assert_called_once()
+        assert "v5_6_ru-aidar" in warning.call_args.kwargs["voice_ids"]
+        assert storage.get_voice("v5_6_ru-aidar") is None
+
+
+class TestDirectPredefinedDataWarmupVoices:
+    """A supplied PredefinedData keeps its own voice warmup values."""
+
+    def test_the_config_warmup_voice_list_does_not_override_them(self):
+        """Warm-up flags already on the Voices survive, in both directions."""
+
+        data = PredefinedData(
+            models=[make_model_info()],
+            voices=[
+                make_voice(voice_id="v5_6_ru-warm", name="warm", warmup=True),
+                make_voice(voice_id="v5_6_ru-lazy", name="lazy", warmup=False),
+            ],
+        )
+
+        storage = YamlDataStorage(
+            data,
+            active_models=["v5_6_ru"],
+            warmup_voices=["v5_6_ru-lazy"],
+        )
+
+        assert storage.get_voice("v5_6_ru-warm").warmup is True
+        assert storage.get_voice("v5_6_ru-lazy").warmup is False
+
+    def test_the_warmup_voice_list_is_inert_for_a_supplied_configuration(self):
+        """No id is validated or warned about, because the list is never applied."""
+        data = PredefinedData(
+            models=[make_model_info()],
+            voices=[make_voice(voice_id="v5_6_ru-warm", name="warm", warmup=True)],
+        )
+
+        with unittest.mock.patch("src.tts.data_storage.logger.warning") as warning:
+            storage = YamlDataStorage(
+                data,
+                active_models=["v5_6_ru"],
+                warmup_voices=["v5_6_ru-ghost"],
+            )
+
+        warning.assert_not_called()
+        assert storage.get_voice("v5_6_ru-warm").warmup is True
 
 
 class TestYamlHashPrefixField:

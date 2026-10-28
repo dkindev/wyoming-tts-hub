@@ -87,6 +87,7 @@ class Voice:
     ref_audio: str | None = None
     ref_text: str | None = None
     instruct: str | None = None
+    warmup: bool = False
 
 
 @dataclass(frozen=True)

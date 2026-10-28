@@ -229,6 +229,22 @@ class TestVoice:
         assert voice.speaker == "aidar"
         assert voice.model_id == "v5_6_ru"
 
+    def test_voice_warmup_defaults_to_false(self):
+        """Voice.warmup defaults to False."""
+        voice = Voice(id="v5_6_ru-aidar", name="aidar", speaker="aidar", model_id="v5_6_ru")
+        assert voice.warmup is False
+
+    def test_voice_warmup_can_be_set_to_true(self):
+        """Voice(warmup=True) sets warmup to True."""
+        voice = Voice(
+            id="v5_6_ru-aidar",
+            name="aidar",
+            speaker="aidar",
+            model_id="v5_6_ru",
+            warmup=True,
+        )
+        assert voice.warmup is True
+
     def test_voice_is_frozen(self):
         """Voice dataclass is immutable (frozen)."""
         voice = Voice(

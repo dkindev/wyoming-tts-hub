@@ -52,10 +52,11 @@ class YamlDataStorage(DataStorage):
         config_path_or_model: str | Path | PredefinedData,
         active_models: list[str] | None = None,
         warmup_models: list[str] | None = None,
+        warmup_voices: list[str] | None = None,
     ):
         if isinstance(config_path_or_model, PredefinedData):
             # A supplied PredefinedData is already the configuration: its warmup
-            # values are kept as given, while warmup_models only derives them for
+            # values are kept as given, while the warmup lists only derive them for
             # data loaded from a file.
             loaded_from_file = False
             config_model = config_path_or_model
@@ -67,12 +68,14 @@ class YamlDataStorage(DataStorage):
 
         if loaded_from_file:
             self._check_warmup_models(config_model, warmup_models)
+            self._check_warmup_voices(config_model, warmup_voices)
             self._warn_inactive_warmup_ids(config_model, active_models, warmup_models)
+            self._warn_inactive_warmup_voice_ids(config_model, active_models, warmup_voices)
 
         config_model = self._filter_served(config_model, active_models)
 
         if loaded_from_file:
-            config_model = self._derive_warmup(config_model, warmup_models)
+            config_model = self._derive_warmup(config_model, warmup_models, warmup_voices)
 
         self._models: dict[str, ModelInfo] = {
             model_info.id: model_info for model_info in config_model.models
@@ -356,10 +359,6 @@ class YamlDataStorage(DataStorage):
         YamlDataStorage._check_declared_ids(config, active_models, "active_models")
 
     @staticmethod
-    def _check_warmup_models(config: PredefinedData, warmup_models: list[str] | None) -> None:
-        YamlDataStorage._check_declared_ids(config, warmup_models, "warmup_models")
-
-    @staticmethod
     def _check_declared_ids(
         config: PredefinedData,
         model_ids: list[str] | None,
@@ -370,6 +369,19 @@ class YamlDataStorage(DataStorage):
         if unknown_ids:
             raise ValueError(
                 f"{setting_name} references unknown model id(s): {', '.join(unknown_ids)}"
+            )
+
+    @staticmethod
+    def _check_warmup_models(config: PredefinedData, warmup_models: list[str] | None) -> None:
+        YamlDataStorage._check_declared_ids(config, warmup_models, "warmup_models")
+
+    @staticmethod
+    def _check_warmup_voices(config: PredefinedData, warmup_voices: list[str] | None) -> None:
+        declared_ids = {voice.id for voice in config.voices}
+        unknown_ids = sorted(set(warmup_voices or []) - declared_ids)
+        if unknown_ids:
+            raise ValueError(
+                f"warmup_voices references unknown voice id(s): {', '.join(unknown_ids)}"
             )
 
     @staticmethod
@@ -387,14 +399,38 @@ class YamlDataStorage(DataStorage):
             )
 
     @staticmethod
-    def _derive_warmup(config: PredefinedData, warmup_models: list[str] | None) -> PredefinedData:
-        warmup_ids = set(warmup_models or [])
+    def _warn_inactive_warmup_voice_ids(
+        config: PredefinedData,
+        active_models: list[str] | None,
+        warmup_voices: list[str] | None,
+    ) -> None:
+        models_by_voice_id = {voice.id: voice.model_id for voice in config.voices}
+        active_ids = set(active_models or [])
+        inactive_ids = sorted(
+            voice_id
+            for voice_id in set(warmup_voices or [])
+            if models_by_voice_id.get(voice_id) not in active_ids
+        )
+        if inactive_ids:
+            logger.warning(
+                "warmup_voices lists voice id(s) whose model is not in active_models "
+                "and cannot be served or warmed up: {voice_ids}. Skipping them.",
+                voice_ids=", ".join(inactive_ids),
+            )
+
+    @staticmethod
+    def _derive_warmup(
+        config: PredefinedData, warmup_models: list[str] | None, warmup_voices: list[str] | None
+    ) -> PredefinedData:
+        warmup_model_ids = set(warmup_models or [])
+        warmup_voice_ids = set(warmup_voices or [])
         return replace(
             config,
             models=[
-                replace(model_info, warmup=model_info.id in warmup_ids)
+                replace(model_info, warmup=model_info.id in warmup_model_ids)
                 for model_info in config.models
             ],
+            voices=[replace(voice, warmup=voice.id in warmup_voice_ids) for voice in config.voices],
         )
 
     @staticmethod

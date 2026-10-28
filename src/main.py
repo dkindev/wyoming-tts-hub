@@ -102,6 +102,7 @@ async def main():
         config_path_or_model=settings.data_yml_path,
         active_models=settings.active_models,
         warmup_models=settings.warmup_models,
+        warmup_voices=settings.warmup_voices,
     )
     warn_unreachable_prompts(settings.normalization, data_storage)
     engine_manager = TtsEngineManager(
