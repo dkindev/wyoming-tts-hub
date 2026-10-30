@@ -117,12 +117,20 @@ _Avoid_: Segment, fragment
 
 **Chunk**:
 Raw PCM audio produced by a **TTS Engine** for streaming over the Wyoming
-protocol.
+protocol, before Audio Post-processing.
 _Avoid_: Audio packet, byte fragment, PCM segment
 
 **Frame**:
-A bounded slice of one **Chunk**, in samples.
+A bounded view over one **Chunk**'s audio, in samples, produced by the final
+Audio Post-processing step and sent to a Wyoming client.
 _Avoid_: Packet, block, window
+
+**Audio Post-processing**:
+The middleware applied to a **Chunk** stream after a **TTS Engine** synthesizes
+it, running in reverse middleware order from the terminal synthesis outwards.
+Framing is its final step, splitting each **Chunk** into **Frames**; without the
+framing middleware, the **TTS Engine Hub** emits raw **Chunks**.
+_Avoid_: Audio pipeline, post-processing (alone)
 
 ## Relationships
 
@@ -150,8 +158,12 @@ _Avoid_: Packet, block, window
   **Sentence**, then routes them to the **TTS Engine** that owns the requested
   **Model Info**
 - A **TTS Engine** synthesizes each **Sentence** into one or more **Chunks**,
-  which the server streams over the Wyoming protocol
-- A **Frame** is a slice of a **Chunk** sized by the configured frame duration
+  which Audio Post-processing transforms before they are streamed over the
+  Wyoming protocol
+- Audio Post-processing applies middleware after synthesis, so a middleware sees
+  the **Chunks** of those inside it and the **Frames** of those outside it
+- A **Frame** is a view over a slice of a **Chunk**, sized by the configured frame
+  duration, produced by Audio Post-processing's final framing step
 - A **Model Info** is loaded on the first synthesis request for it, unless the
   instance names it in `warmup_models` to be pre-warmed at startup; only an
   **Active Model Info** can be warmed

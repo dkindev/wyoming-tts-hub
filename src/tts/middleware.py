@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterator
 
 from loguru import logger
 
@@ -86,6 +86,38 @@ class SplitSentencesMiddleware:
         ctx.sentences = make_aiter()
         async for result in next_call():
             yield result
+
+
+class FramingMiddleware:
+    """Splits each Chunk into Frames of the configured duration.
+
+    It is wired as the outermost audio post-processing, so middleware inside it see
+    Chunks and the consumer sees Frames. Each Frame is a view over the Chunk's audio
+    rather than a copy, so a Sentence costs one buffer however many Frames it is
+    streamed in.
+    """
+
+    def __init__(self, frame_duration: float):
+        self._frame_duration = frame_duration
+
+    async def invoke(self, ctx: SynthesisContext, next_call: NextCall):
+        async for chunk in next_call():
+            for frame in self._frames(chunk):
+                yield frame
+
+    def _frames(self, chunk: TtsResult) -> Iterator[TtsResult]:
+        """Split one Chunk into Frames of `frame_duration` milliseconds each."""
+        duration_sec = self._frame_duration / 1000.0
+        samples_per_frame = max(int(chunk.sample_rate * duration_sec), 1)
+        total_samples = chunk.audio.shape[0]
+
+        for i in range(0, total_samples, samples_per_frame):
+            yield TtsResult(
+                audio=chunk.audio[i : i + samples_per_frame],
+                sample_rate=chunk.sample_rate,
+                bytes_per_sample=chunk.bytes_per_sample,
+                channels=chunk.channels,
+            )
 
 
 class NormalizeTextMiddleware:

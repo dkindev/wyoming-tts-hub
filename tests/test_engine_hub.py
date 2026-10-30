@@ -4,8 +4,13 @@ import numpy as np
 import pytest
 
 from src.tts.data_storage import YamlDataStorage
-from src.tts.middleware import ResolveLanguageMiddleware
+from src.tts.middleware import (
+    FramingMiddleware,
+    ResolveLanguageMiddleware,
+    SplitSentencesMiddleware,
+)
 from src.tts.models import PredefinedData, TextFormat, TtsResult
+from src.tts.preprocessing import TextSentencizerFactory
 from tests.helpers import (
     FakeDataStorage,
     FakeEngineManager,
@@ -204,6 +209,75 @@ class TestSuccessfulSynthesis:
 
         assert [len(frame.audio) for frame in frames] == [2400, 2400, 2400, 2400, 2400, 500]
         assert total_audio_bytes(frames) == engine.audio_size_bytes
+
+
+class TestFramingMiddleware:
+    async def test_hub_without_framing_yields_the_engines_raw_chunks(self):
+        """A Hub wired without framing emits the Chunks the TTS Engine produced."""
+        engine = make_engine(sample_rate=48000, samples_per_sentence=12500)
+        hub = make_hub(engine=engine, frame_duration=None)
+
+        chunks = await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert len(chunks) == 1
+        assert len(chunks[0].audio) == 12500
+        assert np.shares_memory(chunks[0].audio, engine.emitted_audio[0])
+
+    async def test_inner_middleware_see_chunks_and_outer_middleware_see_frames(self):
+        """Framing sits outside audio post-processing, so only outer middleware see Frames."""
+        seen: list[tuple[str, int]] = []
+
+        def record(name):
+            async def middleware(ctx, next_call):
+                async for result in next_call():
+                    seen.append((name, len(result.audio)))
+                    yield result
+
+            return middleware
+
+        engine = make_engine(sample_rate=48000, samples_per_sentence=12500)
+        hub = make_hub(
+            engine=engine,
+            frame_duration=None,
+            middlewares=[
+                record("outer"),
+                FramingMiddleware(frame_duration=50).invoke,
+                record("inner"),
+                ResolveLanguageMiddleware().invoke,
+            ],
+        )
+
+        await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert seen == [("inner", 12500), *[("outer", 2400)] * 5, ("outer", 500)]
+
+    async def test_framing_runs_after_inner_audio_post_processing(self):
+        """A Chunk transformed by an inner middleware is the audio that gets framed."""
+
+        async def add_ten(ctx, next_call):
+            async for result in next_call():
+                yield TtsResult(
+                    audio=result.audio + 10,
+                    sample_rate=result.sample_rate,
+                    bytes_per_sample=result.bytes_per_sample,
+                    channels=result.channels,
+                )
+
+        engine = make_engine(sample_rate=48000, samples_per_sentence=4800)
+        hub = make_hub(
+            engine=engine,
+            frame_duration=None,
+            middlewares=[
+                FramingMiddleware(frame_duration=50).invoke,
+                add_ten,
+                ResolveLanguageMiddleware().invoke,
+            ],
+        )
+
+        frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert [len(frame.audio) for frame in frames] == [2400, 2400]
+        assert all((frame.audio == 10).all() for frame in frames)
 
 
 class TestRequestValidation:
@@ -611,8 +685,8 @@ class TestMiddlewareChain:
         assert total_audio_bytes(frames) == engine.audio_size_bytes
         assert all((frame.audio == 10).all() for frame in frames)
 
-    async def test_middleware_can_drop_audio_after_synthesis(self):
-        """A middleware choosing not to pass an item on drops it from the Hub's output."""
+    async def test_middleware_can_drop_chunks_after_synthesis(self):
+        """A middleware choosing not to pass a Chunk on drops it from the Hub's output."""
 
         async def drop_every_other(ctx, next_call):
             index = 0
@@ -624,12 +698,20 @@ class TestMiddlewareChain:
         engine = make_engine(samples_per_sentence=4800)
         hub = make_hub(
             engine=engine,
-            middlewares=[ResolveLanguageMiddleware().invoke, drop_every_other],
+            middlewares=[
+                ResolveLanguageMiddleware().invoke,
+                SplitSentencesMiddleware(
+                    max_sentence_chars=20,
+                    text_sentencizer_factory=TextSentencizerFactory(),
+                ).invoke,
+                drop_every_other,
+            ],
         )
 
-        frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
+        frames = await collect_hub_sentences(hub, "Иди сюда. Подожди минутку.", VOICE_ID)
 
-        assert [len(frame.audio) for frame in frames] == [2400]
+        assert engine.synthesized_texts == ["Иди сюда.", "Подожди минутку."]
+        assert [len(frame.audio) for frame in frames] == [2400, 2400]
 
 
 class TestEarlyClose:

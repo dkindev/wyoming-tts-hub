@@ -14,6 +14,7 @@ from wyoming.event import Event, read_event
 from src.tts.data_storage import DataStorage
 from src.tts.engine import TtsEngine
 from src.tts.engine_hub import TtsEngineHub
+from src.tts.middleware import FramingMiddleware
 from src.tts.models import (
     BackendType,
     EngineType,
@@ -405,10 +406,18 @@ class FakeDataStorage(DataStorage):
 
 
 def make_hub(*, engine, middlewares, storage, frame_duration=50, engine_manager=None):
-    """Return a TTS Engine Hub wired to fakes around the given engine."""
+    """Return a TTS Engine Hub wired to fakes around the given engine.
+
+    Framing is the default test wiring, placed outside `middlewares` so they work on
+    Chunks and the Hub's consumer sees Frames. Pass `frame_duration=None` to wire a
+    Hub without framing, which then emits raw Chunks.
+    """
+    chain = list(middlewares)
+    if frame_duration is not None:
+        chain.insert(0, FramingMiddleware(frame_duration=frame_duration).invoke)
+
     return TtsEngineHub(
-        frame_duration=frame_duration,
-        middlewares=list(middlewares),
+        middlewares=chain,
         engine_manager=(
             engine_manager
             if engine_manager is not None

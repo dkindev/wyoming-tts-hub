@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator
 
 from loguru import logger
 
@@ -17,12 +17,10 @@ from src.tts.models import (
 class TtsEngineHub:
     def __init__(
         self,
-        frame_duration: float,
         middlewares: list[MiddlewareType],
         engine_manager: TtsEngineManager,
         data_storage: DataStorage,
     ):
-        self._frame_duration = frame_duration
         self._middlewares = middlewares
         self._engine_manager = engine_manager
         self._data_storage = data_storage
@@ -195,13 +193,12 @@ class TtsEngineHub:
                             if isinstance(chunk, Exception):
                                 raise chunk
 
-                            for frame in self._generate_frames(chunk):
-                                yield frame
+                            yield chunk
 
                         finally:
                             chunks_queue.task_done()
 
-                    logger.debug("Audio frames for sentence have been sent.")
+                    logger.debug("Audio chunks for sentence have been sent.")
                 except Exception as e:
                     raise RuntimeError("Sentence inference error") from e
                 finally:
@@ -264,21 +261,3 @@ class TtsEngineHub:
                 chunks_queue.put_nowait(None)
             except asyncio.QueueFull:
                 pass
-
-    def _generate_frames(self, chunk: TtsResult) -> Iterator[TtsResult]:
-        """Split one engine chunk into frames of `frame_duration` milliseconds each.
-
-        Each frame is a view over the chunk's audio rather than a copy of it, so a
-        Sentence costs one buffer of audio however many frames it is streamed in.
-        """
-        duration_sec = self._frame_duration / 1000.0
-        samples_per_frame = max(int(chunk.sample_rate * duration_sec), 1)
-        total_samples = chunk.audio.shape[0]
-
-        for i in range(0, total_samples, samples_per_frame):
-            yield TtsResult(
-                audio=chunk.audio[i : i + samples_per_frame],
-                sample_rate=chunk.sample_rate,
-                bytes_per_sample=chunk.bytes_per_sample,
-                channels=chunk.channels,
-            )

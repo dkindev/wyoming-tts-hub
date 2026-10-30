@@ -42,6 +42,7 @@ from src.tts.engine_factory import TtsEngineFactory
 from src.tts.engine_hub import TtsEngineHub
 from src.tts.engine_manager import TtsEngineManager
 from src.tts.middleware import (
+    FramingMiddleware,
     NormalizeTextMiddleware,
     ResolveLanguageMiddleware,
     SplitSentencesMiddleware,
@@ -241,8 +242,8 @@ async def synthesize_and_read(settings: Settings) -> StreamedRequest:
         data_storage=storage,
     )
     hub = TtsEngineHub(
-        frame_duration=settings.frame_duration,
         middlewares=[
+            FramingMiddleware(frame_duration=settings.frame_duration).invoke,
             ResolveLanguageMiddleware().invoke,
             SplitSentencesMiddleware(
                 max_sentence_chars=settings.max_sentence_chars,

@@ -38,6 +38,7 @@ from src.tts.engine_factory import TtsEngineFactory
 from src.tts.engine_hub import TtsEngineHub
 from src.tts.engine_manager import TtsEngineManager
 from src.tts.middleware import (
+    FramingMiddleware,
     MiddlewareType,
     NextCall,
     NormalizeTextMiddleware,
@@ -310,6 +311,7 @@ class BenchmarkStack:
         )
 
         middlewares: list[MiddlewareType] = [
+            FramingMiddleware(frame_duration=settings.frame_duration).invoke,
             ResolveLanguageMiddleware().invoke,
             SplitSentencesMiddleware(
                 max_sentence_chars=settings.max_sentence_chars,
@@ -328,7 +330,6 @@ class BenchmarkStack:
         ]
 
         self.engine_hub = TtsEngineHub(
-            frame_duration=settings.frame_duration,
             middlewares=middlewares,
             engine_manager=self.engine_manager,
             data_storage=self.data_storage,
