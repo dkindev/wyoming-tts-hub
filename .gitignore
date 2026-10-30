@@ -225,3 +225,4 @@ models
 
 # opencode local configuration
 .opencode/opencode.jsonc
+.scratch
