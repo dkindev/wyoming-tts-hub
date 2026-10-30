@@ -18,7 +18,7 @@ import argparse
 import asyncio
 import resource
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from functools import partial
 
@@ -39,6 +39,7 @@ from src.tts.engine_hub import TtsEngineHub
 from src.tts.engine_manager import TtsEngineManager
 from src.tts.middleware import (
     MiddlewareType,
+    NextCall,
     NormalizeTextMiddleware,
     ResolveLanguageMiddleware,
     SplitSentencesMiddleware,
@@ -150,8 +151,8 @@ class SentenceRecorder:
         self.sentences: list[str] = []
 
     async def __call__(
-        self, ctx: SynthesisContext, next_call: Callable[[], Awaitable[None]]
-    ) -> None:
+        self, ctx: SynthesisContext, next_call: NextCall
+    ) -> AsyncIterator[TtsResult]:
         sentences = ctx.sentences
 
         async def counted() -> AsyncIterator[str]:
@@ -160,7 +161,8 @@ class SentenceRecorder:
                 yield sentence
 
         ctx.sentences = counted()
-        await next_call()
+        async for result in next_call():
+            yield result
 
 
 class CountingTtsEngine(TtsEngine):

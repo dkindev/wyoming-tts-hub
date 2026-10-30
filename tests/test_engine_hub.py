@@ -1,3 +1,5 @@
+import asyncio
+
 import numpy as np
 import pytest
 
@@ -379,7 +381,8 @@ class TestLanguageValidation:
 
         async def record_language(ctx, next_call):
             seen_languages.append(ctx.language)
-            await next_call()
+            async for result in next_call():
+                yield result
 
         hub = make_hub(
             engine=engine,
@@ -391,6 +394,32 @@ class TestLanguageValidation:
 
         assert seen_languages == ["en"]
         assert engine.languages == ["en"]
+
+    async def test_a_middleware_acts_before_a_rejected_language_is_refused(self):
+        """A middleware has acted before the Language is judged."""
+        ran = []
+
+        async def record_pre_processing(ctx, next_call):
+            ran.append("pre")
+            async for result in next_call():
+                yield result
+
+        engine = make_engine(model_id=LANGUAGE_MODEL_ID)
+        engine_manager = FakeEngineManager({LANGUAGE_MODEL_ID: engine})
+        hub = make_hub(
+            engine=engine,
+            middlewares=[record_pre_processing],
+            storage=make_storage(
+                model_id=LANGUAGE_MODEL_ID, voice_id=LANGUAGE_VOICE_ID, languages=["ru"]
+            ),
+            engine_manager=engine_manager,
+        )
+
+        with pytest.raises(ValueError):
+            await collect_hub_sentences(hub, "hello", LANGUAGE_VOICE_ID, language="en")
+
+        assert ran == ["pre"]
+        assert engine_manager.requested_model_ids == []
 
     async def test_rejected_request_never_acquires_an_engine_context(self):
         """Validation runs before the engine context is acquired, so no engine is built
@@ -462,6 +491,41 @@ class TestTextFormatValidation:
 
         assert engine.text_formats == [TextFormat.TEXT]
 
+    async def test_a_middleware_acts_before_a_rejected_text_format_is_refused(self):
+        """A middleware has acted before the Text Format is judged."""
+        ran = []
+
+        async def record_pre_processing(ctx, next_call):
+            ran.append("pre")
+            async for result in next_call():
+                yield result
+
+        engine = make_engine(model_id=TEXT_FORMAT_MODEL_ID)
+        engine_manager = FakeEngineManager({TEXT_FORMAT_MODEL_ID: engine})
+        hub = make_hub(
+            engine=engine,
+            middlewares=[record_pre_processing],
+            storage=make_storage(
+                model_id=TEXT_FORMAT_MODEL_ID,
+                voice_id=TEXT_FORMAT_VOICE_ID,
+                languages=["ru"],
+                ssml_supported=False,
+            ),
+            engine_manager=engine_manager,
+        )
+
+        with pytest.raises(ValueError):
+            await collect_hub_sentences(
+                hub,
+                "hello",
+                TEXT_FORMAT_VOICE_ID,
+                input_type=TextFormat.SSML,
+                language="ru",
+            )
+
+        assert ran == ["pre"]
+        assert engine_manager.requested_model_ids == []
+
     async def test_rejected_text_format_never_acquires_an_engine_context(self):
         """Validation runs before the engine context is acquired, so no engine is built."""
         engine = make_engine(model_id=TEXT_FORMAT_MODEL_ID)
@@ -485,7 +549,8 @@ class TestMiddlewareChain:
         def make_middleware(name):
             async def middleware(ctx, next_call):
                 calls.append(f"before-{name}")
-                await next_call()
+                async for result in next_call():
+                    yield result
                 calls.append(f"after-{name}")
 
             return middleware
@@ -510,7 +575,8 @@ class TestMiddlewareChain:
 
         async def uppercase_middleware(ctx, next_call):
             ctx.sentences = _as_sentence_stream(ctx.raw_text.upper())
-            await next_call()
+            async for result in next_call():
+                yield result
 
         engine = make_engine()
         hub = make_hub(
@@ -521,6 +587,82 @@ class TestMiddlewareChain:
         await collect_hub_sentences(hub, "hello", VOICE_ID)
 
         assert engine.synthesized_texts == ["HELLO"]
+
+    async def test_middleware_can_transform_the_audio_after_synthesis(self):
+        """A middleware that alters the audio it receives changes what the Hub yields."""
+
+        async def raise_amplitude(ctx, next_call):
+            async for result in next_call():
+                yield TtsResult(
+                    audio=result.audio + 10,
+                    sample_rate=result.sample_rate,
+                    bytes_per_sample=result.bytes_per_sample,
+                    channels=result.channels,
+                )
+
+        engine = make_engine()
+        hub = make_hub(
+            engine=engine,
+            middlewares=[ResolveLanguageMiddleware().invoke, raise_amplitude],
+        )
+
+        frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert total_audio_bytes(frames) == engine.audio_size_bytes
+        assert all((frame.audio == 10).all() for frame in frames)
+
+    async def test_middleware_can_drop_audio_after_synthesis(self):
+        """A middleware choosing not to pass an item on drops it from the Hub's output."""
+
+        async def drop_every_other(ctx, next_call):
+            index = 0
+            async for result in next_call():
+                if index % 2 == 0:
+                    yield result
+                index += 1
+
+        engine = make_engine(samples_per_sentence=4800)
+        hub = make_hub(
+            engine=engine,
+            middlewares=[ResolveLanguageMiddleware().invoke, drop_every_other],
+        )
+
+        frames = await collect_hub_sentences(hub, "hello", VOICE_ID)
+
+        assert [len(frame.audio) for frame in frames] == [2400]
+
+
+class TestEarlyClose:
+    async def test_closing_the_hub_stream_closes_the_engine_stream(self):
+        """Stopping early closes the synthesis stream the Hub was reading upstream."""
+
+        class EndlessEngine(FakeTtsEngine):
+            def __init__(self):
+                super().__init__(make_model_info(id=MODEL_ID), samples_per_sentence=1)
+                self.synthesis_closed = asyncio.Event()
+
+            async def _synthesize_pcm(self, text, voice, text_format, language=None):
+                self.requests.append((text, voice, text_format, language))
+                try:
+                    while True:
+                        yield TtsResult(
+                            audio=np.zeros(1, dtype=np.int16),
+                            sample_rate=48000,
+                            bytes_per_sample=2,
+                            channels=1,
+                        )
+                        await asyncio.sleep(0)
+                finally:
+                    self.synthesis_closed.set()
+
+        engine = EndlessEngine()
+        hub = make_hub(engine=engine)
+
+        audio = hub.synthesize_pcm_chunks("hello", VOICE_ID, TextFormat.TEXT)
+        await audio.__anext__()
+        await audio.aclose()
+
+        await asyncio.wait_for(engine.synthesis_closed.wait(), timeout=1)
 
 
 async def _as_sentence_stream(text):

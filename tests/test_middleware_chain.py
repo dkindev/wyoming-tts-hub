@@ -219,7 +219,8 @@ class TestLanguageResolution:
 
         async def record_language(ctx, next_call):
             seen_languages.append(ctx.language)
-            await next_call()
+            async for result in next_call():
+                yield result
 
         hub = make_hub(
             engine=engine,

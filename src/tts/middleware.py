@@ -1,9 +1,9 @@
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Callable
 
 from loguru import logger
 
-from src.tts.models import ModelInfo, TextFormat, Voice
+from src.tts.models import ModelInfo, TextFormat, TtsResult, Voice
 from src.tts.preprocessing import TextNormalizer, TextNormalizerFactory, TextSentencizerFactory
 
 
@@ -27,7 +27,9 @@ class SynthesisContext:
         yield self.raw_text
 
 
-MiddlewareType = Callable[[SynthesisContext, Callable[[], Awaitable[None]]], Awaitable[None]]
+AudioStream = AsyncIterator[TtsResult]
+NextCall = Callable[[], AudioStream]
+MiddlewareType = Callable[[SynthesisContext, NextCall], AudioStream]
 
 
 class ResolveLanguageMiddleware:
@@ -38,7 +40,7 @@ class ResolveLanguageMiddleware:
     Language the Model Info does not declare would synthesize speech in the wrong one.
     """
 
-    async def invoke(self, ctx: SynthesisContext, next_call: Callable[[], Awaitable[None]]):
+    async def invoke(self, ctx: SynthesisContext, next_call: NextCall):
         if (
             ctx.language is None
             and len(ctx.model_info.languages) == 1
@@ -51,7 +53,8 @@ class ResolveLanguageMiddleware:
                 model_id=ctx.model_info.id,
             )
 
-        await next_call()
+        async for result in next_call():
+            yield result
 
 
 class SplitSentencesMiddleware:
@@ -59,7 +62,7 @@ class SplitSentencesMiddleware:
         self._max_sentence_chars = max_sentence_chars
         self._text_sentencizer_factory = text_sentencizer_factory
 
-    async def invoke(self, ctx: SynthesisContext, next_call: Callable[[], Awaitable[None]]):
+    async def invoke(self, ctx: SynthesisContext, next_call: NextCall):
         text_sentencizer = self._text_sentencizer_factory.create(ctx.text_format, ctx.language)
         if text_sentencizer is None:
             raise RuntimeError(
@@ -81,7 +84,8 @@ class SplitSentencesMiddleware:
                     yield splitted_sentence
 
         ctx.sentences = make_aiter()
-        await next_call()
+        async for result in next_call():
+            yield result
 
 
 class NormalizeTextMiddleware:
@@ -95,16 +99,18 @@ class NormalizeTextMiddleware:
         self._max_concurrent_sentences = max_concurrent_sentences
         self._text_normalizer_factory = text_normalizer_factory
 
-    async def invoke(self, ctx: SynthesisContext, next_call: Callable[[], Awaitable[None]]):
+    async def invoke(self, ctx: SynthesisContext, next_call: NextCall):
         if not ctx.language:
-            await next_call()
+            async for result in next_call():
+                yield result
             return
 
         text_normalizer = self._text_normalizer_factory.create(
             ctx.voice, ctx.text_format, ctx.language
         )
         if text_normalizer is None:
-            await next_call()
+            async for result in next_call():
+                yield result
             return
 
         logger.debug(
@@ -113,7 +119,8 @@ class NormalizeTextMiddleware:
         )
 
         ctx.sentences = self._normalize_text(text_normalizer, ctx.sentences)
-        await next_call()
+        async for result in next_call():
+            yield result
 
     async def _normalize_text(self, normalizer: TextNormalizer, sentences: AsyncIterator[str]):
         queue = asyncio.Queue(maxsize=3)

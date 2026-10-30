@@ -48,29 +48,52 @@ class TtsEngineHub:
 
         ctx = SynthesisContext(text, model_info, voice, text_format, language)
 
-        async def run_middleware(index: int):
-            if index < len(self._middlewares):
-                await self._middlewares[index](ctx, lambda: run_middleware(index + 1))
+        async with contextlib.aclosing(self._chain(0, ctx)) as audio:
+            async for chunk in audio:
+                yield chunk
 
-        if self._middlewares and len(self._middlewares) > 0:
-            await run_middleware(0)
+    def _chain(self, index: int, context: SynthesisContext) -> AsyncIterator[TtsResult]:
+        """Wrap the terminal synthesis in the middleware from `index` outwards."""
+        if index == len(self._middlewares):
+            return self._terminal(context)
 
-        self._validate_language(ctx)
-        self._validate_text_format(ctx)
+        next_audio = self._chain(index + 1, context)
+        middleware_audio = self._middlewares[index](context, lambda: next_audio)
 
+        return self._forward_and_close(middleware_audio, next_audio)
+
+    async def _forward_and_close(
+        self,
+        middleware_audio: AsyncIterator[TtsResult],
+        next_audio: AsyncIterator[TtsResult],
+    ) -> AsyncIterator[TtsResult]:
+        """Pass a middleware's audio through, closing both streams when the client stops."""
+        try:
+            async with contextlib.aclosing(middleware_audio) as audio:
+                async for result in audio:
+                    yield result
+        finally:
+            await next_audio.aclose()
+
+    async def _terminal(self, context: SynthesisContext) -> AsyncIterator[TtsResult]:
+        """Validate the request and synthesize, after every middleware's pre-processing."""
+        self._validate_language(context)
+        self._validate_text_format(context)
+
+        model_info = context.model_info
         engine_context = await self._engine_manager.get_context(model_info.id)
         if engine_context is None:
             raise ValueError(f"No engine found for synthesis with model '{model_info.id}'")
 
         logger.info(
             "Synthesizing TTS. Text length: {text_length}. Voice: {voice_id}. Text format: {text_format}. Model: {model_id}",
-            text_length=len(text),
-            voice_id=voice_id,
-            text_format=text_format.value,
+            text_length=len(context.raw_text),
+            voice_id=context.voice.id,
+            text_format=context.text_format.value,
             model_id=model_info.id,
         )
 
-        async for chunk in self._synthesize_pcm_chunks(ctx, engine_context):
+        async for chunk in self._synthesize_pcm_chunks(context, engine_context):
             yield chunk
 
     @staticmethod
