@@ -224,6 +224,4 @@ __marimo__/
 models
 
 # opencode local configuration
-.opencode/
-.agents/
-.claude/
+.opencode/opencode.jsonc
