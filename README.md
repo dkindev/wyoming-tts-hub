@@ -232,7 +232,7 @@ a client may omit the Language, declare `language_auto_detected: true`; with any
 other Language those Speakers speak that Language in their own timbre.
 
 This example declares one model of each family; the same entries ship in
-`data/data.yml`. Replace `data/reference/my_voice.wav` with a clip of the voice
+`data/data.yml`. Replace `data/reference/bandit.wav` with a clip of the voice
 you want to clone. Neither model is downloaded until its id is added to
 `active_models` in `config.yml` (or `TTS_ACTIVE_MODELS`); it is then fetched on
 first use, or at startup when also listed in `warmup_models`.
